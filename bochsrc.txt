@@ -1,2 +1,0 @@
-floppya: 1_44=bootsect.bin, status=inserted
-boot: a
