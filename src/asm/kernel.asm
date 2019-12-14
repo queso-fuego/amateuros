@@ -1,9 +1,11 @@
 ;;; =========================================================================== 
 ;;; Kernel.asm: basic 'kernel' loaded from our bootsector
 ;;; ===========================================================================
+main_menu:
+        ;; --------------------------------------------------------------------
+        ;; Screen & Menu Set up
         ;; --------------------------------------------------------------------
         ;; Set video mode
-        ;; --------------------------------------------------------------------
         mov ah, 0x00            ; int 0x10/ ah 0x00 = set video mode
         mov al, 0x01            ; 40x25 text mode
         int 0x10
@@ -14,8 +16,7 @@
         mov bl, 0x01
         int 0x10
 
-        ;; Print screen heading and Menu options
-        mov si, menuString     
+        mov si, menuString      ; print menu header & options 
         call print_string
 
         ;; --------------------------------------------------------------------
@@ -42,6 +43,8 @@ run_command:
         je filebrowser
         cmp al, 'R'             ; 'warm' reboot option
         je reboot              
+        cmp al, 'P'             ; print register values
+        je registers_print
         cmp al, 'N'             ; e(n)d current program
         je end_program
         mov si, failure         ; command not found! boo D:
@@ -111,13 +114,40 @@ next_element:
         jmp fileTable_Loop
 
 stop:
-        hlt
+        mov si, goBackMsg
+        call print_string       ; show go back message
+
+        mov ah, 0x00            ; get keystroke
+        int 0x16
+        jmp main_menu           ; go back to main menu
 
         ;; --------------------------------------------------------------------
         ;; Menu R) - Reboot: far jump to reset vector
         ;; --------------------------------------------------------------------
 reboot: 
         jmp 0xFFFF:0x0000
+
+        ;; --------------------------------------------------------------------
+        ;; Menu P) - Print Register Values
+        ;; --------------------------------------------------------------------
+registers_print:
+        ;; Set video mode
+        mov ah, 0x00            ; int 0x10/ ah 0x00 = set video mode
+        mov al, 0x01            ; 40x25 text mode
+        int 0x10
+
+        ;; Change color/ palette
+        mov ah, 0x0b
+        mov bh, 0x00
+        mov bl, 0x01
+        int 0x10
+
+        call print_registers
+        mov si, goBackMsg
+        call print_string
+        mov ah, 0x00
+        int 0x16                ; get keystroke
+        jmp main_menu           ; go back to main menu
 
         ;; --------------------------------------------------------------------
         ;; Menu N) - End Program  
@@ -131,24 +161,11 @@ end_program:
         ;; ====================================================================
 
         ;; --------------------------------------------------------------------
-        ;; Print strings
+        ;; Include Files
         ;; --------------------------------------------------------------------
-print_string:
-        mov ah, 0x0e            ; int 10/ ah 0x0e BIOS teletype output
-        mov bh, 0x0             ; page number
-        mov bl, 0x07            ; color
-
-print_char:
-        mov al, [si]
-        cmp al, 0
-        je end_print            ; jump if equal (al = 0) to halt label
-        int 0x10                ; print character in al
-        add si, 1               ; move 1 byte forward/ get next char
-        jmp print_char          ; loop
-
-end_print:
-        ret
-       
+        include "../print/print_string.asm"
+        include "../print/print_registers.asm"
+      
         ;; --------------------------------------------------------------------
         ;; Variables
         ;; --------------------------------------------------------------------
@@ -156,17 +173,20 @@ menuString:     db '---------------------------------',0xA,0xD,\
         'Kernel Booted, Welcome to QuesOS!', 0xA, 0xD,\
         '---------------------------------', 0xA, 0xD, 0xA, 0xD,\
         'F) File & Program Browser/Loader', 0xA, 0xD,\
-        'R) Reboot',0xA,0xD,0
+        'R) Reboot',0xA,0xD,\
+        'P) Print Register Values',0xA,0xD,0
+
 success:        db 0xA,0xD,'Command ran successfully!', 0xA,0xD,0
 failure:        db 0xA,0xD,'Oops! Something went wrong :(', 0xA,0xD,0
 
 fileTableHeading:   db '------------           ------',0xA,0xD,\
         'File/Program           Sector',0xA,0xD,\
         '------------           ------',0xA,0xD, 0
+goBackMsg:      db 0xA,0xD,0xA,0xD,'Press any key to go back...', 0
 cmdString:      db ''
 
         ;; --------------------------------------------------------------------
         ;; Sector Padding magic
         ;; --------------------------------------------------------------------
-        times 512-($-$$) db 0   ; pads out 0s until we reach 512th byte
+        times 1024-($-$$) db 0   ; pads out 0s until we reach 512th byte
 
