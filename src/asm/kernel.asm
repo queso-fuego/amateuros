@@ -1,22 +1,15 @@
 ;;; =========================================================================== 
 ;;; Kernel.asm: basic 'kernel' loaded from our bootsector
 ;;; ===========================================================================
-main_menu:
         ;; --------------------------------------------------------------------
         ;; Screen & Menu Set up
         ;; --------------------------------------------------------------------
-        ;; Set video mode
-        mov ah, 0x00            ; int 0x10/ ah 0x00 = set video mode
-        mov al, 0x01            ; 40x25 text mode
-        int 0x10
-
-        ;; Change color/ palette
-        mov ah, 0x0b
-        mov bh, 0x00
-        mov bl, 0x01
-        int 0x10
-
-        mov si, menuString      ; print menu header & options 
+main_menu:
+        ;; Reset screen state
+        call resetTextScreen
+        
+        ; print menu header & options 
+        mov si, menuString
         call print_string
 
         ;; --------------------------------------------------------------------
@@ -45,6 +38,8 @@ run_command:
         je reboot              
         cmp al, 'P'             ; print register values
         je registers_print
+        cmp al, 'G'             ; graphics mode test
+        je graphics_test
         cmp al, 'N'             ; e(n)d current program
         je end_program
         mov si, failure         ; command not found! boo D:
@@ -56,18 +51,8 @@ run_command:
         ;; --------------------------------------------------------------------
 filebrowser: 
         ;; Reset screen state
-        ;; ------------------
-        ;; Set video mode
-        mov ah, 0x00            ; int 0x10/ ah 0x00 = set video mode
-        mov al, 0x01            ; 40x25 text mode
-        int 0x10
+        call resetTextScreen 
 
-        ;; Change color/ palette
-        mov ah, 0x0b
-        mov bh, 0x00
-        mov bl, 0x01
-        int 0x10
-      
         mov si, fileTableHeading
         call print_string
 
@@ -84,7 +69,7 @@ fileTable_Loop:
         inc bx
         mov al, [ES:BX]
         cmp al, '}'             ; at end of file table?
-        je stop
+        je get_program_name
         cmp al, '-'             ; at sector number of element
         je sectorNumber_Loop
         cmp al, ','             ; between table elements?
@@ -113,10 +98,150 @@ next_element:
         int 0x10
         jmp fileTable_Loop
 
-stop:
+        ;; After file table printed to screen, user can input program to load
+        ;; ------------------------------------------------------------------
+get_program_name:
+        mov ah, 0x0e            ; print newline...
+        mov al, 0xA
+        int 0x10
+        mov al, 0xD
+        int 0x10
+        mov di, cmdString       ; di now points to command string
+        mov byte [cmdLength], 0 ; reset counter & length of user input
+
+pgm_name_loop:
+        xor ax, ax              ; ah = 0x0, al = 0x0
+        int 0x16                ; BIOS int get keystroke ah=0, al <- character
+
+        mov ah, 0x0e            ; BIOS teletype output
+        cmp al, 0xD             ; user pressed enter? 
+        je start_search
+
+        inc byte [cmdLength]    ; if not, add to counter
+        mov [di], al            ; store input char to string
+        inc di                  ; go to next byte at di/cmdString
+        int 0x10                ; print input character to screen
+        jmp pgm_name_loop       ; loop for next character from user
+
+start_search:
+        mov di, cmdString       ; reset di, point to start of command string
+        xor bx, bx              ; reset ES:BX, point to beginning of file table
+
+check_next_char:
+        mov al, [ES:BX]         ; get file table character
+        cmp al, '}'             ; at end of file table?
+        je pgm_not_found
+
+        cmp al, [di]            ; does user input match file table character?
+        je start_compare
+
+        inc bx                  ; if not, get next char from file table and re-check
+        jmp check_next_char
+
+start_compare:
+        push bx                 ; save file table position
+        mov byte cl, [cmdLength]
+
+compare_loop:
+        mov al, [ES:BX]         ; get file table character
+        inc bx                  ; next byte in input/filetable
+        cmp al, [di]            ; does input match filetable char?
+        jne restart_search      ; if not, search again from this point in filetable
+
+        dec cl                  ; if it does match, decrement length counter
+        jz found_program        ; counter = 0, all of input found in filetable
+        inc di                  ; else go to next byte of input
+        jmp compare_loop
+
+restart_search:
+        mov di, cmdString       ; reset to start of user input
+        pop bx                  ; get saved file table position
+        inc bx                  ; go to next char in file table
+        jmp check_next_char     ; start checking again
+
+pgm_not_found:
+        mov si, notFoundString  ; did not find pgm name in file table
+        call print_string
+        mov ah, 0x00            ; get keystroke
+        int 0x16
+        mov ah, 0x0e
+        int 0x10
+        cmp al, 'Y'
+        je filebrowser          ; reload file browser screen to search again
+        jmp fileTable_end       ; else go back to main menu
+
+        ;; Get sector number after pgm name in file table
+        ;; ----------------------------------------------
+found_program:
+        inc bx
+        mov cl, 10              ; use to get sector number
+        xor al, al              ; reset al to 0
+
+next_sector_number:
+        mov dl, [ES:BX]         ; checking next byte of file table
+        inc bx
+        cmp dl, ','             ; at end of sector number?
+        je load_program         ; if so, load program from that sector
+        cmp dl, 48              ; else, check if al is '0'-'9' in ascii
+        jl sector_not_found     ; before '0', not a number
+        cmp dl, 57              
+        jg sector_not_found     ; after '9', not a number
+        sub dl, 48              ; convert ascii char to integer
+        mul cl                  ; al * cl (al * 10), result in AH/AL (AX)
+        add al, dl              ; al = al + dl
+        jmp next_sector_number
+
+sector_not_found:
+        mov si, sectNotFound    ; did not find sector or partial pgm name 
+        call print_string
+        mov ah, 0x00            ; get keystroke, print to screen
+        int 0x16
+        mov ah, 0x0e
+        int 0x10
+        cmp al, 'Y'
+        je filebrowser          ; reload file browser screen to search again
+        jmp fileTable_end       ; else go back to main menu
+
+        ;; Read disk sector of program to memory and execute it by far jumping
+        ;; -------------------------------------------------------------------
+load_program:
+        mov cl, al              ; cl = sector # to start loading/reading at 
+
+        mov ah, 0x00            ; int 13h ah 0 = reset disk system
+        mov dl, 0x00            ; disk # 
+        int 0x13
+
+        mov ax, 0x8000          ; memory location to load pgm to
+        mov es, ax
+        xor bx, bx              ; ES:BX <- 0x8000:0x0000
+
+        mov ah, 0x02            ; int 13h ah 2 = read disk sectors to memory
+        mov al, 0x01            ; # of sectors to read
+        mov ch, 0x00            ; track #
+        mov dh, 0x00            ; head #
+        mov dl, 0x00            ; drive #
+
+        int 0x13
+        jnc pgm_loaded          ; carry flag not set, success
+
+        mov si, notLoaded       ; else error, program did not load correctly
+        call print_string
+        mov ah, 0x00
+        int 0x16
+        jmp filebrowser         ; reload file table
+
+pgm_loaded:
+        mov ax, 0x8000          ; program loaded, set segment registers to location
+        mov ds, ax
+        mov es, ax
+        mov fs, ax
+        mov gs, ax
+        mov ss, ax
+        jmp 0x8000:0x0000       ; far jump to program
+
+fileTable_end:
         mov si, goBackMsg
         call print_string       ; show go back message
-
         mov ah, 0x00            ; get keystroke
         int 0x16
         jmp main_menu           ; go back to main menu
@@ -131,23 +256,54 @@ reboot:
         ;; Menu P) - Print Register Values
         ;; --------------------------------------------------------------------
 registers_print:
-        ;; Set video mode
-        mov ah, 0x00            ; int 0x10/ ah 0x00 = set video mode
-        mov al, 0x01            ; 40x25 text mode
-        int 0x10
+        ;; Reset screen state
+        call resetTextScreen 
 
-        ;; Change color/ palette
-        mov ah, 0x0b
-        mov bh, 0x00
-        mov bl, 0x01
-        int 0x10
+        mov si, printRegHeading 
+        call print_string
 
         call print_registers
+
+        ;; Go back to main menu
         mov si, goBackMsg
         call print_string
         mov ah, 0x00
         int 0x16                ; get keystroke
         jmp main_menu           ; go back to main menu
+
+        ;; --------------------------------------------------------------------
+        ;; Menu G) - Graphics Mode Test(s)
+        ;; --------------------------------------------------------------------
+graphics_test:
+        call resetGraphicsScreen
+
+        ;; Test Square
+        mov ah, 0x0c            ; int 0x10 ah 0x0C - write gfx pixel
+        mov al, 0x02            ; green
+        mov bh, 0x00            ; page number
+
+        ;; Starting pixel of square
+        mov cx, 100             ; column #
+        mov dx, 100             ; row #
+        int 0x10
+
+        ;; Pixels for columns 
+squareColLoop:
+        inc cx
+        int 0x10
+        cmp cx, 150
+        jne squareColLoop
+
+        ;; Go down one row
+        inc dx
+        int 0x10
+        mov cx, 99 
+        cmp dx, 150
+        jne squareColLoop       ; pixels for next row
+
+        mov ah, 0x00
+        int 0x16                ; get keystroke
+        jmp main_menu
 
         ;; --------------------------------------------------------------------
         ;; Menu N) - End Program  
@@ -164,7 +320,10 @@ end_program:
         ;; Include Files
         ;; --------------------------------------------------------------------
         include "../print/print_string.asm"
+        include "../print/print_hex.asm"
         include "../print/print_registers.asm"
+        include "../screen/resetTextScreen.asm"
+        include "../screen/resetGraphicsScreen.asm"
       
         ;; --------------------------------------------------------------------
         ;; Variables
@@ -174,19 +333,32 @@ menuString:     db '---------------------------------',0xA,0xD,\
         '---------------------------------', 0xA, 0xD, 0xA, 0xD,\
         'F) File & Program Browser/Loader', 0xA, 0xD,\
         'R) Reboot',0xA,0xD,\
-        'P) Print Register Values',0xA,0xD,0
+        'P) Print Register Values',0xA,0xD,\
+        'G) Graphics Mode Test',0xA,0xD,0
 
-success:        db 0xA,0xD,'Command ran successfully!', 0xA,0xD,0
+success:        db 0xA,0xD,'Program Found!', 0xA,0xD,0
 failure:        db 0xA,0xD,'Oops! Something went wrong :(', 0xA,0xD,0
+notLoaded:      db 0xA,0xD,'Error! Program Not Loaded, Try Again',0xA,0xD,0
 
 fileTableHeading:   db '------------           ------',0xA,0xD,\
         'File/Program           Sector',0xA,0xD,\
         '------------           ------',0xA,0xD, 0
+
+printRegHeading:    db '--------  ------------',0xA,0xD,\
+        'Register  Mem Location',0xA,0xD,\
+        '--------  ------------',0xA,0xD,0
+
+notFoundString: db 0xA,0xD,'program not found!, try again? (Y)',0xA,0xD,0
+sectNotFound:   db 0xA,0xD,'sector not found!, try again? (Y)',0xA,0xD,0
+
+cmdLength:      db 0
+
 goBackMsg:      db 0xA,0xD,0xA,0xD,'Press any key to go back...', 0
+dbgTest:        db 'Test',0
 cmdString:      db ''
 
         ;; --------------------------------------------------------------------
         ;; Sector Padding magic
         ;; --------------------------------------------------------------------
-        times 1024-($-$$) db 0   ; pads out 0s until we reach 512th byte
+        times 1536-($-$$) db 0   ; pads out 0s until we reach 512th byte
 

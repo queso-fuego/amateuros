@@ -7,7 +7,7 @@
 ;;;
 print_hex:
         pusha           ; save all registers to the stack
-        mov cx, 0       ; initialize loop counter 
+        xor cx, cx      ; initialize loop counter 
 
 hex_loop:
         cmp cx, 4       ; are we at end of loop?
@@ -30,10 +30,9 @@ move_intoBX:
                         ; 0x12AB -> 0xB12A -> 0xAB12 -> 0x2AB1 -> 0x12AB
         add cx, 1       ; increment counter   
         jmp hex_loop    ; loop for next hex digit in DX
-
         
 end_hexloop:
-        mov bx, hexString
+        mov si, hexString
         call print_string
 
         popa            ; restore all registers from the stack
