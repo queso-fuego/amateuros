@@ -2,8 +2,8 @@
 #-----------------------------------
 
 # Create the OS.bin file (use 'Make OS')
-OS: bootSect.bin fileTable.bin kernel.bin calculator.bin
-	cat bootSect.bin fileTable.bin kernel.bin calculator.bin > OS.bin
+OS: bootSect.bin kernel.bin fileTable.bin calculator.bin
+	cat bootSect.bin kernel.bin fileTable.bin calculator.bin > OS.bin
 
 # Create bootsector binary file
 bootSect.bin: 

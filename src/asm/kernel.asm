@@ -59,47 +59,70 @@ filebrowser:
         ;; Load file table string from its memory location (0x1000), print file
         ;;   and program names & sector numbers to screen, for user to choose
         ;; --------------------------------------------------------------------
-        xor cx, cx              ; reset counter for # chars in file/pgm name
+        xor cx, cx              ; reset counter for # of bytes at current filetable entry
         mov ax, 0x1000          ; file table location
         mov es, ax              ; ES = 0x1000
         xor bx, bx              ; ES:BX = 0x1000:0x0000 
         mov ah, 0x0e            ; get ready to print to screen
 
-fileTable_Loop:
-        inc bx
+filename_loop:
+	;; TODO: Add whitespace between table entry sections
         mov al, [ES:BX]
-        cmp al, '}'             ; at end of file table?
-        je get_program_name
-        cmp al, '-'             ; at sector number of element
-        je sectorNumber_Loop
-        cmp al, ','             ; between table elements?
-        je next_element
-        inc cx
-        int 0x10
-        jmp fileTable_Loop
+        cmp al, 0               ; is file name null? at end of filetable?
+	je check_name		; if so, stop reading file name, go to extension
 
-sectorNumber_Loop:
-        cmp cx, 23
-        je fileTable_Loop
-        mov al, ' '
-        int 0x10
-        inc cx
-        jmp sectorNumber_Loop
+	int 0x10		; otherwise print char in al to screen
+	inc bx			; get next byte at file table
+	inc cx			; increment file entry byte counter
+	jmp filename_loop
 
-next_element:
-        xor cx, cx              ; reset counter
-        mov al, 0xA
-        int 0x10
-        mov al, 0xD
-        int 0x10
-        mov al, 0xA
-        int 0x10
-        mov al, 0xD
-        int 0x10
-        jmp fileTable_Loop
+check_name:
+	cmp cx, 0		; no name! should be at end of table entries
+	je get_program_name
+	
+check_name_loop:	
+        cmp cx, 9		; else, check end of max file name length?
+	je file_ext		; get file extension
+	inc cx			; else keep checking
+	inc bx			; skip over nulls in file table entry
+	jmp check_name_loop
+
+file_ext:
+	mov al, [ES:BX]
+	mov ah, 0x0e
+	int 0x10
+	inc bx
+	mov al, [ES:BX]
+	int 0x10
+	inc bx
+	mov al, [ES:BX]
+	int 0x10
+
+dir_entry_number:
+	inc bx
+	mov al, [ES:BX]
+	call print_hex_as_ascii
+
+start_sector_number:
+	inc bx
+	mov al, [ES:BX]
+	call print_hex_as_ascii
+
+file_size:	
+	inc bx
+	mov al, [ES:BX]
+	call print_hex_as_ascii
+	mov al, 0xA
+	int 0x10
+	mov al, 0xD
+	int 0x10
+
+	xor cx, cx		; reset counter for next file name
+	jmp filename_loop
 
         ;; After file table printed to screen, user can input program to load
         ;; ------------------------------------------------------------------
+	;; TODO: Change to accomadate new file table layout
 get_program_name:
         mov ah, 0x0e            ; print newline...
         mov al, 0xA
@@ -315,7 +338,19 @@ end_program:
         ;; ====================================================================
         ;; End Main Logic
         ;; ====================================================================
-
+	
+	;; Small routine to convert hex byte to ascii, assume hex digit in AL
+print_hex_as_ascii:
+	and al, 0xFF
+	add al, 0x30		; convert to ascii number
+	cmp al, 0x39		; is value 0h-9h or A-F
+	jle hexNum
+	add al, 0x7			; add hex 7 to get ascii 'A'-'F'
+	mov ah, 0x0e
+	int 0x10	
+hexNum:	
+	ret
+	
         ;; --------------------------------------------------------------------
         ;; Include Files
         ;; --------------------------------------------------------------------
@@ -340,10 +375,11 @@ success:        db 0xA,0xD,'Program Found!', 0xA,0xD,0
 failure:        db 0xA,0xD,'Oops! Something went wrong :(', 0xA,0xD,0
 notLoaded:      db 0xA,0xD,'Error! Program Not Loaded, Try Again',0xA,0xD,0
 
-fileTableHeading:   db '------------           ------',0xA,0xD,\
-        'File/Program           Sector',0xA,0xD,\
-        '------------           ------',0xA,0xD, 0
-
+fileTableHeading:   db '---------   ---------   -------   ------------   --------------',\
+	0xA,0xD,'File Name   Extension   Entry #   Start Sector   Size (sectors)',\
+	0xA,0xD,'---------   ---------   -------   ------------   --------------',\
+	0xA,0xD,0
+        
 printRegHeading:    db '--------  ------------',0xA,0xD,\
         'Register  Mem Location',0xA,0xD,\
         '--------  ------------',0xA,0xD,0
