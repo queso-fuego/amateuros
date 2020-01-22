@@ -13,10 +13,10 @@
 ;;; 			  sectors. Max file size for 1 file table entry = 130560 bytes or
 ;;; 			  127.5KB; Max file size overall = 255*512*255 bytes or ~32MB
 ;;; ---------------------------------
-	db 'bootSect',0,0,'bin',00h,01h,01h,\
-	'kernel',0,0,0,0,'bin',00h,02h,03h,\
-	'fileTable',0,'txt',00h,6h,01h,\
-	'calculator','bin',00h,07h,01h
+	db 'bootSect  ','bin',0h,1h,1h,\
+	'kernel    ','bin',0h,2h,3h,\
+	'fileTable ','txt',0h,5h,1h,\
+	'calculator','bin',0h,6h,1h
 
         ;; Sector padding magic!
         times 512-($-$$) db 0       ; pad rest of sector out with 0s

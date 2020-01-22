@@ -66,30 +66,24 @@ filebrowser:
         mov ah, 0x0e            ; get ready to print to screen
 
 filename_loop:
-	;; TODO: Add whitespace between table entry sections
         mov al, [ES:BX]
         cmp al, 0               ; is file name null? at end of filetable?
-	je check_name		; if so, stop reading file name, go to extension
+	je get_program_name	; no more names? at end of file table, move on
 
 	int 0x10		; otherwise print char in al to screen
-	inc bx			; get next byte at file table
+	cmp cx, 9		; if at end of name, go on
+	je file_ext
 	inc cx			; increment file entry byte counter
+	inc bx			; get next byte at file table
 	jmp filename_loop
 
-check_name:
-	cmp cx, 0		; no name! should be at end of table entries
-	je get_program_name
-	
-check_name_loop:	
-        cmp cx, 9		; else, check end of max file name length?
-	je file_ext		; get file extension
-	inc cx			; else keep checking
-	inc bx			; skip over nulls in file table entry
-	jmp check_name_loop
-
 file_ext:
+	;; 2 blanks before file extension
+	mov cx, 2
+	call print_blanks_loop
+
+	inc bx
 	mov al, [ES:BX]
-	mov ah, 0x0e
 	int 0x10
 	inc bx
 	mov al, [ES:BX]
@@ -99,16 +93,28 @@ file_ext:
 	int 0x10
 
 dir_entry_number:
+	;; 9 blanks before entry #
+	mov cx, 9
+	call print_blanks_loop
+	
 	inc bx
 	mov al, [ES:BX]
 	call print_hex_as_ascii
 
 start_sector_number:
+	;; 9 blanks before starting sector
+	mov cx, 9
+	call print_blanks_loop
+	
 	inc bx
 	mov al, [ES:BX]
 	call print_hex_as_ascii
 
-file_size:	
+file_size:
+	;; 14 blanks before file size
+	mov cx, 14
+	call print_blanks_loop
+	
 	inc bx
 	mov al, [ES:BX]
 	call print_hex_as_ascii
@@ -117,15 +123,14 @@ file_size:
 	mov al, 0xD
 	int 0x10
 
+	inc bx			; get first byte of next file name
 	xor cx, cx		; reset counter for next file name
 	jmp filename_loop
 
         ;; After file table printed to screen, user can input program to load
         ;; ------------------------------------------------------------------
-	;; TODO: Change to accomadate new file table layout
 get_program_name:
-        mov ah, 0x0e            ; print newline...
-        mov al, 0xA
+        mov al, 0xA		; print newline...
         int 0x10
         mov al, 0xD
         int 0x10
@@ -152,13 +157,16 @@ start_search:
 
 check_next_char:
         mov al, [ES:BX]         ; get file table character
-        cmp al, '}'             ; at end of file table?
+        cmp al, 0               ; at end of file table?
         je pgm_not_found
 
         cmp al, [di]            ; does user input match file table character?
         je start_compare
 
-        inc bx                  ; if not, get next char from file table and re-check
+	;; TODO: Add cmp al, ' ' line here and je start_compare
+	;;  so that user doesn't have to type out name with spaces to work
+
+        add bx, 16              ; if not, go to next file entry in table
         jmp check_next_char
 
 start_compare:
@@ -193,53 +201,24 @@ pgm_not_found:
         je filebrowser          ; reload file browser screen to search again
         jmp fileTable_end       ; else go back to main menu
 
-        ;; Get sector number after pgm name in file table
-        ;; ----------------------------------------------
-found_program:
-        inc bx
-        mov cl, 10              ; use to get sector number
-        xor al, al              ; reset al to 0
-
-next_sector_number:
-        mov dl, [ES:BX]         ; checking next byte of file table
-        inc bx
-        cmp dl, ','             ; at end of sector number?
-        je load_program         ; if so, load program from that sector
-        cmp dl, 48              ; else, check if al is '0'-'9' in ascii
-        jl sector_not_found     ; before '0', not a number
-        cmp dl, 57              
-        jg sector_not_found     ; after '9', not a number
-        sub dl, 48              ; convert ascii char to integer
-        mul cl                  ; al * cl (al * 10), result in AH/AL (AX)
-        add al, dl              ; al = al + dl
-        jmp next_sector_number
-
-sector_not_found:
-        mov si, sectNotFound    ; did not find sector or partial pgm name 
-        call print_string
-        mov ah, 0x00            ; get keystroke, print to screen
-        int 0x16
-        mov ah, 0x0e
-        int 0x10
-        cmp al, 'Y'
-        je filebrowser          ; reload file browser screen to search again
-        jmp fileTable_end       ; else go back to main menu
-
-        ;; Read disk sector of program to memory and execute it by far jumping
+	;; Read disk sector of program to memory and execute it by far jumping
         ;; -------------------------------------------------------------------
-load_program:
-        mov cl, al              ; cl = sector # to start loading/reading at 
+found_program:
+        add bx, 4		; go to starting sector # in file table entry
+        mov cl, [ES:BX]         ; sector number to start reading at
+	inc bx
+	mov bl, [ES:BX]		; file size in sectors / # of sectors to read
 
-        mov ah, 0x00            ; int 13h ah 0 = reset disk system
+	xor ax, ax
         mov dl, 0x00            ; disk # 
-        int 0x13
+        int 0x13		; int 13h ah 0 = reset disk system
 
         mov ax, 0x8000          ; memory location to load pgm to
         mov es, ax
+	mov al, bl		; # of sectors to read
         xor bx, bx              ; ES:BX <- 0x8000:0x0000
 
         mov ah, 0x02            ; int 13h ah 2 = read disk sectors to memory
-        mov al, 0x01            ; # of sectors to read
         mov ch, 0x00            ; track #
         mov dh, 0x00            ; head #
         mov dl, 0x00            ; drive #
@@ -341,14 +320,25 @@ end_program:
 	
 	;; Small routine to convert hex byte to ascii, assume hex digit in AL
 print_hex_as_ascii:
-	and al, 0xFF
+	mov ah, 0x0e
 	add al, 0x30		; convert to ascii number
 	cmp al, 0x39		; is value 0h-9h or A-F
 	jle hexNum
-	add al, 0x7			; add hex 7 to get ascii 'A'-'F'
+	add al, 0x7		; add hex 7 to get ascii 'A'-'F'
+hexNum:
+	int 0x10
+	ret
+
+	;; Small routine to print out cx # of spaces to screen
+print_blanks_loop:
+	cmp cx, 0
+	je end_blanks_loop
 	mov ah, 0x0e
-	int 0x10	
-hexNum:	
+	mov al, ' '
+	int 0x10
+	dec cx
+	jmp print_blanks_loop
+end_blanks_loop:
 	ret
 	
         ;; --------------------------------------------------------------------
@@ -396,5 +386,5 @@ cmdString:      db ''
         ;; --------------------------------------------------------------------
         ;; Sector Padding magic
         ;; --------------------------------------------------------------------
-        times 1536-($-$$) db 0   ; pads out 0s until we reach 512th byte
+        times 1536-($-$$) db 0   ; pads out 0s until we reach 1536th byte
 
