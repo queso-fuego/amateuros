@@ -16,32 +16,74 @@ main_menu:
         ;; Get user input, print to screen & choose menu option/run command
         ;; --------------------------------------------------------------------
 get_input:
-        mov di, cmdString       ; di now pointing to command string
+	mov si, prompt
+	call print_string
+	xor cx, cx		; reset byte counter of input
+        mov si, cmdString       ; si now pointing to command string
+	
+	mov ax, 0x2000		; reset ES & DS segments to kernel area
+	mov es, ax
+	mov ds, ax
+	
 keyloop:
         xor ax, ax              ; ah = 0x0, al = 0x0
         int 0x16                ; BIOS int get keystroke ah=0, al <- character
 
         mov ah, 0x0e
-        cmp al, 0xD             ; user pressed enter? 
-        je run_command
-        int 0x10                ; print input character to screen
-        mov [di], al            ; store input char to string
-        inc di                  ; go to next byte at di/cmdString
+        cmp al, 0xD             ; user pressed enter?
+        je run_command		; run user input command or load file/pgm
+	
+        int 0x10                ; else print input character to screen
+        mov [si], al            ; store input char to string
+	inc cx			; increment byte counter of input
+        inc si                  ; go to next byte at di/cmdString
         jmp keyloop             ; loop for next character from user
 
 run_command:
-        mov byte [di], 0        ; null terminate cmdString from di
-        mov al, [cmdString]
-        cmp al, 'F'             ; file table command / menu option
-        je filebrowser
-        cmp al, 'R'             ; 'warm' reboot option
-        je reboot              
-        cmp al, 'P'             ; print register values
-        je registers_print
-        cmp al, 'G'             ; graphics mode test
-        je graphics_test
-        cmp al, 'N'             ; e(n)d current program
-        je end_program
+	cmp cx, 0
+	je input_not_found  	; handle empty input
+	
+        mov byte [si], 0        ; else null terminate cmdString from di
+	mov si, cmdString	; reset si to point to start of user input
+	
+check_commands:
+	push cx
+	mov di, cmdDir
+	repe cmpsb
+	je filebrowser
+
+	pop cx
+	push cx
+	mov di, cmdReboot
+	mov si, cmdString
+	repe cmpsb
+	je reboot
+
+	pop cx
+	push cx
+        mov di, cmdPrtreg
+	mov si, cmdString
+	repe cmpsb
+	je registers_print
+
+	pop cx
+	push cx
+	mov di, cmdGfxtst
+	mov si, cmdString
+	repe cmpsb
+	je graphics_test
+
+	pop cx
+	push cx
+	mov di, cmdHlt
+	mov si, cmdString
+	repe cmpsb
+	je end_program
+	pop cx
+	
+check_files:
+	
+input_not_found:
         mov si, failure         ; command not found! boo D:
         call print_string
         jmp get_input 
@@ -355,16 +397,23 @@ end_blanks_loop:
         ;; --------------------------------------------------------------------
 menuString:     db '---------------------------------',0xA,0xD,\
         'Kernel Booted, Welcome to QuesOS!', 0xA, 0xD,\
-        '---------------------------------', 0xA, 0xD, 0xA, 0xD,\
-        'F) File & Program Browser/Loader', 0xA, 0xD,\
-        'R) Reboot',0xA,0xD,\
-        'P) Print Register Values',0xA,0xD,\
-        'G) Graphics Mode Test',0xA,0xD,0
-
+        '---------------------------------', 0xA, 0xD, 0xA, 0xD,0
+	
+prompt:	db '>:',0
+	
 success:        db 0xA,0xD,'Program Found!', 0xA,0xD,0
-failure:        db 0xA,0xD,'Oops! Something went wrong :(', 0xA,0xD,0
+failure:	db 0xA,0xD,'Command/Program not found, try again',0xA,0xD,0
+	
+windowsMsg:     db 0xA,0xD,'Oops! Something went wrong :(', 0xA,0xD,0
 notLoaded:      db 0xA,0xD,'Error! Program Not Loaded, Try Again',0xA,0xD,0
-
+	
+	;; Prompt commands
+cmdDir:		db 'dir',0	; directory command; list all files/pgms on disk
+cmdReboot:	db 'reboot',0   ; 'warm' reboot option
+cmdPrtreg:	db 'prtreg',0	; print register values
+cmdGfxtst:	db 'gfxtst',0   ; graphics mode test
+cmdHlt:		db 'hlt',0      ; e(n)d current program by halting cpu
+	
 fileTableHeading:   db '---------   ---------   -------   ------------   --------------',\
 	0xA,0xD,'File Name   Extension   Entry #   Start Sector   Size (sectors)',\
 	0xA,0xD,'---------   ---------   -------   ------------   --------------',\
