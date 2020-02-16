@@ -2,6 +2,7 @@
 ;;; print_registers.asm: prints registers and memory addresses to screen
 ;;;
 print_registers:
+	pusha
         mov si, regString
         call print_string
         call print_hex          ; print DX
@@ -46,7 +47,13 @@ print_registers:
         mov dx, es
         call print_hex          ; print ES
 
+	mov ah, 0Eh
+	mov al, 0Ah
+	int 0x10
+	mov al, 0Dh
+	int 0x10
+	popa
         ret
 
         ;; Variables
-regString:  db 0xA,0xD,'dx        ',0 ; hold string of current register name and memory address
+regString:  db 0Ah,0Dh,'dx        ',0 ; hold string of current register name and memory address
