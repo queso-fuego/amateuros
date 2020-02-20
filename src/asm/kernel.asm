@@ -51,7 +51,7 @@ check_commands:
 	push cx
 	mov di, cmdDir
 	repe cmpsb
-	je filebrowser
+	je fileTable_print
 
 	pop cx
 	push cx
@@ -132,10 +132,19 @@ restart_search:
 	;; Read disk sector of program to memory and execute it by far jumping
         ;; -------------------------------------------------------------------
 found_program:
+	;; Get file extension - bytes 10-12 of file table entry
+	mov al, [ES:BX]
+	mov [fileExt], al
+	mov al, [ES:BX+1]
+	mov [fileExt+1], al
+	mov al, [ES:BX+2]
+	mov [fileExt+2], al
+	
         add bx, 4		; go to starting sector # in file table entry
         mov cl, [ES:BX]         ; sector number to start reading at
 	inc bx
 	mov bl, [ES:BX]		; file size in sectors / # of sectors to read
+	mov byte [fileSize], bl
 
 	xor ax, ax
         mov dl, 0x00            ; disk # 
@@ -152,21 +161,52 @@ found_program:
         mov dl, 0x00            ; drive #
 
         int 0x13
-        jnc pgm_loaded          ; carry flag not set, success
+        jnc run_program	        ; carry flag not set, success
 
-        mov si, pgmNotLoaded       ; else error, program did not load correctly
+        mov si, pgmNotLoaded    ; else error, program did not load correctly
         call print_string
         jmp get_input		; go back to prompt for input
 
-pgm_loaded:
+run_program:
+	;; Check file extension in file table entry, if 'bin'/binary, then far jump & run
+	;;   Else if 'txt', then print content to screen
+	mov cx, 3
+	mov si, fileExt
+	mov ax, 2000h  		; Reset es to kernel space for comparison (ES = DS)
+	mov es, ax		; ES <- 0x2000
+	mov di, fileBin
+	repe cmpsb
+	jne print_txt_file
+	
         mov ax, 0x8000          ; program loaded, set segment registers to location
         mov ds, ax
         mov es, ax
         mov fs, ax
         mov gs, ax
         mov ss, ax
-        jmp 0x8000:0x0000       ; far jump to program
+        jmp 0x8000:0x0000       ; far jump to program to execute
 	
+print_txt_file:
+	mov ax, 8000h 		; Set ES back to file memory location
+	mov es, ax		; ES <- 0x8000
+	xor cx, cx
+	mov ah, 0Eh
+	;; Get size of filesize in bytes (512 byte per sector)
+	;; TODO: File size in sectors is in hex - convert to decimal!
+add_cx_size:		
+	cmp byte [fileSize], 0
+	je print_file_char
+	add cx, 512
+	dec byte [fileSize]
+	jne add_cx_size	
+
+print_file_char:
+	mov al, [ES:BX]
+	int 10h			; Print file character to screen
+	inc bx
+	loop print_file_char	; Keep printing characters and decrement CX till 0
+	jmp get_input		; after all printed, go back to prompt
+
 input_not_found:
         mov si, failure         ; command not found! boo D:
         call print_string
@@ -175,80 +215,9 @@ input_not_found:
         ;; --------------------------------------------------------------------
         ;; File/Program browser & loader   
         ;; --------------------------------------------------------------------
-filebrowser: 
-        mov si, fileTableHeading
-        call print_string
-
-        ;; Load file table string from its memory location (0x1000), print file
-        ;;   and program names & sector numbers to screen
-        ;; --------------------------------------------------------------------
-        xor cx, cx              ; reset counter for # of bytes at current filetable entry
-        mov ax, 0x1000          ; file table location
-        mov es, ax              ; ES = 0x1000
-        xor bx, bx              ; ES:BX = 0x1000:0x0000 
-        mov ah, 0x0e            ; get ready to print to screen
-
-filename_loop:
-        mov al, [ES:BX]
-        cmp al, 0               ; is file name null? at end of filetable?
-	je get_input		; if end of filetable, done printing, get next user input
-	
-	int 0x10		; otherwise print char in al to screen
-	cmp cx, 9		; if at end of name, go on
-	je file_ext
-	inc cx			; increment file entry byte counter
-	inc bx			; get next byte at file table
-	jmp filename_loop
-
-file_ext:
-	;; 2 blanks before file extension
-	mov cx, 2
-	call print_blanks_loop
-
-	inc bx
-	mov al, [ES:BX]
-	int 0x10
-	inc bx
-	mov al, [ES:BX]
-	int 0x10
-	inc bx
-	mov al, [ES:BX]
-	int 0x10
-
-dir_entry_number:
-	;; 9 blanks before entry #
-	mov cx, 9
-	call print_blanks_loop
-	
-	inc bx
-	mov al, [ES:BX]
-	call print_hex_as_ascii
-
-start_sector_number:
-	;; 9 blanks before starting sector
-	mov cx, 9
-	call print_blanks_loop
-	
-	inc bx
-	mov al, [ES:BX]
-	call print_hex_as_ascii
-
-file_size:
-	;; 14 blanks before file size
-	mov cx, 14
-	call print_blanks_loop
-	
-	inc bx
-	mov al, [ES:BX]
-	call print_hex_as_ascii
-	mov al, 0xA
-	int 0x10
-	mov al, 0xD
-	int 0x10
-
-	inc bx			; get first byte of next file name
-	xor cx, cx		; reset counter for next file name
-	jmp filename_loop
+fileTable_print: 
+	call print_fileTable
+	jmp get_input
 
         ;; --------------------------------------------------------------------
         ;; Reboot: far jump to reset vector
@@ -331,14 +300,10 @@ hexNum:
 
 	;; Small routine to print out cx # of spaces to screen
 print_blanks_loop:
-	cmp cx, 0
-	je end_blanks_loop
 	mov ah, 0x0e
 	mov al, ' '
 	int 0x10
-	dec cx
-	jmp print_blanks_loop
-end_blanks_loop:
+	loop print_blanks_loop
 	ret
 	
         ;; --------------------------------------------------------------------
@@ -347,6 +312,7 @@ end_blanks_loop:
         include "../print/print_string.asm"
         include "../print/print_hex.asm"
         include "../print/print_registers.asm"
+	include "../print/print_fileTable.asm"
 	;; include "../screen/clearScreen.asm"
         include "../screen/resetTextScreen.asm"
         include "../screen/resetGraphicsScreen.asm"
@@ -394,6 +360,10 @@ cmdLength:      db 0
 
 goBackMsg:      db nl,nl,'Press any key to go back...', 0
 dbgTest:        db nl,'Test',nl,0
+fileExt:	db '   ',0
+fileSize:	db 0
+fileBin:	db 'bin',0
+fileTxt:	db 'txt',0
 cmdString:      db ''
 
         ;; --------------------------------------------------------------------
