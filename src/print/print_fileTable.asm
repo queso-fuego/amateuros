@@ -50,7 +50,8 @@ dir_entry_number:
 	
 	inc bx
 	mov al, [ES:BX]
-	call print_hex_as_ascii
+	call hex_to_ascii
+	int 10h
 
 start_sector_number:
 	;; 9 blanks before starting sector
@@ -59,7 +60,8 @@ start_sector_number:
 	
 	inc bx
 	mov al, [ES:BX]
-	call print_hex_as_ascii
+	call hex_to_ascii
+	int 10h
 
 file_size:
 	;; 14 blanks before file size
@@ -68,7 +70,8 @@ file_size:
 	
 	inc bx
 	mov al, [ES:BX]
-	call print_hex_as_ascii
+	call hex_to_ascii
+	int 10h
 	mov al, 0xA
 	int 0x10
 	mov al, 0xD

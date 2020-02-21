@@ -27,7 +27,7 @@ get_input:
 	
 keyloop:
         xor ax, ax              ; ah = 0x0, al = 0x0
-        int 0x16                ; BIOS int get keystroke ah=0, al <- character
+        int 16h                 ; BIOS int get keystroke ah=0, al <- character
 
         mov ah, 0x0e
         cmp al, 0xD             ; user pressed enter?
@@ -191,8 +191,8 @@ print_txt_file:
 	mov es, ax		; ES <- 0x8000
 	xor cx, cx
 	mov ah, 0Eh
+	
 	;; Get size of filesize in bytes (512 byte per sector)
-	;; TODO: File size in sectors is in hex - convert to decimal!
 add_cx_size:		
 	cmp byte [fileSize], 0
 	je print_file_char
@@ -202,11 +202,19 @@ add_cx_size:
 
 print_file_char:
 	mov al, [ES:BX]
+	cmp al, 0Fh
+	jle call_h_to_a
+	
+return_file_char:	
 	int 10h			; Print file character to screen
 	inc bx
 	loop print_file_char	; Keep printing characters and decrement CX till 0
 	jmp get_input		; after all printed, go back to prompt
 
+call_h_to_a:
+	call hex_to_ascii
+	jmp return_file_char
+	
 input_not_found:
         mov si, failure         ; command not found! boo D:
         call print_string
@@ -288,21 +296,20 @@ end_program:
         ;; ====================================================================
 	
 	;; Small routine to convert hex byte to ascii, assume hex digit in AL
-print_hex_as_ascii:
-	mov ah, 0x0e
-	add al, 0x30		; convert to ascii number
-	cmp al, 0x39		; is value 0h-9h or A-F
+hex_to_ascii:
+	mov ah, 0Eh
+	add al, 30h		; convert to ascii number
+	cmp al, 39h		; is value 0h-9h or A-F
 	jle hexNum
-	add al, 0x7		; add hex 7 to get ascii 'A'-'F'
+	add al, 07h		; add hex 7 to get ascii 'A'-'F'
 hexNum:
-	int 0x10
 	ret
 
 	;; Small routine to print out cx # of spaces to screen
 print_blanks_loop:
-	mov ah, 0x0e
+	mov ah, 0Eh
 	mov al, ' '
-	int 0x10
+	int 10h
 	loop print_blanks_loop
 	ret
 	
@@ -316,12 +323,12 @@ print_blanks_loop:
 	;; include "../screen/clearScreen.asm"
         include "../screen/resetTextScreen.asm"
         include "../screen/resetGraphicsScreen.asm"
-      
+	
         ;; --------------------------------------------------------------------
         ;; Variables
         ;; --------------------------------------------------------------------
 	;; Carriage return/linefeed; "newline"
-	nl equ 0xA,0xD
+	nl equ 0Ah,0Dh
 	
 menuString:     db '---------------------------------',nl,\
         'Kernel Booted, Welcome to QuesOS!',nl,\
@@ -342,6 +349,7 @@ cmdPrtreg:	db 'prtreg',0	; print register values
 cmdGfxtst:	db 'gfxtst',0   ; graphics mode test
 cmdHlt:		db 'hlt',0      ; e(n)d current program by halting cpu
 cmdCls:		db 'cls',0	; clear screen by scrolling
+cmdEditor:	db 'editor',0	; launch editor program
 	
 fileTableHeading:   db nl,\
 	'---------   ---------   -------   ------------   --------------',\
