@@ -42,3 +42,6 @@ But this may change later on to more fully develop the OS within itself, that is
 In this event, changes to the binary would be uploaded to this gitlab (or other) repo as time allows, but relevant changes would not necessarily be seen in source 
 files. I'm assuming only the binary file would be changing at that point, so may take a different approach at that time to better document changes.
 
+Screenshots:
+------------
+![Basic Screenshot showing 'dir' command inside dev environment]( "Basic Screenshot showing 'dir' command inside dev environment")
