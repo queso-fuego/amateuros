@@ -10,7 +10,10 @@ Videos / Documenting Progress:
 All progress, or as much as (hopefully!) every new/changed line of code, will be documented on video in a youtube playlist on my main channel here:
 https://www.youtube.com/QuesoFuego
 
-All development is currently done on "live" recordings, and will probably be arduous or boring for most people to watch, it is later edited down before uploading
+Playlist link:
+https://www.youtube.com/playlist?list=PLT7NbkyNWaqajsw8Xh7SP9KJwjfpP8TNX
+
+- All development is currently done on "live" recordings, and will probably be arduous or boring for most people to watch, it is later edited down before uploading
 
 *Suggestions or comments regarding videos should be handled in either video comments or through email - fuegoqueso at gmail dot com*
 
