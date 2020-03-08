@@ -44,4 +44,4 @@ files. I'm assuming only the binary file would be changing at that point, so may
 
 Screenshots:
 ------------
-![Basic Screenshot showing 'dir' command inside dev environment]( "Basic Screenshot showing 'dir' command inside dev environment")
+![Basic Screenshot showing 'dir' command inside dev environment](https://gitlab.com/queso_fuego/quesos/-/blob/master/OS_Dev_1_2020_03_08.PNG "Basic Screenshot showing 'dir' command inside dev environment")
