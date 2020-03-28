@@ -45,3 +45,16 @@ files. I'm assuming only the binary file would be changing at that point, so may
 Screenshots:
 ------------
 ![Basic Screenshot showing 'dir' command inside dev environment](https://gitlab.com/queso_fuego/quesos/-/blob/master/OS_Dev_1_2020_03_08.PNG "Basic Screenshot showing 'dir' command inside dev environment")
+
+More screenshots will be added in future
+
+How to Build:
+-------------
+- Download & install bochs http://bochs.sourceforge.net/
+- Download & install or ensure you have make installed (bsd and gnu make should both work I think, though this is mainly tested with bsdmake)
+- Download & install fasm/flat assembler https://flatassembler.net/download.php
+- clone and cd to this repo's /bin folder
+- Ensure you have the .bochsrc and makefile files in /bin
+- Run 'make OS' or just 'make' from command line (may have to generate a test binary first for 'clean' to work e.g. 'echo a > test.bin')
+- Run 'make run', or 'bochs', or 'bochs -q', or some other way of starting bochs that you prefer
+
