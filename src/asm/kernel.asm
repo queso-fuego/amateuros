@@ -6,7 +6,7 @@
         ;; --------------------------------------------------------------------
 main_menu:
         ;; Reset screen state
-        call resetTextScreen
+        call clear_screen_text_mode
         
         ; print menu header & options 
         mov si, menuString
@@ -18,33 +18,41 @@ main_menu:
 get_input:
 	mov si, prompt
 	call print_string
-	xor cx, cx		; reset byte counter of input
-        mov si, cmdString       ; si now pointing to command string
+	xor cx, cx			; reset byte counter of input
+    mov si, cmdString   ; si now pointing to command string
 	
-	mov ax, 0x2000		; reset ES & DS segments to kernel area
+	mov ax, 2000h		; reset ES & DS segments to kernel area
 	mov es, ax
 	mov ds, ax
 	
 keyloop:
-        xor ax, ax              ; ah = 0x0, al = 0x0
-        int 16h                 ; BIOS int get keystroke ah=0, al <- character
+    xor ax, ax              ; ah = 0x0, al = 0x0
+    int 16h                 ; BIOS int get keystroke ah=0, al <- character
 
-        mov ah, 0x0e
-        cmp al, 0xD             ; user pressed enter?
-        je run_command		; run user input command or load file/pgm
+    mov ah, 0Eh
+    cmp al, 0Dh             ; user pressed enter?
+    je run_command			; run user input command or load file/pgm
 	
-        int 0x10                ; else print input character to screen
-        mov [si], al            ; store input char to string
-	inc cx			; increment byte counter of input
-        inc si                  ; go to next byte at si/cmdString
-        jmp keyloop             ; loop for next character from user
+	cmp al, 08h				; backspace?
+	jne .not_backspace
+	dec si					; yes, go back one char
+	dec cx					; byte counter - 1
+    int 10h                 ; else print input character to screen
+	jmp keyloop
+
+.not_backspace:
+	int 10h
+    mov [si], al            ; store input char to string
+	inc cx					; increment byte counter of input
+    inc si                  ; go to next byte at si/cmdString
+    jmp keyloop             ; loop for next character from user
 
 run_command:
 	cmp cx, 0
 	je input_not_found  	; handle empty input
 	
-        mov byte [si], 0        ; else null terminate cmdString from di
-	mov si, cmdString	; reset si to point to start of user input
+    mov byte [si], 0        ; else null terminate cmdString from si
+	mov si, cmdString		; reset si to point to start of user input
 
 	;; Prompt/"Shell" commands
 check_commands:
@@ -62,7 +70,7 @@ check_commands:
 
 	pop cx
 	push cx
-        mov di, cmdPrtreg
+    mov di, cmdPrtreg
 	mov si, cmdString
 	repe cmpsb
 	je registers_print
@@ -87,26 +95,33 @@ check_commands:
 	mov si, cmdString
 	repe cmpsb
 	je clear_screen
-	
+
+	pop cx
+	push cx
+	mov di, cmdShutdown
+	mov si, cmdString
+	repe cmpsb
+	je shutdown
+
 	pop cx			; reset command length
 	
 	;; If command not input, search file table entries for user input file
 check_files:
 	mov ax, 1000h		; reset ES:BX to start of file table (0x1000:0x0000)
 	mov es, ax
-        xor bx, bx
+    xor bx, bx
 	
 	mov si, cmdString	; reset si to start of user input string
 
 check_next_char:
         mov al, [ES:BX]         ; get file table character
         cmp al, 0               ; at end of file table?
-        je input_not_found	; if so, no file/pgm found for user input :(
+        je input_not_found		; if so, no file/pgm found for user input :(
 
         cmp al, [si]            ; does user input match file table character?
         je start_compare
 
-	add bx, 16              ; if not, go to next file entry in table
+		add bx, 16              ; if not, go to next file entry in table
         jmp check_next_char
 
 start_compare:
@@ -130,7 +145,7 @@ restart_search:
         jmp check_next_char     ; start checking again
 
 	;; Read disk sector of program to memory and execute it by far jumping
-        ;; -------------------------------------------------------------------
+    ;; -------------------------------------------------------------------
 found_program:
 	;; Get file extension - bytes 10-12 of file table entry
 	mov al, [ES:BX]
@@ -140,32 +155,32 @@ found_program:
 	mov al, [ES:BX+2]
 	mov [fileExt+2], al
 	
-        add bx, 4		; go to starting sector # in file table entry
-        mov cl, [ES:BX]         ; sector number to start reading at
+    add bx, 4			; go to starting sector # in file table entry
+    mov cl, [ES:BX]     ; sector number to start reading at
 	inc bx
 	mov bl, [ES:BX]		; file size in sectors / # of sectors to read
 	mov byte [fileSize], bl
 
 	xor ax, ax
-        mov dl, 0x00            ; disk # 
-        int 0x13		; int 13h ah 0 = reset disk system
+    mov dl, 0x00            ; disk # 
+    int 0x13		; int 13h ah 0 = reset disk system
 
-        mov ax, 0x8000          ; memory location to load pgm to
-        mov es, ax
+    mov ax, 0x8000          ; memory location to load pgm to
+    mov es, ax
 	mov al, bl		; # of sectors to read
-        xor bx, bx              ; ES:BX <- 0x8000:0x0000
+    xor bx, bx              ; ES:BX <- 0x8000:0x0000
 
-        mov ah, 0x02            ; int 13h ah 2 = read disk sectors to memory
-        mov ch, 0x00            ; track #
-        mov dh, 0x00            ; head #
-        mov dl, 0x00            ; drive #
+    mov ah, 0x02            ; int 13h ah 2 = read disk sectors to memory
+    mov ch, 0x00            ; track #
+    mov dh, 0x00            ; head #
+    mov dl, 0x00            ; drive #
 
-        int 0x13
-        jnc run_program	        ; carry flag not set, success
+    int 0x13
+    jnc run_program	        ; carry flag not set, success
 
-        mov si, pgmNotLoaded    ; else error, program did not load correctly
-        call print_string
-        jmp get_input		; go back to prompt for input
+    mov si, pgmNotLoaded    ; else error, program did not load correctly
+    call print_string
+    jmp get_input		; go back to prompt for input
 
 run_program:
 	;; Check file extension in file table entry, if 'bin'/binary, then far jump & run
@@ -178,13 +193,12 @@ run_program:
 	repe cmpsb
 	jne print_txt_file
 	
-        mov ax, 0x8000          ; program loaded, set segment registers to location
-        mov ds, ax
-        mov es, ax
-        mov fs, ax
-        mov gs, ax
-        mov ss, ax
-        jmp 0x8000:0x0000       ; far jump to program to execute
+    mov ax, 0x8000          ; program loaded, set segment registers to location
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    jmp 0x8000:0x0000       ; far jump to program to execute
 	
 print_txt_file:
 	mov ax, 8000h 		; Set ES back to file memory location
@@ -194,11 +208,7 @@ print_txt_file:
 	
 	;; Get size of filesize in bytes (512 byte per sector)
 add_cx_size:		
-	cmp byte [fileSize], 0
-	je print_file_char
-	add cx, 512
-	dec byte [fileSize]
-	jne add_cx_size	
+	imul cx, word [fileSize], 512 
 
 print_file_char:
 	mov al, [ES:BX]
@@ -209,6 +219,11 @@ return_file_char:
 	int 10h			; Print file character to screen
 	inc bx
 	loop print_file_char	; Keep printing characters and decrement CX till 0
+
+	mov ax, 0E0Ah		; Print newline after done printing file contents
+	int 0x10
+	mov al, 0Dh
+	int 0x10
 	jmp get_input		; after all printed, go back to prompt
 
 call_h_to_a:
@@ -216,9 +231,9 @@ call_h_to_a:
 	jmp return_file_char
 	
 input_not_found:
-        mov si, failure         ; command not found! boo D:
-        call print_string
-        jmp get_input 
+    mov si, failure         ; command not found! boo D:
+    call print_string
+    jmp get_input 
 
         ;; --------------------------------------------------------------------
         ;; File/Program browser & loader   
@@ -231,16 +246,16 @@ fileTable_print:
         ;; Reboot: far jump to reset vector
         ;; --------------------------------------------------------------------
 reboot: 
-        jmp 0xFFFF:0x0000
+    jmp 0xFFFF:0x0000
 
         ;; --------------------------------------------------------------------
         ;; Print Register Values
         ;; --------------------------------------------------------------------
 registers_print:
-        mov si, printRegHeading 
-        call print_string
+    mov si, printRegHeading 
+    call print_string
 
-        call print_registers
+    call print_registers
 	jmp get_input		; return to prompt '>:'
 	
         ;; --------------------------------------------------------------------
@@ -281,15 +296,23 @@ squareColLoop:
         ;; Clear Screen
         ;; --------------------------------------------------------------------
 clear_screen:
-	call resetTextScreen
+	call clear_screen_text_mode
 	jmp get_input
-	
+
+	    ;; --------------------------------------------------------------------
+        ;; Shutdown (QEMU)
+        ;; --------------------------------------------------------------------
+shutdown:
+	mov ax, 2000h
+	mov dx, 604h
+	out dx, ax
+
         ;; --------------------------------------------------------------------
         ;; End Program  
         ;; --------------------------------------------------------------------
 end_program:
-        cli                     ; clear interrupts
-        hlt                     ; halt cpu
+    cli                     ; clear interrupts
+    hlt                     ; halt cpu
 
         ;; ====================================================================
         ;; End Main Logic
@@ -319,9 +342,8 @@ print_blanks_loop:
         include "../print/print_string.asm"
         include "../print/print_hex.asm"
         include "../print/print_registers.asm"
-	include "../print/print_fileTable.asm"
-	;; include "../screen/clearScreen.asm"
-        include "../screen/resetTextScreen.asm"
+		include "../print/print_fileTable.asm"
+		include "../screen/clear_screen_text_mode.asm"
         include "../screen/resetGraphicsScreen.asm"
 	
         ;; --------------------------------------------------------------------
@@ -349,6 +371,7 @@ cmdPrtreg:	db 'prtreg',0	; print register values
 cmdGfxtst:	db 'gfxtst',0   ; graphics mode test
 cmdHlt:		db 'hlt',0      ; e(n)d current program by halting cpu
 cmdCls:		db 'cls',0	; clear screen by scrolling
+cmdShutdown: db 'shutdown',0 ; Close QEMU emulator
 cmdEditor:	db 'editor',0	; launch editor program
 	
 fileTableHeading:   db nl,\
@@ -377,5 +400,5 @@ cmdString:      db ''
         ;; --------------------------------------------------------------------
         ;; Sector Padding magic
         ;; --------------------------------------------------------------------
-        times 1536-($-$$) db 0   ; pads out 0s until we reach 1536th byte
+        times 2048-($-$$) db 0   ; pads out 0s until we reach 1536th byte
 

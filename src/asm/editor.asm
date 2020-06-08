@@ -3,26 +3,42 @@
 ;;;
 	;; CONSTANTS
 	;; --------------------------
-endPgm equ '?'
-endInput equ '$'
+ENDPGM   equ '?'
+ENDINPUT equ '$'
+VIDMEM   equ 0B800h
 	
 	;; LOGIC
 	;; -------------------------
 reset_editor:	
 	;; Clear the screen
-	call resetTextScreen
+	call clear_screen_text_mode
+
+	;; Write keybinds at bottom of screen
+	mov ax, VIDMEM
+	mov es, ax			
+	mov word di, 0F00h	; ES:DI <- 0B800h:80*2*24
+	
+	mov si, keybinds	
+	mov cx, 33			; # of bytes to move
+	cld					; clear direction flag (increment operands)
+
+	rep movsw			; mov [di], [si] and increment both until cx = 0
+
+	;; Restore extra segment
+	mov ax, 8000h
+	mov es, ax
 
 	;; Take in user input & print to screen
-	xor cx, cx		; reset byte counter
+	xor cx, cx			; reset byte counter
 	mov di, hex_code	; di points to memory address of hex code
 	
 get_next_hex_char:
 	xor ax, ax
 	int 16h			; BIOS get keystroke int 16h ah 00h, al <- input char
 	mov ah, 0Eh
-	cmp al, endInput	; at end of user input?
+	cmp al, ENDINPUT	; at end of user input?
 	je execute_input
-	cmp al, endPgm	    	; end program, exit back to kernel
+	cmp al, ENDPGM	    	; end program, exit back to kernel
 	je end_editor
 	int 10h			; print out input character BIOS int 10h ah 0Eh, al = char
 	call ascii_to_hex   	; else convert al to hexidecimal first
@@ -35,17 +51,16 @@ return_from_hex: jmp get_next_hex_char
 	
 	;; When done with input, convert to valid machine code (hex) & run	
 execute_input:
+	mov byte [di], 0C3h ; C3 hex = near return x86 instruction, to get back to prompt after running code
 	jmp hex_code		; jump to hex code memory location to run
 
-	;; TODO: find a way to get to this point for reset
 	jmp reset_editor	; reset for next hex input
 	
 put_hex_byte:
 	rol byte [hex_byte], 4	; move digit 4 bits to the left, make room for 2nd digit
 	or byte [hex_byte], al	; move 2nd ascii byte/hex digit into memory
 	mov al, [hex_byte]
-	mov [di], al		; put hex byte(2 hex digits) into hex code memory area
-	inc di			; point to next byte of hex code mem area	
+	stosb			; put hex byte(2 hex digits) into hex code memory area, and inc di/point to next byte
 	xor cx, cx		; reset byte counter
 	mov al, ' '		; print space to screen
 	int 10h
@@ -62,7 +77,7 @@ get_hex_num:
 	jmp return_from_hex_num
 	
 end_editor:	
-        mov ax, 0x2000
+        mov ax, 2000h
         mov es, ax
         xor bx, bx              ; ES:BX <- 0x2000:0x0000
 
@@ -70,16 +85,18 @@ end_editor:
         mov es, ax
         mov fs, ax
         mov gs, ax
-        mov ss, ax
-        jmp 0x2000:0x0000       ; far jump back to kernel
+        jmp 2000h:0000h	       ; far jump back to kernel
 
 	;; include files
-	include "../screen/resetTextScreen.asm"
+	include "../screen/clear_screen_text_mode.asm"
 	include "../print/print_string.asm"
 	
 	;; VARIABLES
 	;; --------------------------
 testString:	db 'Testing',0
+keybinds:	db '$',17h,' ',17h,'=',17h,' ',17h,'R',17h,'u',17h,'n',17h,' ',17h,'c',17h,'o',17h,'d',17h,'e',17h,\
+' ',17h,'?',17h,' ',17h,'=',17h,' ',17h,'R',17h,'e',17h,'t',17h,'u',17h,'r',17h,'n',17h,' ',17h,\
+'t',17h,'o',17h,' ',17h,'k',17h,'e',17h,'r',17h,'n',17h,'e',17h,'l',17h
 hex_byte:	db 00h		; 1 byte/2 hex digits
 hex_code:	times 255 db 00h
 
