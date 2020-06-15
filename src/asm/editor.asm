@@ -79,7 +79,7 @@ get_hex_num:
 end_editor:	
         mov ax, 2000h
         mov es, ax
-        xor bx, bx              ; ES:BX <- 0x2000:0x0000
+        xor bx, bx              ; ES:BX <- 2000h:0000h
 
         mov ds, ax
         mov es, ax

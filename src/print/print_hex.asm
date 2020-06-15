@@ -1,9 +1,9 @@
 ;;;
 ;;; Prints hexidecimal values using register DX and print_string.asm
 ;;;
-;;; Ascii '0'-'9' = hex 0x30-0x39
-;;; Ascii 'A'-'F' = hex 0x41-0x46
-;;; Ascii 'a'-'f' = hex 0x61-0x66
+;;; Ascii '0'-'9' = hex 30h-39h
+;;; Ascii 'A'-'F' = hex 41h-46h
+;;; Ascii 'a'-'f' = hex 61h-66h
 ;;;
 print_hex:
         pusha           ; save all registers to the stack
@@ -15,11 +15,11 @@ hex_loop:
 
         ;; Convert DX hex values to ascii
         mov ax, dx
-        and ax, 0x000F  ; turn 1st 3 hex to 0, keep final digit to convert
-        add al, 0x30    ; get ascii number value by default
-        cmp al, 0x39    ; is hex value 0-9 (<= 0x39) or A-F (> 0x39)?
+        and ax, 000Fh   ; turn 1st 3 hex to 0, keep final digit to convert
+        add al, 30h    ; get ascii number value by default
+        cmp al, 39h    ; is hex value 0-9 (<= 39h) or A-F (> 39h)?
         jle move_intoBX
-        add al, 0x7     ; to get ascii 'A'-'F'
+        add al, 07h    ; to get ascii 'A'-'F'
 
 ;; Move ascii char into bx string
 move_intoBX:
@@ -27,7 +27,7 @@ move_intoBX:
         sub bx, cx      ; subtract loop counter
         mov [bx], al
         ror dx, 4       ; rotate right by 4 bits,
-                        ; 0x12AB -> 0xB12A -> 0xAB12 -> 0x2AB1 -> 0x12AB
+                        ; 12ABh -> 0B12Ah -> 0AB12h -> 2AB1h -> 12ABh
         add cx, 1       ; increment counter   
         jmp hex_loop    ; loop for next hex digit in DX
         

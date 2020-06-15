@@ -3,8 +3,8 @@
 ;;; -----------------------------------------------------------
 resetGraphicsScreen:
         ;; Set video mode
-        mov ah, 0x00            ; int 0x10/ ah 0x00 = set video mode
-        mov al, 0x13            ; 320x200 256 color gfx mode
-        int 0x10
+        mov ah, 00h           ; int 10h/ ah 00h = set video mode
+        mov al, 13h           ; 320x200 256 color gfx mode
+        int 10h
 
         ret

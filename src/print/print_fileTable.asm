@@ -5,23 +5,23 @@ print_fileTable:
 	pusha
 	
 	mov si, fileTableHeading
-        call print_string
+    call print_string
 
-        ;; Load file table string from its memory location (0x1000), print file
-        ;;   and program names & sector numbers to screen
-        ;; --------------------------------------------------------------------
-        xor cx, cx              ; reset counter for # of bytes at current filetable entry
-        mov ax, 0x1000          ; file table location
-        mov es, ax              ; ES = 0x1000
-        xor bx, bx              ; ES:BX = 0x1000:0x0000 
-        mov ah, 0x0e            ; get ready to print to screen
+    ;; Load file table string from its memory location (1000h), print file
+    ;;   and program names & sector numbers to screen
+    ;; --------------------------------------------------------------------
+    xor cx, cx              ; reset counter for # of bytes at current filetable entry
+    mov ax, 1000h           ; file table location
+    mov es, ax              ; ES = 1000h
+    xor bx, bx              ; ES:BX = 1000h:0000h 
+    mov ah, 0Eh             ; get ready to print to screen
 
 filename_loop:
-        mov al, [ES:BX]
-        cmp al, 0               ; is file name null? at end of filetable?
+    mov al, [ES:BX]
+    cmp al, 0               ; is file name null? at end of filetable?
 	je end_print_fileTable	; if end of filetable, done printing, return to caller
 	
-	int 0x10		; otherwise print char in al to screen
+	int 10h			; otherwise print char in al to screen
 	cmp cx, 9		; if at end of name, go on
 	je file_ext
 	inc cx			; increment file entry byte counter
@@ -35,13 +35,13 @@ file_ext:
 
 	inc bx
 	mov al, [ES:BX]
-	int 0x10
+	int 10h
 	inc bx
 	mov al, [ES:BX]
-	int 0x10
+	int 10h
 	inc bx
 	mov al, [ES:BX]
-	int 0x10
+	int 10h
 
 dir_entry_number:
 	;; 9 blanks before entry #
@@ -72,10 +72,10 @@ file_size:
 	mov al, [ES:BX]
 	call hex_to_ascii
 	int 10h
-	mov al, 0xA
-	int 0x10
-	mov al, 0xD
-	int 0x10
+	mov al, 0Ah
+	int 10h
+	mov al, 0Dh
+	int 10h
 
 	inc bx			; get first byte of next file name
 	xor cx, cx		; reset counter for next file name

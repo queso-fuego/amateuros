@@ -26,7 +26,7 @@ get_input:
 	mov ds, ax
 	
 keyloop:
-    xor ax, ax              ; ah = 0x0, al = 0x0
+    xor ax, ax              ; ah = 00h al = 00h
     int 16h                 ; BIOS int get keystroke ah=0, al <- character
 
     mov ah, 0Eh
@@ -107,7 +107,7 @@ check_commands:
 	
 	;; If command not input, search file table entries for user input file
 check_files:
-	mov ax, 1000h		; reset ES:BX to start of file table (0x1000:0x0000)
+	mov ax, 1000h		; reset ES:BX to start of file table (1000h:0000h)
 	mov es, ax
     xor bx, bx
 	
@@ -162,25 +162,25 @@ found_program:
 	mov byte [fileSize], bl
 
 	xor ax, ax
-    mov dl, 0x00            ; disk # 
-    int 0x13		; int 13h ah 0 = reset disk system
+    mov dl, 00h         ; disk # 
+    int 13h     		; int 13h ah 0 = reset disk system
 
-    mov ax, 0x8000          ; memory location to load pgm to
+    mov ax, 8000h       ; memory location to load pgm to
     mov es, ax
-	mov al, bl		; # of sectors to read
-    xor bx, bx              ; ES:BX <- 0x8000:0x0000
+	mov al, bl  		; # of sectors to read
+    xor bx, bx          ; ES:BX <- 8000h:0000h
 
-    mov ah, 0x02            ; int 13h ah 2 = read disk sectors to memory
-    mov ch, 0x00            ; track #
-    mov dh, 0x00            ; head #
-    mov dl, 0x00            ; drive #
+    mov ah, 02h         ; int 13h ah 2 = read disk sectors to memory
+    mov ch, 00h         ; track #
+    mov dh, 00h         ; head #
+    mov dl, 00h         ; drive #
 
-    int 0x13
+    int 13h
     jnc run_program	        ; carry flag not set, success
 
     mov si, pgmNotLoaded    ; else error, program did not load correctly
     call print_string
-    jmp get_input		; go back to prompt for input
+    jmp get_input		    ; go back to prompt for input
 
 run_program:
 	;; Check file extension in file table entry, if 'bin'/binary, then far jump & run
@@ -188,21 +188,21 @@ run_program:
 	mov cx, 3
 	mov si, fileExt
 	mov ax, 2000h  		; Reset es to kernel space for comparison (ES = DS)
-	mov es, ax		; ES <- 0x2000
+	mov es, ax	    	; ES <- 2000h
 	mov di, fileBin
 	repe cmpsb
 	jne print_txt_file
 	
-    mov ax, 0x8000          ; program loaded, set segment registers to location
+    mov ax, 8000h       ; program loaded, set segment registers to location
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
-    jmp 0x8000:0x0000       ; far jump to program to execute
+    jmp 8000h:0000h     ; far jump to program to execute
 	
 print_txt_file:
 	mov ax, 8000h 		; Set ES back to file memory location
-	mov es, ax		; ES <- 0x8000
+	mov es, ax	    	; ES <- 8000h
 	xor cx, cx
 	mov ah, 0Eh
 	
@@ -216,15 +216,15 @@ print_file_char:
 	jle call_h_to_a
 	
 return_file_char:	
-	int 10h			; Print file character to screen
+	int 10h     			; Print file character to screen
 	inc bx
 	loop print_file_char	; Keep printing characters and decrement CX till 0
 
-	mov ax, 0E0Ah		; Print newline after done printing file contents
-	int 0x10
+	mov ax, 0E0Ah   		; Print newline after done printing file contents
+	int 10h
 	mov al, 0Dh
-	int 0x10
-	jmp get_input		; after all printed, go back to prompt
+	int 10h
+	jmp get_input   		; after all printed, go back to prompt
 
 call_h_to_a:
 	call hex_to_ascii
@@ -246,7 +246,7 @@ fileTable_print:
         ;; Reboot: far jump to reset vector
         ;; --------------------------------------------------------------------
 reboot: 
-    jmp 0xFFFF:0x0000
+    jmp 0FFFFh:0000h
 
         ;; --------------------------------------------------------------------
         ;; Print Register Values
@@ -265,31 +265,31 @@ graphics_test:
         call resetGraphicsScreen
 
         ;; Test Square
-        mov ah, 0x0c            ; int 0x10 ah 0x0C - write gfx pixel
-        mov al, 0x02            ; green
-        mov bh, 0x00            ; page number
+        mov ah, 0Ch           ; int 10h ah 0Ch - write gfx pixel
+        mov al, 02h           ; green
+        mov bh, 00h           ; page number
 
         ;; Starting pixel of square
-        mov cx, 100             ; column #
-        mov dx, 100             ; row #
-        int 0x10
+        mov cx, 100           ; column #
+        mov dx, 100           ; row #
+        int 10h
 
         ;; Pixels for columns 
 squareColLoop:
         inc cx
-        int 0x10
+        int 10h
         cmp cx, 150
         jne squareColLoop
 
         ;; Go down one row
         inc dx
-        int 0x10
+        int 10h
         mov cx, 99 
         cmp dx, 150
         jne squareColLoop       ; pixels for next row
 
-        mov ah, 0x00
-        int 0x16                ; get keystroke
+        mov ah, 00h
+        int 16h                 ; get keystroke
         jmp main_menu
 
         ;; --------------------------------------------------------------------
