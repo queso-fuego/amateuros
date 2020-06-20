@@ -7,7 +7,7 @@ clear_screen_text_mode:
 
 	mov ax, 0B800h	; set up video memory
 	mov es, ax
-	xor di, di		; es:di <- B800:0000
+	xor di, di		; es:di <- B8000:0000
 
 	mov ah, 17h		; blue background, light gray foreground
 	mov al, ' '		; space

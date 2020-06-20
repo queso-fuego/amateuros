@@ -11,7 +11,7 @@ print_fileTable:
     ;;   and program names & sector numbers to screen
     ;; --------------------------------------------------------------------
     xor cx, cx              ; reset counter for # of bytes at current filetable entry
-    mov ax, 1000h           ; file table location
+    mov ax, 100h           ; file table location
     mov es, ax              ; ES = 1000h
     xor bx, bx              ; ES:BX = 1000h:0000h 
     mov ah, 0Eh             ; get ready to print to screen

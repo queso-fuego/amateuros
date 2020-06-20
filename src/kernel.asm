@@ -21,7 +21,7 @@ get_input:
 	xor cx, cx			; reset byte counter of input
     mov si, cmdString   ; si now pointing to command string
 	
-	mov ax, 2000h		; reset ES & DS segments to kernel area
+	mov ax, 200h		; reset ES & DS segments to kernel area
 	mov es, ax
 	mov ds, ax
 	
@@ -107,7 +107,7 @@ check_commands:
 	
 	;; If command not input, search file table entries for user input file
 check_files:
-	mov ax, 1000h		; reset ES:BX to start of file table (1000h:0000h)
+	mov ax, 100h		; reset ES:BX to start of file table (1000h:0000h)
 	mov es, ax
     xor bx, bx
 	
@@ -165,10 +165,10 @@ found_program:
     mov dl, 00h         ; disk # 
     int 13h     		; int 13h ah 0 = reset disk system
 
-    mov ax, 8000h       ; memory location to load pgm to
+    mov ax, 800h       ; memory location to load pgm to
     mov es, ax
 	mov al, bl  		; # of sectors to read
-    xor bx, bx          ; ES:BX <- 8000h:0000h
+    xor bx, bx          ; ES:BX <- 800h:0000h = 8000h
 
     mov ah, 02h         ; int 13h ah 2 = read disk sectors to memory
     mov ch, 00h         ; track #
@@ -187,21 +187,21 @@ run_program:
 	;;   Else if 'txt', then print content to screen
 	mov cx, 3
 	mov si, fileExt
-	mov ax, 2000h  		; Reset es to kernel space for comparison (ES = DS)
+	mov ax, 200h  		; Reset es to kernel space for comparison (ES = DS)
 	mov es, ax	    	; ES <- 2000h
 	mov di, fileBin
 	repe cmpsb
 	jne print_txt_file
 	
-    mov ax, 8000h       ; program loaded, set segment registers to location
+    mov ax, 800h       ; program loaded, set segment registers to location
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
-    jmp 8000h:0000h     ; far jump to program to execute
+    jmp 800h:0000h     ; far jump to program to execute
 	
 print_txt_file:
-	mov ax, 8000h 		; Set ES back to file memory location
+	mov ax, 800h 		; Set ES back to file memory location
 	mov es, ax	    	; ES <- 8000h
 	xor cx, cx
 	mov ah, 0Eh
@@ -339,12 +339,12 @@ print_blanks_loop:
         ;; --------------------------------------------------------------------
         ;; Include Files
         ;; --------------------------------------------------------------------
-        include "../print/print_string.asm"
-        include "../print/print_hex.asm"
-        include "../print/print_registers.asm"
-		include "../print/print_fileTable.asm"
-		include "../screen/clear_screen_text_mode.asm"
-        include "../screen/resetGraphicsScreen.asm"
+        include "../include/print/print_string.inc"
+        include "../include/print/print_hex.inc"
+        include "../include/print/print_registers.inc"
+		include "../include/print/print_fileTable.inc"
+		include "../include/screen/clear_screen_text_mode.inc"
+        include "../include/screen/resetGraphicsScreen.inc"
 	
         ;; --------------------------------------------------------------------
         ;; Variables

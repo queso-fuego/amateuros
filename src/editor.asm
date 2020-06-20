@@ -16,7 +16,7 @@ reset_editor:
 	;; Write keybinds at bottom of screen
 	mov ax, VIDMEM
 	mov es, ax			
-	mov word di, 0F00h	; ES:DI <- 0B800h:80*2*24
+	mov word di, 0F00h	; ES:DI <- 0B8000h:80*2*24
 	
 	mov si, keybinds	
 	mov cx, 33			; # of bytes to move
@@ -25,7 +25,7 @@ reset_editor:
 	rep movsw			; mov [di], [si] and increment both until cx = 0
 
 	;; Restore extra segment
-	mov ax, 8000h
+	mov ax, 800h
 	mov es, ax
 
 	;; Take in user input & print to screen
@@ -77,7 +77,7 @@ get_hex_num:
 	jmp return_from_hex_num
 	
 end_editor:	
-        mov ax, 2000h
+        mov ax, 200h
         mov es, ax
         xor bx, bx              ; ES:BX <- 2000h:0000h
 
@@ -85,11 +85,11 @@ end_editor:
         mov es, ax
         mov fs, ax
         mov gs, ax
-        jmp 2000h:0000h	       ; far jump back to kernel
+        jmp 200h:0000h				; far jump back to kernel
 
 	;; include files
-	include "../screen/clear_screen_text_mode.asm"
-	include "../print/print_string.asm"
+	include "../include/screen/clear_screen_text_mode.inc"
+	include "../include/print/print_string.inc"
 	
 	;; VARIABLES
 	;; --------------------------

@@ -18,17 +18,17 @@ end_print:
         mov ah, 00h
         int 16h
 
-        mov ax, 2000h
+        mov ax, 200h
         mov es, ax
-        xor bx, bx             ; ES:BX <- 2000h:0000h
+        xor bx, bx             ; ES:BX <- 200h:0000h
 
         mov ds, ax
         mov es, ax
         mov fs, ax
         mov gs, ax
-        jmp 2000h:0000h        ; far jump back to kernel
+        jmp 200h:000h				; far jump back to kernel
 
-        include "../screen/clear_screen_text_mode.asm"
+        include "../include/screen/clear_screen_text_mode.inc"
 
 testMsg:        db 'Program Loaded!',0
 
