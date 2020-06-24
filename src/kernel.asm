@@ -107,7 +107,7 @@ check_commands:
 	
 	;; If command not input, search file table entries for user input file
 check_files:
-	mov ax, 100h		; reset ES:BX to start of file table (1000h:0000h)
+	mov ax, 100h		; reset ES:BX to start of file table (100h:0000h = 1000h)
 	mov es, ax
     xor bx, bx
 	
