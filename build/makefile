@@ -9,6 +9,7 @@ OS:
 	dd if=../bin/temp.bin of=../bin/OS.bin conv=notrunc;\
 	rm ../bin/*[!OS].bin
 
-.PHONY: clean
+run:
+	qemu-system-i386 -fda ../bin/OS.bin
 clean:
 	rm -f ../bin/*.bin
