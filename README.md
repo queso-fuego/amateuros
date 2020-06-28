@@ -53,11 +53,11 @@ How to Build:
 - Download & install bochs http://bochs.sourceforge.net/ or qemu https://www.qemu.org/download/ (or get either from your distros package manager)
 - Download & install or ensure you have 'make' installed (bsd and gnu make should both work I think, though this is mainly tested with bsdmake)
 - Download & install fasm/flat assembler https://flatassembler.net/download.php
-- clone and cd to this repo's /bin folder
-- Ensure you have the .bochsrc (if using bochs) and makefile files in /bin
-- Run 'make OS' or 'make' from command line
-- For bochs: In the /bin folder, run 'make run', or 'bochs', or 'bochs -q', or some other way of starting bochs that you prefer
-- For qemu: In the /bin folder, run 'qemu-system-i386 -fda OS.bin'. This will generate a warning message by default, but that is harmless
+- clone and cd to this repo's /build folder
+- Ensure you have the .bochsrc file (if using bochs) in /bin, and the makefile in /build
+- Run 'make OS' or 'make' from command line to build the OS.bin binary file in /bin
+- For bochs: In the /bin folder, run 'bochs' or 'bochs -q', or some other way of starting bochs that you prefer
+- For qemu: In the /build folder run 'make run', or in the /bin folder run 'qemu-system-i386 -fda OS.bin'. This will generate a warning message by default, but that is harmless
  
 Note: Qemu seems to run and act better than bochs, so I have switched to using it full time instead. If anything is broken on bochs and not
   on qemu, let me know. 
