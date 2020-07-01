@@ -10,10 +10,23 @@ print_fileTable:
     ;; Load file table string from its memory location (1000h), print file
     ;;   and program names & sector numbers to screen
     ;; --------------------------------------------------------------------
+	;; Load file table sector from disk to memory, to get any updates
+	mov bx, 100h
+	mov es, bx
+	xor bx, bx		; ES:BX <- 100h:0000h = 1000h; file table memory location
+	
+	xor dx, dx		; DH = head #, DL = drive #
+	mov cx, 0006h	; CH = cylinder #, CL = starting sector # to read
+
+retry_load:
+	mov ax, 0201h	; AH = 02h/int13h read disk sectors, AL = # of sectors to read
+
+	int 13h
+	jc retry_load
+
+	;; Now read file table from memory location 1000h
     xor cx, cx              ; reset counter for # of bytes at current filetable entry
-    mov ax, 100h           ; file table location
-    mov es, ax              ; ES = 1000h
-    xor bx, bx              ; ES:BX = 1000h:0000h 
+    mov ax, 100h            ; file table location
     mov ah, 0Eh             ; get ready to print to screen
 
 filename_loop:

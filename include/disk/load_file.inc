@@ -4,18 +4,20 @@
 ;;; Parms: SI - Filename, ES:BX - memory location (ES - memory address for segment; BX - memory address for offset) to load file data to
 ;;;
 load_file:
+	;; Function prologue - save callers stack values & registers
+	push bp
+	mov bp, sp
+	pusha
+
 	;; Get parms off stack - reverse order/LIFO!!
-	pop bx
-	pop fs			; FS:BX <- memory location to load data to
-	pop si			; File name
+	mov bx, [bp+4]	; 1st parm off stack, offset memory address
+	mov fs, [bp+6]	; 2nd parm, segment memory address
+	mov si, [bp+8]	; 3rd parm, File name (address)
 		
 	;; Copy filename to variable
 	mov cx, 10
 	mov di, file_name_loading
-	.loop:
-		lodsb
-		stosb
-	loop .loop
+	rep movsb
 		
 	;; Reset file_name address
 	mov si, file_name_loading
@@ -82,6 +84,10 @@ load_file:
 		;; TODO: Otherwise handle error here...
 
 		return_to_caller_loading:
+			;; Function epilogue - Restore callers stack values & registers
+			popa			; Restore registers in initial setup
+			mov sp, bp		; Reset stack pointer
+			pop bp			; Reset caller's base pointer
 			ret
 
 ;;; Variables

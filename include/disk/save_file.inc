@@ -2,33 +2,39 @@
 ;;; save_file.inc: Save file data to disk
 ;;;
 ;;; Parms: File name, file type (bin or other), file size (in hex sectors), 
-;;;        memory location to save data from, error code
+;;;        memory location to save data from
 ;;;
 save_file:
+	;; Function prologue - save callers stack values & registers
+	push bp
+	mov bp, sp
+	sub sp, 2		; Make room for local stack variable - error code
+	push bx
+	push fs			
+	push cx		
+	push dx	
+	push si
+
 	;; Get parms off stack - reverse order
-	pop ax				; error code
-	mov word [error_code], ax
-	pop bx
-	pop fs		; FS:BX memory location to save data from
-	pop cx		; File size
-	pop ax		; File type
-	pop si		; File name
+	mov bx, [bp+4]
+	mov fs, [bp+6]		; FS:BX memory location to save data from
+	mov cx, [bp+8]		; File size
+	mov dx, [bp+10]		; File type
+	mov si, [bp+12]		; File name
 	
 	;; Copy file size to variable
 	mov byte [file_size], cl
 
-	;; Copy file type to variable
-	mov cx, 3
-	mov di, file_type
-	rep stosb			; Store 3 bytes of file type string from al to variable in di
-
 	;; Copy filename to variable
 	mov cx, 10
 	mov di, file_name_saving
-	.loop:
-		lodsb
-		stosb
-	loop .loop
+	rep	movsb
+
+	;; Copy file type to variable
+	mov di, file_type
+	mov si, dx
+	mov cx, 3
+	rep movsb
 
 	;; Reset file_name address
 	mov si, file_name_saving
@@ -36,21 +42,20 @@ save_file:
 	;; Search filetable for filename
 	xor ax, ax
 	mov es, ax		
-	mov di, 1000h	; 0000h:1000h = location of fileTable in memory
+	mov di, 1000h		; 0000h:1000h = location of fileTable in memory
 	
 	mov cx, 10
 
 	check_filename_saving:
 		;; Get starting sector of file + file size in sectors 
-		mov al, [ES:DI+14]				; Starting sector
+		mov al, byte [ES:DI+14]			; Starting sector
+		cmp al, 0
+		je new_file					; No starting sector, file doesn't exist, create new file
+
+		add al, byte [ES:DI+15]		; File size in hex sectors 
 		mov byte [last_saved_sector], al
-		mov al, [ES:DI+15]				; File size in sectors
-		add byte [last_saved_sector], al
 
 		mov al, [ES:DI]
-		cmp al, 0		; End of file table?
-		je new_file		; File doesn't exist yet, create new file
-
 		cmp al, [si]
 		je compare_filenames_saving
 		
@@ -58,6 +63,7 @@ save_file:
 		jmp check_filename_saving
 
 	compare_filenames_saving:
+		mov di, file_name_saving
 		push di
 
 		.loop:
@@ -110,13 +116,15 @@ save_file:
 
 		;; Write changed filetable to disk - TODO: Assuming file table is 1 sector, 
 		;;   change later
-		mov ah, 03h			; int 13h ah 03h - write disk sectors	
-		mov al, 01h			; # of sectors to write
 		xor ch, ch			; track #
 		mov cl, 06h			; sector # to start writing at
 		xor dx, dx			; dh = head #, dl = drive #
 		mov word [saved_bx], bx	
+		xor ax, ax
+		mov es, ax
 		mov bx, 1000h		; ES:BX <- 0000h:1000h (file table memory location)
+		mov ah, 03h			; int 13h ah 03h - write disk sectors	
+		mov al, 01h			; # of sectors to write
 	
 		int 13h
 		jnc write_file_data ; Success, now write file data
@@ -138,10 +146,18 @@ save_file:
 		jnc return_to_caller_saving
 
 		;; TODO: Handle disk write error for file data here...
-		mov word [error_code], 1	; Signifies error occurred
-		push word [error_code]
+		mov word [bp-2], 1	; Signifies error occurred
 
 	return_to_caller_saving:
+		;; Function epilogue - Restore callers stack values & registers
+		mov ax, [bp-2]	; Error/return code
+		pop si			; Restore changed registers
+		pop dx
+		pop cx
+		pop fs
+		pop bx
+		mov sp, bp		; Reset stack pointer
+		pop bp			; Reset caller's base pointer
 		ret
 
 ;; Variables
