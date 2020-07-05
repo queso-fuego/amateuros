@@ -86,11 +86,11 @@ return_from_hex: jmp get_next_hex_char
 	
 	;; When done with input, convert to valid machine code (hex) & run	
 execute_input:
-	mov byte [di], 0CBh ; CB hex = far return x86 instruction, to get back to prompt after running code
+	mov byte [es:di], 0CBh ; CB hex = far return x86 instruction, to get back to prompt after running code
 	xor di, di			; Reset di/hex memory location 10,000h
 	call 1000h:0000h	; jump to hex code memory location to run
 
-	jmp reset_editor	; reset for next hex input
+	jmp hex_editor		; reset for next hex input
 	
 put_hex_byte:
 	rol byte [hex_byte], 4	; move digit 4 bits to the left, make room for 2nd digit
