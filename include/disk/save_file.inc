@@ -44,8 +44,6 @@ save_file:
 	mov es, ax		
 	mov di, 1000h		; 0000h:1000h = location of fileTable in memory
 	
-	mov cx, 10
-
 	check_filename_saving:
 		;; Get starting sector of file + file size in sectors 
 		mov al, byte [ES:DI+14]			; Starting sector
@@ -63,19 +61,13 @@ save_file:
 		jmp check_filename_saving
 
 	compare_filenames_saving:
-		mov di, file_name_saving
 		push di
 
-		.loop:
-			mov al, [ES:DI]
-			inc di
-			cmp al, [si]
-			jne restart_check_saving
+		mov cx, 10
 
-			dec cl
-			jz found_file_saving
-			inc si	
-			jmp .loop
+		rep cmpsb
+		jne restart_check_saving
+		je found_file_saving
 		
 		restart_check_saving:
 			mov	si, file_name_saving
@@ -132,6 +124,8 @@ save_file:
 		;; TODO: Handle disk write error for file table here...
 
 	write_file_data:
+		mov word [bp-2], 0					; Init error code to 'success'
+
 		mov ax, fs
 		mov es, ax							; Segment address of file data to write
 

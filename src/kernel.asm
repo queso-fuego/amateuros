@@ -227,7 +227,7 @@ return_file_char:
 	jmp get_input   		; after all printed, go back to prompt
 
 call_h_to_a:
-	call hex_to_ascii
+	call hex_to_ascii		; convert AL hex character to ASCII character 
 	jmp return_file_char
 	
 input_not_found:
@@ -318,24 +318,6 @@ end_program:
         ;; End Main Logic
         ;; ====================================================================
 	
-	;; Small routine to convert hex byte to ascii, assume hex digit in AL
-hex_to_ascii:
-	mov ah, 0Eh
-	add al, 30h		; convert to ascii number
-	cmp al, 39h		; is value 0h-9h or A-F
-	jle hexNum
-	add al, 07h		; add hex 7 to get ascii 'A'-'F'
-hexNum:
-	ret
-
-	;; Small routine to print out cx # of spaces to screen
-print_blanks_loop:
-	mov ah, 0Eh
-	mov al, ' '
-	int 10h
-	loop print_blanks_loop
-	ret
-	
         ;; --------------------------------------------------------------------
         ;; Include Files
         ;; --------------------------------------------------------------------
@@ -345,6 +327,7 @@ print_blanks_loop:
 		include "../include/print/print_fileTable.inc"
 		include "../include/screen/clear_screen_text_mode.inc"
         include "../include/screen/resetGraphicsScreen.inc"
+		include "../include/type_conversions/hex_to_ascii.inc"
 	
         ;; --------------------------------------------------------------------
         ;; Variables
@@ -373,12 +356,6 @@ cmdHlt:		db 'hlt',0      ; e(n)d current program by halting cpu
 cmdCls:		db 'cls',0	; clear screen by scrolling
 cmdShutdown: db 'shutdown',0 ; Close QEMU emulator
 cmdEditor:	db 'editor',0	; launch editor program
-	
-fileTableHeading:   db nl,\
-	'---------   ---------   -------   ------------   --------------',\
-	nl,'File Name   Extension   Entry #   Start Sector   Size (sectors)',\
-	nl,'---------   ---------   -------   ------------   --------------',\
-	nl,0
         
 printRegHeading:    db nl,'--------  ------------',nl,\
         'Register  Mem Location',nl,\

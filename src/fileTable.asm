@@ -17,7 +17,7 @@
 	'kernel    ','bin',00h,02h,04h,\
 	'fileTable ','txt',00h,06h,01h,\
 	'calculator','bin',00h,07h,01h,\
-	'editor    ','bin',00h,08h,03h
+	'editor    ','bin',00h,08h,04h
 
         ;; Sector padding magic!
         times 512-($-$$) db 0       ; pad rest of sector out with 0s

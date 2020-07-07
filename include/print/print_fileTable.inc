@@ -56,7 +56,7 @@ file_ext:
 	mov al, [ES:BX]
 	int 10h
 
-dir_entry_number:
+	;; Directory entry # section
 	;; 9 blanks before entry #
 	mov cx, 9
 	call print_blanks_loop
@@ -66,7 +66,7 @@ dir_entry_number:
 	call hex_to_ascii
 	int 10h
 
-start_sector_number:
+	;; Starting sector section
 	;; 9 blanks before starting sector
 	mov cx, 9
 	call print_blanks_loop
@@ -76,7 +76,7 @@ start_sector_number:
 	call hex_to_ascii
 	int 10h
 
-file_size:
+	;; File size section
 	;; 14 blanks before file size
 	mov cx, 14
 	call print_blanks_loop
@@ -97,3 +97,23 @@ file_size:
 end_print_fileTable:
 	popa
 	ret
+
+	;; Small routine to print out cx # of spaces to screen
+print_blanks_loop:
+	mov ah, 0Eh
+	mov al, ' '
+	int 10h
+	loop print_blanks_loop
+	ret
+
+;; --------------------------------------------------------------------
+;; Variables
+;; --------------------------------------------------------------------
+;; CONSTANTS
+nl equ 0Ah,0Dh
+
+fileTableHeading:   db nl,\
+	'---------   ---------   -------   ------------   --------------',\
+	nl,'File Name   Extension   Entry #   Start Sector   Size (sectors)',\
+	nl,'---------   ---------   -------   ------------   --------------',\
+	nl,0
