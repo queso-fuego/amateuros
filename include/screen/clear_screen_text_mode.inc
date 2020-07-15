@@ -1,5 +1,5 @@
 ;;; 
-;;; clearScreen.asm: clears screen by writing to video memory 
+;;; clear_screen_text_mode.inc: clears screen by writing to video memory 
 ;;; assuming VGA txt mode 03 - 80x25 characters, 16 colors
 ;;;
 clear_screen_text_mode:

@@ -11,6 +11,10 @@ LOADCURR  equ 'L'
 BINFILE   equ 'B'
 OTHERFILE equ 'O'
 VIDMEM   equ 0B800h
+LEFTARROW equ 4Bh
+RIGHTARROW equ 4Dh
+UPARROW equ 48h
+DOWNARROW equ 50h
 	
 	;; LOGIC
 	;; -------------------------
@@ -175,22 +179,65 @@ hex_editor:
 	mov ax, 1000h
 	mov es, ax
 	xor di, di			; ES:DI <- 1000h:0000h = 10,000h
+	
+	;; Reset cursor x/y
+	mov byte [cursor_x], 0
+	mov byte [cursor_y], 0
 
 get_next_hex_char:
 	xor ax, ax
 	int 16h				; BIOS get keystroke int 16h ah 00h, al <- input char
+	mov byte [save_scancode], ah
 	mov ah, 0Eh
+
+	;; Check for hex editor keybinds
 	cmp al, RUNINPUT	; at end of user input?
 	je execute_input
 	cmp al, ENDPGM    	; end program, exit back to kernel
 	je end_editor
 	cmp al, SAVEPGM		; Does user want to save?
 	je save_program
-	cmp al, '0'
-	jl get_next_hex_char	; skip input character
-	cmp al, '9'
-	jg check_if_athruf
-	jmp convert_input	; continue on 
+
+	;; Check for arrow keys
+	cmp byte [save_scancode], LEFTARROW	; Left arrow key
+	je left_arrow_pressed
+	cmp byte [save_scancode], RIGHTARROW
+	je right_arrow_pressed
+	cmp byte [save_scancode], UPARROW
+	je up_arrow_pressed
+	cmp byte [save_scancode], DOWNARROW
+	je down_arrow_pressed
+
+	jmp check_valid_hex
+	
+	left_arrow_pressed:
+		cmp byte [cursor_x], 3
+		jl get_next_hex_char
+		sub byte [cursor_x], 3
+	
+		mov dh, [cursor_y]		; TODO: Change this later to push x/y, not dx
+		mov dl, [cursor_x]
+		push dx
+		call move_cursor
+		dec	di					; Move file data to previous byte
+		jmp get_next_hex_char
+
+	right_arrow_pressed:
+	; TODO:
+
+	up_arrow_pressed:
+	; TODO:
+
+	down_arrow_pressed:
+	; TODO:
+
+	;; Check for valid hex digits
+	check_valid_hex:
+		cmp al, '0'
+		jl get_next_hex_char	; skip input character
+		cmp al, '9'
+		jg check_if_athruf
+		jmp convert_input	; continue on 
 
 	check_if_AthruF:
 		cmp al, 'A'
@@ -208,6 +255,7 @@ get_next_hex_char:
 
 	convert_input:
 		int 10h				; print out input character BIOS int 10h ah 0Eh, al = char
+		inc byte [cursor_x]
 		call ascii_to_hex  	; else convert al to hexidecimal first
 		inc cx				; increment byte counter
 		cmp cx, 2			;; 2 ascii bytes = 1 hex byte
@@ -218,7 +266,8 @@ return_from_hex: jmp get_next_hex_char
 	
 	;; When done with input, convert to valid machine code (hex) & run	
 execute_input:
-	mov byte [es:di], 0CBh ; CB hex = far return x86 instruction, to get back to prompt after running code
+	mov di, word [editor_filesize]	; Put current end of file into di
+	mov byte [ES:DI], 0CBh ; CB hex = far return x86 instruction, to get back to prompt after running code
 	xor di, di			; Reset di/hex memory location 10,000h
 	call 1000h:0000h	; jump to hex code memory location to run
 
@@ -233,6 +282,7 @@ put_hex_byte:
 	xor cx, cx		; reset byte counter
 	mov al, ' '		; print space to screen
 	int 10h
+	inc byte [cursor_x]
 	jmp return_from_hex
 
 ascii_to_hex:
@@ -395,6 +445,7 @@ end_editor:
 
 	;; include files
 	include "../include/screen/clear_screen_text_mode.inc"
+	include "../include/screen/move_cursor.inc"
 	include "../include/print/print_string.inc"
 	include "../include/print/print_fileTable.inc"
 	include "../include/disk/save_file.inc"
@@ -421,6 +472,9 @@ load_file_error_msg: db 'Load file error occurred' ; length of string = 24
 hex_byte:	db 00h		; 1 byte/2 hex digits
 text_color: db 17h
 save_di: dw 0
+save_scancode: db 0
+cursor_x: db 0
+cursor_y: db 0
 
 	;; Sector padding
 	times 2048-($-$$) db 0
