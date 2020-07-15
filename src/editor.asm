@@ -103,6 +103,18 @@ load_file_success:
 	
 new_file_hex:
 	call clear_screen_text_mode
+	;; Fill out filetype (.bin)
+	mov ax, 800h					; reset es to program location (8000h)
+	mov es, ax
+	mov di, editor_filetype
+	mov al, 'b'
+	stosb
+	mov al, 'i'
+	stosb
+	mov al, 'n'
+	stosb
+	call fill_out_bottom_editor_message	; Write keybinds & filetype at bottom of screen
+
 	jmp hex_editor
 	
 load_file_hex:
@@ -134,10 +146,8 @@ load_file_hex:
 
 	mov word [save_di], di	; Save off di first
 
-	;; Write keybinds at bottom of screen
-	mov si, keybinds_string	
-	mov cx, 56			; # of bytes to move
-	call write_bottom_screen_message
+	; Write keybinds at bottom of screen
+	call fill_out_bottom_editor_message	
 
 	mov ax, 1000h
 	mov es, ax			; Reset es to file location (10000h)
@@ -147,13 +157,19 @@ load_file_hex:
 
 text_editor:
 	;; TODO: Fill this out!...
+	;; Fill out default filetype .txt
+	mov ax, 800h
+	mov es, ax
+	mov di, editor_filetype
+	mov al, 't'
+	stosb
+	mov al, 'x'
+	stosb
+	mov al, 't'
+	stosb
 
 hex_editor:
-	;; Write keybinds at bottom of screen
-	mov si, keybinds_string	
-	mov cx, 56			; # of bytes to move
-	call write_bottom_screen_message
-
+	
 	;; Take in user input & print to screen
 	xor cx, cx			; reset byte counter
 	mov ax, 1000h
@@ -170,12 +186,33 @@ get_next_hex_char:
 	je end_editor
 	cmp al, SAVEPGM		; Does user want to save?
 	je save_program
-	int 10h				; print out input character BIOS int 10h ah 0Eh, al = char
-	call ascii_to_hex  	; else convert al to hexidecimal first
-	inc cx				; increment byte counter
-	cmp cx, 2			;; 2 ascii bytes = 1 hex byte
-	je put_hex_byte
-	mov [hex_byte], al	; put input into hex byte memory area
+	cmp al, '0'
+	jl get_next_hex_char	; skip input character
+	cmp al, '9'
+	jg check_if_athruf
+	jmp convert_input	; continue on 
+
+	check_if_AthruF:
+		cmp al, 'A'
+		jl get_next_hex_char
+		cmp al, 'F'
+		jg check_if_athruf
+		jmp convert_input
+
+	check_if_athruf:
+		cmp al, 'a'
+		jl get_next_hex_char
+		cmp al, 'f'
+		jg get_next_hex_char
+		sub al, 20h			; Convert lowercase to uppercase
+
+	convert_input:
+		int 10h				; print out input character BIOS int 10h ah 0Eh, al = char
+		call ascii_to_hex  	; else convert al to hexidecimal first
+		inc cx				; increment byte counter
+		cmp cx, 2			;; 2 ascii bytes = 1 hex byte
+		je put_hex_byte
+		mov [hex_byte], al	; put input into hex byte memory area
 	
 return_from_hex: jmp get_next_hex_char
 	
@@ -284,11 +321,12 @@ save_file_error:
 
 save_file_success:
 	call clear_screen_text_mode			; Clear screen on success
-	mov si, keybinds_string				; Write normal keybinds string
+	mov si, keybinds_hex_editor			; Write normal keybinds string
 	mov cx, 56
 	call write_bottom_screen_message
 	jmp get_next_hex_char				; Return to normal hex editing
 
+;; Subroutine: write message at bottom of screen
 write_bottom_screen_message:
 	;; Message to write in SI, length of message in CX
 	mov ax, VIDMEM
@@ -302,6 +340,7 @@ write_bottom_screen_message:
 	loop .loop
 	ret
 
+;; Subroutine: have user input a file name
 input_file_name:
 	;; Save file name
 	mov di, editor_filename
@@ -314,6 +353,33 @@ input_file_name:
 		int 10h			; Print out character to screen
 	loop .input_filename_loop
 	ret
+
+;; Subroutine: fill out message at bottom of editor
+fill_out_bottom_editor_message:
+	; Fill string variable with message to write
+	mov ax, 800h
+	mov es, ax
+	mov di, bottom_editor_msg
+	mov si, keybinds_hex_editor
+	mov cx, 56			; # of bytes to move
+	rep movsb
+	mov al, ' '			; append filetype (extension) to string
+	stosb
+	stosb
+	mov al, '['
+	stosb
+	mov al, '.'
+	stosb
+	mov si, editor_filetype
+	mov cx, 3
+	rep movsb
+	mov al, ']'
+	stosb
+	
+	mov si, bottom_editor_msg
+	mov cx, 80
+	call write_bottom_screen_message
+	ret					; return to caller
 
 ;; End program
 end_editor:	
@@ -337,8 +403,9 @@ end_editor:
 	
 	;; VARIABLES
 	;; --------------------------
-keybinds_string:	db ' $ = Run code ? = Return to kernel S = Save file to disk'
-;keybinds_string_len equ $ - keybinds_string
+bottom_editor_msg:	times 80 db 0 
+keybinds_hex_editor: db  ' $ = Run code ? = Return to kernel S = Save file to disk'
+;; 56 length
 new_or_current_string: db '(C)reate new file or (L)oad existing file?', 0
 ;; 41 length
 choose_filetype_string: db '(B)inary/hex file or (O)ther file type (.txt, etc)?', 0
