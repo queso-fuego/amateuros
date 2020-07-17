@@ -45,7 +45,7 @@ files. I'm assuming only the binary file would be changing at that point, so I m
 
 Screenshots:
 ------------
-![Basic Screenshot showing 'dir' command inside dev environment](https://gitlab.com/queso_fuego/quesos/-/blob/master/OS_Dev_1_2020_03_08.PNG "Basic Screenshot showing 'dir' command inside dev environment")
+![Showing 'dir' command inside bochs dev environment](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/OS_Dev_1_2020_03_08.PNG "Basic Screenshot showing 'dir' command inside dev environment")
 
 More screenshots will be added in future
 
