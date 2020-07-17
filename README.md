@@ -4,6 +4,7 @@ Overview/Goals:
 and develop the OS from within itself, including homemade assembler, compiler, programming languages, GUIs, applications, window managers, etc.
 - Initial reasoning & motivation for this project was to learn x86 16bit assembly; as such, this will be the primary language until further from-scratch
 developments are made or interests change to C or other languages
+- Feel free to fork or make your own changes to your own repos, the license is effectively public domain. Suggestions or improvements are welcome, but they will be covered in a video if used. I might open up this repo in the future, but currently lack sufficient time to manage that. 
 
 Videos / Documenting Progress:
 ------------------------------
@@ -13,9 +14,9 @@ https://www.youtube.com/QuesoFuego
 Playlist link:
 https://www.youtube.com/playlist?list=PLT7NbkyNWaqajsw8Xh7SP9KJwjfpP8TNX
 
-- All development is currently done on "live" recordings, and would probably be arduous or boring for most people to watch. Footage is edited down before uploading
+- All development is currently done on "live" recordings, and would probably be arduous or boring for most people to watch unedited. Footage is edited down before uploading to cut out long pauses, gratuitous ums and ahs, redundant info, off-topic ramblings, etc.
 
-*Suggestions or comments regarding videos should be handled in either video comments or through email - fuegoqueso at gmail dot com*
+*Suggestions or comments regarding videos should be handled in either video comments, twitter @Queso_Fuego, or through email - fuegoqueso at gmail dot com*
 
 ** The rollout of these will most likely be slow (weeks to months). I have a full time job and lack time/energy/motivation most days to do too much 
     outside of research.**
@@ -50,8 +51,8 @@ More screenshots will be added in future
 
 How to Build:
 -------------
-- Download & install bochs http://bochs.sourceforge.net/ or qemu https://www.qemu.org/download/ (or get either from your distros package manager)
-- Download & install or ensure you have 'make' installed (bsd and gnu make should both work I think, though this is mainly tested with bsdmake)
+- Download & install bochs http://bochs.sourceforge.net/ or qemu https://www.qemu.org/download/ (or get either from your distro's package manager)
+- Download & install make or ensure you have 'make' installed (bsd and gnu make should both work I think, though this is mainly tested with bsdmake)
 - Download & install fasm/flat assembler https://flatassembler.net/download.php
 - clone and cd to this repo's /build folder
 - Ensure you have the .bochsrc file (if using bochs) in /bin, and the makefile in /build
