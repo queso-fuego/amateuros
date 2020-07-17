@@ -46,6 +46,7 @@ files. I'm assuming only the binary file would be changing at that point, so I m
 Screenshots:
 ------------
 ![Showing 'dir' command inside bochs dev environment](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/OS_Dev_1_2020_03_08.PNG "Basic Screenshot showing 'dir' command inside dev environment")
+![Showing 'editor' program in hex editor mode, loading its own bootsector](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/OS_Dev_2020_07-17.PNG "Basic Screenshot showing 'editor' program loading its own bootsector")
 
 More screenshots will be added in future
 
