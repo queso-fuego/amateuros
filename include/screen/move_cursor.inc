@@ -3,6 +3,7 @@
 ;;; assuming VGA txt mode 03 - 80x25 characters, 16 colors
 ;;; Parms:
 ;;; input 1: row/col as 2 bytes in a word
+;;; output 1: error/return code in AX
 move_cursor:
 	push bp
 	mov bp, sp	
@@ -11,7 +12,9 @@ move_cursor:
 	push dx			; save modified register
 
 	;; Get parm off stack
-	mov dx, [bp+4]	; row/col to move cursor to
+	mov dx, [bp+4]	; DX = row/col to move cursor to, DL = column value
+	mov ax, [bp+6]	; row value
+	mov dh, al		
 
 	mov ah, 02h		; int 10h ah 02h = move cursor
 	mov bh, 00h

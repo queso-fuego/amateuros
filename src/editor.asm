@@ -11,10 +11,11 @@ LOADCURR  equ 'L'
 BINFILE   equ 'B'
 OTHERFILE equ 'O'
 VIDMEM   equ 0B800h
-LEFTARROW equ 4Bh
+LEFTARROW equ 4Bh	; Keyboard scancodes...
 RIGHTARROW equ 4Dh
 UPARROW equ 48h
 DOWNARROW equ 50h
+ESC equ 01h
 	
 	;; LOGIC
 	;; -------------------------
@@ -43,7 +44,7 @@ create_new_file:
 	cmp al, BINFILE
 	je new_file_hex
 	cmp al, OTHERFILE
-	je text_editor
+	je new_file_text
 
 load_existing_file:
 	call print_fileTable
@@ -103,7 +104,7 @@ load_file_success:
 	mov cx, 3
 	rep cmpsb			; Check if file extension = 'bin'
 	je load_file_hex	; If so, load file bytes to screen, and go to hex editor
-	jmp text_editor		; Otherwise, go to general text editor
+	jmp load_file_text	; Otherwise, go to general text editor
 	
 new_file_hex:
 	call clear_screen_text_mode
@@ -117,6 +118,8 @@ new_file_hex:
 	stosb
 	mov al, 'n'
 	stosb
+	mov si, keybinds_hex_editor
+	mov cx, 56			; # of bytes to move
 	call fill_out_bottom_editor_message	; Write keybinds & filetype at bottom of screen
 
 	jmp hex_editor
@@ -151,6 +154,8 @@ load_file_hex:
 	mov word [save_di], di	; Save off di first
 
 	; Write keybinds at bottom of screen
+	mov si, keybinds_hex_editor
+	mov cx, 56			; # of bytes to move
 	call fill_out_bottom_editor_message	
 
 	mov ax, 1000h
@@ -159,10 +164,10 @@ load_file_hex:
 	
 	jmp get_next_hex_char
 
-text_editor:
-	;; TODO: Fill this out!...
-	;; Fill out default filetype .txt
-	mov ax, 800h
+new_file_text:
+	call clear_screen_text_mode
+	;; Fill out filetype (.txt)
+	mov ax, 800h					; reset es to program location (8000h)
 	mov es, ax
 	mov di, editor_filetype
 	mov al, 't'
@@ -171,9 +176,82 @@ text_editor:
 	stosb
 	mov al, 't'
 	stosb
+	mov si, keybinds_text_editor
+	mov cx, 50			; # of bytes to move
+	call fill_out_bottom_editor_message	; Write keybinds & filetype at bottom of screen
+
+	jmp text_editor
+
+load_file_text:
+	call clear_screen_text_mode
+
+	;; Load file bytes to screen
+	mov ax, 1000h
+	mov es, ax
+	xor di, di			; ES:DI <- 1000h:0000h = 10,000h - file location
+	mov cx, 512			; TODO: Change to actual file size
+
+	mov ah, 0Eh
+	.loop:
+		mov al, [ES:DI]		; Read ascii byte from file location
+		int 10h
+		inc di
+	loop .loop
+
+	dec di					; Fix off by one
+
+	mov word [save_di], di	; Save off di first
+
+	; Write keybinds at bottom of screen
+	mov si, keybinds_text_editor
+	mov cx, 50			; # of bytes to move
+	call fill_out_bottom_editor_message	
+
+	mov ax, 1000h
+	mov es, ax			; Reset es to file location (10000h)
+	mov di, [save_di]	; Restore di value for file location
+	
+	;; TODO: Put code to format hex code lines so that they all line up the same
+
+text_editor:
+	input_char_loop:
+		xor ah, ah
+		int 16h			; Keyboard scancode in AH, char in AL
+		mov byte [save_scancode], ah	
+		cmp ah, 0Eh
+
+		;; Check for text editor keybinds
+		cmp byte [save_scancode], ESC	; Return to kernel
+		je end_editor	
+
+		;; Print out user input character to screen
+		xor ah, ah
+		push ax					; char to print in AL
+		push word [cursor_y]
+		push word [cursor_x]
+		call print_char_text_mode
+		
+		add sp, 6
+
+		;; Move cursor 1 character forward
+		inc word [cursor_x]
+		push word [cursor_y]
+		push word [cursor_x]
+		call move_cursor
+
+		add sp, 4
+		
+		;; TODO: Put newline code here (enter key)
+
+		;; TODO: put backspace code here
+
+		;; TODO: put arrow keys code here
+
+	jmp input_char_loop
+
+	;; TODO: Implement saving text file to disk here...
 
 hex_editor:
-	
 	;; Take in user input & print to screen
 	xor cx, cx			; reset byte counter
 	mov ax, 1000h
@@ -181,8 +259,8 @@ hex_editor:
 	xor di, di			; ES:DI <- 1000h:0000h = 10,000h
 	
 	;; Reset cursor x/y
-	mov byte [cursor_x], 0
-	mov byte [cursor_y], 0
+	mov word [cursor_x], 0
+	mov word [cursor_y], 0
 
 get_next_hex_char:
 	xor ax, ax
@@ -198,32 +276,78 @@ get_next_hex_char:
 	cmp al, SAVEPGM		; Does user want to save?
 	je save_program
 
-	;; Check for arrow keys
-	cmp byte [save_scancode], LEFTARROW	; Left arrow key
-	je left_arrow_pressed
-	cmp byte [save_scancode], RIGHTARROW
-	je right_arrow_pressed
-	cmp byte [save_scancode], UPARROW
-	je up_arrow_pressed
-	cmp byte [save_scancode], DOWNARROW
-	je down_arrow_pressed
+	;; Check for backspace
+	cmp al, 08h
+	jne check_arrow_keys	
+	cmp word [cursor_x], 3
+	jl get_next_hex_char
 
-	jmp check_valid_hex
+	;; Blank out 1st nibble of hex byte
+	push word 0020h			; space ' ' in ascii
+	push word [cursor_y]	 
+	push word [cursor_x]
+	call print_char_text_mode
+
+	add sp, 6				; restore stack
+
+	;; Blank out 2nd nibble of hex byte
+	push word 0020h			; space ' ' in ascii
+	push word [cursor_y]	 
+	inc word [cursor_x]		; 2nd nibble of hex byte
+	push word [cursor_x]
+	call print_char_text_mode
+
+	add sp, 6				; restore stack
+
+	;; Move cursor 1 full hex byte left
+	sub word [cursor_x], 4	; cursor_x was on 2nd nibble, so go 1 extra
+	push word [cursor_y]	
+	push word [cursor_x]
+	call move_cursor
+	add sp, 4				; Restore stack after call
+
+	mov [ES:DI], byte 00h	; Make current byte 0 in file
+	dec	di					; Move file data to previous byte
+	jmp get_next_hex_char
+
+	;; Check for arrow keys
+	check_arrow_keys:
+		cmp byte [save_scancode], LEFTARROW	; Left arrow key
+		je left_arrow_pressed
+		cmp byte [save_scancode], RIGHTARROW
+		je right_arrow_pressed
+		cmp byte [save_scancode], UPARROW
+		je up_arrow_pressed
+		cmp byte [save_scancode], DOWNARROW
+		je down_arrow_pressed
+
+		jmp check_valid_hex
 	
 	left_arrow_pressed:
-		cmp byte [cursor_x], 3
+		cmp word [cursor_x], 3
 		jl get_next_hex_char
-		sub byte [cursor_x], 3
+		sub word [cursor_x], 3
 	
-		mov dh, [cursor_y]		; TODO: Change this later to push x/y, not dx
-		mov dl, [cursor_x]
-		push dx
+		push word [cursor_y]	
+		push word [cursor_x]
 		call move_cursor
+		add sp, 4				; Restore stack after call
+
 		dec	di					; Move file data to previous byte
 		jmp get_next_hex_char
 
 	right_arrow_pressed:
-	; TODO:
+		cmp word [cursor_x], 75
+		jg get_next_hex_char
+		add word [cursor_x], 3
+
+		push word [cursor_y]	
+		push word [cursor_x]
+		call move_cursor
+		add sp, 4				; Restore stack after call
+
+		inc	di					; Move file data to next byte
+		jmp get_next_hex_char
 
 	up_arrow_pressed:
 	; TODO:
@@ -255,7 +379,7 @@ get_next_hex_char:
 
 	convert_input:
 		int 10h				; print out input character BIOS int 10h ah 0Eh, al = char
-		inc byte [cursor_x]
+		inc word [cursor_x]
 		call ascii_to_hex  	; else convert al to hexidecimal first
 		inc cx				; increment byte counter
 		cmp cx, 2			;; 2 ascii bytes = 1 hex byte
@@ -282,7 +406,7 @@ put_hex_byte:
 	xor cx, cx		; reset byte counter
 	mov al, ' '		; print space to screen
 	int 10h
-	inc byte [cursor_x]
+	inc word [cursor_x]
 	jmp return_from_hex
 
 ascii_to_hex:
@@ -410,8 +534,6 @@ fill_out_bottom_editor_message:
 	mov ax, 800h
 	mov es, ax
 	mov di, bottom_editor_msg
-	mov si, keybinds_hex_editor
-	mov cx, 56			; # of bytes to move
 	rep movsb
 	mov al, ' '			; append filetype (extension) to string
 	stosb
@@ -448,6 +570,7 @@ end_editor:
 	include "../include/screen/move_cursor.inc"
 	include "../include/print/print_string.inc"
 	include "../include/print/print_fileTable.inc"
+	include "../include/print/print_char_text_mode.inc"
 	include "../include/disk/save_file.inc"
 	include "../include/disk/load_file.inc"
 	include "../include/type_conversions/hex_to_ascii.inc"
@@ -457,6 +580,8 @@ end_editor:
 bottom_editor_msg:	times 80 db 0 
 keybinds_hex_editor: db  ' $ = Run code ? = Return to kernel S = Save file to disk'
 ;; 56 length
+keybinds_text_editor: db  ' Esc = Return to kernel Ctrl-S = Save file to disk'
+;; 53 length
 new_or_current_string: db '(C)reate new file or (L)oad existing file?', 0
 ;; 41 length
 choose_filetype_string: db '(B)inary/hex file or (O)ther file type (.txt, etc)?', 0
@@ -473,8 +598,8 @@ hex_byte:	db 00h		; 1 byte/2 hex digits
 text_color: db 17h
 save_di: dw 0
 save_scancode: db 0
-cursor_x: db 0
-cursor_y: db 0
+cursor_x: dw 0
+cursor_y: dw 0
 
 	;; Sector padding
-	times 2048-($-$$) db 0
+	times 2560-($-$$) db 0
