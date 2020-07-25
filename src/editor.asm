@@ -16,6 +16,10 @@ RIGHTARROW equ 4Dh
 UPARROW equ 48h
 DOWNARROW equ 50h
 ESC equ 01h
+ENDOFLINE equ 80
+HOMEKEY equ 47h
+ENDKEY equ 4Fh
+DELKEY equ 53h
 	
 	;; LOGIC
 	;; -------------------------
@@ -127,6 +131,10 @@ new_file_hex:
 load_file_hex:
 	call clear_screen_text_mode
 
+	;; Reset cursor position
+	mov word [cursor_x], 0
+	mov word [cursor_y], 0
+ 
 	;; Load file bytes to screen
 	mov ax, 1000h
 	mov es, ax
@@ -134,22 +142,33 @@ load_file_hex:
 	mov cx, 512			; TODO: Change to actual file size
 
 	mov ah, 0Eh
-	.loop:
+	load_file_hex_loop:
 		mov al, [ES:DI]		; Read hex byte from file location - 2 nibbles!
 		ror al, 4			; Get 1st nibble into al
 		and al, 00001111b
 		call hex_to_ascii
 		int 10h
+		inc word [cursor_x]
 		mov al, [ES:DI]
 		and al, 00001111b	; Get 2nd nibble into al
 		call hex_to_ascii
 		int 10h
+		inc word [cursor_x]
+		cmp word [cursor_x], ENDOFLINE
+		je go_down_one_line
 		mov al, ' '
 		int 10h
-		inc di
-	loop .loop
+		inc word [cursor_x]
+		jmp iterate_loop
 
-	dec di					; Fix off by one
+		go_down_one_line:
+		mov word [cursor_x], 0
+		inc word [cursor_y]
+
+		iterate_loop:
+		inc di
+		inc word [editor_filesize]
+	loop load_file_hex_loop	
 
 	mov word [save_di], di	; Save off di first
 
@@ -278,7 +297,7 @@ get_next_hex_char:
 
 	;; Check for backspace
 	cmp al, 08h
-	jne check_arrow_keys	
+	jne check_delete	
 	cmp word [cursor_x], 3
 	jl get_next_hex_char
 
@@ -310,8 +329,34 @@ get_next_hex_char:
 	dec	di					; Move file data to previous byte
 	jmp get_next_hex_char
 
+	check_delete:
+		cmp byte [save_scancode], DELKEY
+		jne check_nav_keys
+
+		;; Blank out 1st nibble of hex byte
+		push word 0020h			; space ' ' in ascii
+		push word [cursor_y]	 
+		push word [cursor_x]
+		call print_char_text_mode
+
+		add sp, 6				; restore stack
+
+		;; Blank out 2nd nibble of hex byte
+		push word 0020h			; space ' ' in ascii
+		push word [cursor_y]	 
+		inc word [cursor_x]		; 2nd nibble of hex byte
+		push word [cursor_x]
+		call print_char_text_mode
+	
+		add sp, 6				; restore stack
+		mov [ES:DI], byte 00h	; Make current byte 0 in file
+
+		dec word [cursor_x]		; move back to 1st nibble of hex byte
+
+		jmp get_next_hex_char
+	
 	;; Check for arrow keys
-	check_arrow_keys:
+	check_nav_keys:
 		cmp byte [save_scancode], LEFTARROW	; Left arrow key
 		je left_arrow_pressed
 		cmp byte [save_scancode], RIGHTARROW
@@ -320,9 +365,14 @@ get_next_hex_char:
 		je up_arrow_pressed
 		cmp byte [save_scancode], DOWNARROW
 		je down_arrow_pressed
+		cmp byte [save_scancode], HOMEKEY
+		je home_pressed
+		cmp byte [save_scancode], ENDKEY	
+		je end_pressed
 
 		jmp check_valid_hex
 	
+	;; Move 1 byte left (till beginning of line)
 	left_arrow_pressed:
 		cmp word [cursor_x], 3
 		jl get_next_hex_char
@@ -336,6 +386,7 @@ get_next_hex_char:
 		dec	di					; Move file data to previous byte
 		jmp get_next_hex_char
 
+	;; Move 1 byte right (till end of line)
 	right_arrow_pressed:
 		cmp word [cursor_x], 75
 		jg get_next_hex_char
@@ -349,11 +400,66 @@ get_next_hex_char:
 		inc	di					; Move file data to next byte
 		jmp get_next_hex_char
 
+	;; Move 1 line up
 	up_arrow_pressed:
-	; TODO:
+		cmp word [cursor_y], 0
+		je get_next_hex_char
+		dec word [cursor_y]
+		sub di, 27
 
+		push word [cursor_y]
+		push word [cursor_x]
+		call move_cursor
+		add sp, 4
+
+		jmp get_next_hex_char
+
+	;; Move 1 line down
 	down_arrow_pressed:
-	; TODO:
+		cmp word [cursor_y], 24		; at bottom row of screen?
+		je get_next_hex_char
+		inc word [cursor_y]
+		add di, 27					; # of hex bytes in a screen row
+
+		push word [cursor_y]
+		push word [cursor_x]
+		call move_cursor
+		add sp, 4
+
+		jmp get_next_hex_char
+
+	;; Move to beginning of line
+	home_pressed:
+		xor dx, dx
+		mov ax, [cursor_x]		
+		mov bx, 3
+		div bx
+		sub di, ax
+		mov word [cursor_x], 0
+		
+		push word [cursor_y]
+		push word [cursor_x]
+		call move_cursor
+		add sp, 4
+
+		jmp get_next_hex_char
+
+	;; Move to end of line
+	end_pressed:
+		xor dx, dx
+		mov ax, word 79
+		sub ax, [cursor_x]
+		mov bx, 3
+		div bx
+		add di, ax
+		mov word [cursor_x], 78	
+
+		push word [cursor_y]
+		push word [cursor_x]
+		call move_cursor
+		add sp, 4
+
+		jmp get_next_hex_char
 
 	;; Check for valid hex digits
 	check_valid_hex:
@@ -404,10 +510,17 @@ put_hex_byte:
 	stosb			; put hex byte(2 hex digits) into 10000h memory area, and inc di/point to next byte
 	inc word [editor_filesize]  ; Increment file size byte counter
 	xor cx, cx		; reset byte counter
+	cmp word [cursor_x], ENDOFLINE
+	je move_down_one_row
 	mov al, ' '		; print space to screen
 	int 10h
 	inc word [cursor_x]
 	jmp return_from_hex
+
+	move_down_one_row:
+		mov word [cursor_x], 0	; beginning of next line on screen
+		inc word [cursor_y]		; one line down
+		jmp return_from_hex
 
 ascii_to_hex:
 	cmp al, '9'		; is input ascii '0'-'9'?
