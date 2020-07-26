@@ -6,10 +6,12 @@
 ENDPGM   equ '?'
 RUNINPUT equ '$'
 SAVEPGM  equ 'S'
-CREATENEW equ 'C'
-LOADCURR  equ 'L'
-BINFILE   equ 'B'
-OTHERFILE equ 'O'
+CREATENEW equ 'c'
+LOADCURR  equ 'l'
+BINFILE   equ 'b'
+OTHERFILE equ 'o'
+CTRLR equ 1312h
+CTRLS equ 1F13h
 VIDMEM   equ 0B800h
 LEFTARROW equ 4Bh	; Keyboard scancodes...
 RIGHTARROW equ 4Dh
@@ -196,8 +198,28 @@ new_file_text:
 	mov al, 't'
 	stosb
 	mov si, keybinds_text_editor
-	mov cx, 50			; # of bytes to move
+	mov cx, 53			; # of bytes to move
 	call fill_out_bottom_editor_message	; Write keybinds & filetype at bottom of screen
+
+	mov ax, 1000h
+	mov es, ax
+	xor di, di			; New file starts at 1000h:0000h (10000h)
+
+	;; Fill out 1 blank sector for new file
+	xor ax, ax
+	mov cx, 256			; 512 / 2
+	rep stosw
+
+	;; Initialize cursor and file variables for new file
+	xor di, di
+	xor ax, ax
+	mov word [cursor_x], ax
+	mov word [cursor_y], ax
+	mov word [current_line_length], ax
+	mov word [prev_line_length], ax
+	mov word [next_line_length], ax
+	mov word [file_length_lines], ax
+	mov word [file_length_bytes], ax
 
 	jmp text_editor
 
@@ -230,45 +252,294 @@ load_file_text:
 	mov es, ax			; Reset es to file location (10000h)
 	mov di, [save_di]	; Restore di value for file location
 	
-	;; TODO: Put code to format hex code lines so that they all line up the same
+	;; TODO: Put code to format lines on newlines (0Ah) here
 
 text_editor:
 	input_char_loop:
 		xor ah, ah
 		int 16h			; Keyboard scancode in AH, char in AL
 		mov byte [save_scancode], ah	
-		cmp ah, 0Eh
+		mov byte [save_input_char], al
 
 		;; Check for text editor keybinds
-		cmp byte [save_scancode], ESC	; Return to kernel
-		je end_editor	
+		cmp ax, CTRLR			; Return to kernel
+		je end_editor
+		;; TODO: Implement saving text file to disk here...
+		cmp ax, CTRLS			; Save file to disk
 
-		;; Print out user input character to screen
-		xor ah, ah
-		push ax					; char to print in AL
-		push word [cursor_y]
-		push word [cursor_x]
-		call print_char_text_mode
-		
-		add sp, 6
-
-		;; Move cursor 1 character forward
-		inc word [cursor_x]
-		push word [cursor_y]
-		push word [cursor_x]
-		call move_cursor
-
-		add sp, 4
-		
-		;; TODO: Put newline code here (enter key)
+		jmp check_nav_keys_text	
 
 		;; TODO: put backspace code here
+	
+		;; TODO: put delete key code here
 
-		;; TODO: put arrow keys code here
+		;; Check for arrow keys
+		check_nav_keys_text:
+			cmp byte [save_scancode], LEFTARROW	; Left arrow key
+			je left_arrow_pressed_text
+			cmp byte [save_scancode], RIGHTARROW
+			je right_arrow_pressed_text
+			cmp byte [save_scancode], UPARROW
+			je up_arrow_pressed_text
+			cmp byte [save_scancode], DOWNARROW
+			je down_arrow_pressed_text
+			cmp byte [save_scancode], HOMEKEY
+			je home_pressed_text
+			cmp byte [save_scancode], ENDKEY	
+			je end_pressed_text
+
+			jmp print_char_text_editor
+	
+		;; Move 1 byte left (till beginning of line)
+		left_arrow_pressed_text:
+			cmp word [cursor_x], 0
+			je input_char_loop
+			dec word [cursor_x]
+	
+			push word [cursor_y]	
+			push word [cursor_x]
+			call move_cursor
+			add sp, 4				; Restore stack after call
+
+			dec	di					; Move file data to previous byte
+			jmp input_char_loop
+
+		;; Move 1 byte right (till end of line)
+		right_arrow_pressed_text:
+			mov ax, word [cursor_x]
+			inc ax							; Cursor is 0-based
+			cmp ax, [current_line_length]	; Stop at end of line
+			jge input_char_loop
+
+			inc word [cursor_x]
+			push word [cursor_y]	
+			push word [cursor_x]
+			call move_cursor
+			add sp, 4				; Restore stack after call
+	
+			inc	di					; Move file data to next byte
+			jmp input_char_loop 
+	
+		;; Move 1 line up
+		up_arrow_pressed_text:
+			cmp word [cursor_y], 0		; On 1st line, can't go up
+			je input_char_loop
+			dec word [cursor_y]			; Move cursor 1 line up
+
+			mov ax, [current_line_length]	; next line = current line
+			mov [next_line_length], ax
+
+			;; Get previous line length
+			mov word [prev_line_length], 0
+
+			;; Search for end of previous line above current line (newline 0Ah)
+			search_backward_loop:
+				dec di
+				cmp [ES:DI], byte 0Ah
+				je newline_backward_loop
+			jmp search_backward_loop
+
+			;; Search for either start of file (if 1st line) or end of line above
+			;;  previous line
+			newline_backward_loop:
+				dec di
+				inc word [prev_line_length]		; line length
+				cmp di, 0
+				je stop_backward_start_of_file
+				cmp [ES:DI], byte 0Ah
+				je stop_backward_newline
+			jmp newline_backward_loop
+
+			;; Found start of file, on 1st line
+			stop_backward_start_of_file:
+				inc word [prev_line_length]		; Include end of line newline char
+				mov di, [cursor_x]				; di <- start of file (should be 0)
+				jmp compare_cx_prev_line	
+
+			;; Found end of line above previous line
+			stop_backward_newline:
+				inc di							; di <- end of line above prev
+				add di, [cursor_x]				; move file data to cursor position
+
+			compare_cx_prev_line:
+				mov ax, [prev_line_length]		; current line = previous line
+				mov [current_line_length], ax
+
+				mov ax, word [cursor_x]
+				inc ax							; cursor is 0-based
+				cmp ax, [prev_line_length]
+				jle .move
+				mov ax, [prev_line_length]
+				dec ax							; cursor is 0-based
+				mov word [cursor_x], ax
+
+				.move:
+				push word [cursor_y]
+				push word [cursor_x]
+				call move_cursor
+				add sp, 4
+
+				mov word [prev_line_length], 0	; Reset previous line
+	
+				jmp input_char_loop
+
+		;; Move 1 line down
+		down_arrow_pressed_text:
+			mov ax, [cursor_y]
+			cmp ax, [file_length_lines]		; at end of file?
+			je input_char_loop
+			inc word [cursor_y]				; move cursor down 1 line
+
+			mov ax, [current_line_length]	; Previous line = current line
+			mov [prev_line_length], ax
+
+			;; Get next_line_length
+			mov word [next_line_length], 0
+
+			;; Search file data forwards for a newline (0Ah)
+			search_forward_loop:
+				cmp [ES:DI], byte 0Ah		; Are we starting at end of current line?
+				je newline_forward_loop
+				inc di
+			jmp search_forward_loop
+
+			;; Found end of current line, search for end of next line or end of file
+			newline_forward_loop:
+				inc di
+				inc word [next_line_length]		; line length
+				cmp di, [file_length_bytes]
+				je stop_forward
+				cmp [ES:DI], byte 0Ah
+				je stop_forward
+			jmp newline_forward_loop
+				
+			;; Found end of next line
+			stop_forward:
+				mov ax, [next_line_length]		; Current line = next line 
+				mov [current_line_length], ax
+
+			mov ax, word [cursor_x]
+			inc ax						; cursor is 0-based
+			cmp ax, [next_line_length]
+			jle .move
+			mov ax, [next_line_length]
+			dec ax						; cursor is 0-based
+			mov word [cursor_x], ax
+
+			sub di, [current_line_length]	; Move to end of last line newline (0Ah)
+			inc di							; Move to start of current line
+			add di, [cursor_x]				; Move to cursor position
+
+			.move:
+			push word [cursor_y]
+			push word [cursor_x]
+			call move_cursor
+			add sp, 4
+
+			mov word [next_line_length], 0	; Reset next line
+
+			jmp input_char_loop
+
+		;; Move to beginning of line
+		home_pressed_text:
+			sub di, [cursor_x]			; Move file data to start of line
+			mov word [cursor_x], 0		; Move cursor to start of line
+			
+			push word [cursor_y]
+			push word [cursor_x]
+			call move_cursor
+			add sp, 4
+
+			jmp input_char_loop
+
+		;; Move to end of line
+		end_pressed_text:
+			;; Get difference of current_line_length and cursor_x
+			mov ax, [current_line_length]
+			dec ax							; Cursor is 0-based
+			sub ax, [cursor_x]
+
+			;; Add this difference to cursor_x, and di for file data
+			add [cursor_x], ax
+			add di, ax
+	
+			;; Move cursor on screen
+			push word [cursor_y]
+			push word [cursor_x]
+			call move_cursor
+			add sp, 4
+	
+			jmp input_char_loop
+	
+		;; Print out user input character to screen
+		print_char_text_editor:
+			cmp al, 0Dh						; Newline, enter key pressed
+			jne .print
+
+			push 0020h						; Print a space at cursor to signify newline
+			push word [cursor_y]
+			push word [cursor_x]
+			call print_char_text_mode
+	
+			add sp, 6
+
+			mov word [cursor_x], 0			; beginning of line (carriage return)
+			inc word [cursor_y]				; go down 1 line (line feed)
+
+			mov al, 0Ah						; Use line feed as end of line char
+			stosb							; Insert char and increment di
+			inc word [file_length_lines]	; Update file length
+			inc word [file_length_bytes]	; Update file length
+
+			push word [cursor_y]			; Move cursor
+			push word [cursor_x]
+			call move_cursor
+
+			add sp, 4
+
+			inc word [current_line_length]
+			mov ax, [current_line_length]	; Previous line = current line
+			mov [prev_line_length], ax
+
+			mov word [current_line_length], 0 ; TODO: Not true unless no data below
+
+			;; TODO: Put full blank line on screen, and move file data down here...
+
+			jmp input_char_loop
+
+			;; Print normal character to screen
+			.print:
+			xor ax, ax
+			mov al, [save_input_char]
+			cmp [ES:DI], byte 0		; Is there previous data here?
+			je .insert				; No, insert new char
+			mov [ES:DI], al			; Yes, overwrite current char, do not inc di
+			jmp .print_to_screen
+
+			.insert:
+			stosb					; Input character to file data; inc di
+			inc word [current_line_length]	; Update line length
+			inc word [file_length_bytes]	; Update file length
+			
+			.print_to_screen:
+			push ax					; char to print in AL
+			push word [cursor_y]
+			push word [cursor_x]
+			call print_char_text_mode
+	
+			add sp, 6
+
+			;; Move cursor 1 character forward
+			;; TODO: Assuming insert mode, not overwrite! Move rest of file data 
+			;;   forward after this character
+			inc word [cursor_x]
+			push word [cursor_y]
+			push word [cursor_x]
+			call move_cursor
+
+			add sp, 4
 
 	jmp input_char_loop
-
-	;; TODO: Implement saving text file to disk here...
 
 hex_editor:
 	;; Take in user input & print to screen
@@ -331,7 +602,7 @@ get_next_hex_char:
 
 	check_delete:
 		cmp byte [save_scancode], DELKEY
-		jne check_nav_keys
+		jne check_nav_keys_hex
 
 		;; Blank out 1st nibble of hex byte
 		push word 0020h			; space ' ' in ascii
@@ -356,7 +627,7 @@ get_next_hex_char:
 		jmp get_next_hex_char
 	
 	;; Check for arrow keys
-	check_nav_keys:
+	check_nav_keys_hex:
 		cmp byte [save_scancode], LEFTARROW	; Left arrow key
 		je left_arrow_pressed
 		cmp byte [save_scancode], RIGHTARROW
@@ -684,6 +955,7 @@ end_editor:
 	include "../include/print/print_string.inc"
 	include "../include/print/print_fileTable.inc"
 	include "../include/print/print_char_text_mode.inc"
+	include "../include/print/print_hex.inc"
 	include "../include/disk/save_file.inc"
 	include "../include/disk/load_file.inc"
 	include "../include/type_conversions/hex_to_ascii.inc"
@@ -693,7 +965,7 @@ end_editor:
 bottom_editor_msg:	times 80 db 0 
 keybinds_hex_editor: db  ' $ = Run code ? = Return to kernel S = Save file to disk'
 ;; 56 length
-keybinds_text_editor: db  ' Esc = Return to kernel Ctrl-S = Save file to disk'
+keybinds_text_editor: db  ' Ctrl-R = Return to kernel Ctrl-S = Save file to disk'
 ;; 53 length
 new_or_current_string: db '(C)reate new file or (L)oad existing file?', 0
 ;; 41 length
@@ -711,8 +983,14 @@ hex_byte:	db 00h		; 1 byte/2 hex digits
 text_color: db 17h
 save_di: dw 0
 save_scancode: db 0
+save_input_char: db 0
 cursor_x: dw 0
 cursor_y: dw 0
+current_line_length: dw 0
+prev_line_length: dw 0
+next_line_length: dw 0
+file_length_lines: dw 0
+file_length_bytes: dw 0
 
 	;; Sector padding
-	times 2560-($-$$) db 0
+	times 3584-($-$$) db 0
