@@ -226,33 +226,79 @@ new_file_text:
 load_file_text:
 	call clear_screen_text_mode
 
+	xor ax, ax
+	mov word [cursor_x], ax
+	mov word [cursor_y], ax
+	mov word [current_line_length], ax	
+	mov word [prev_line_length], ax	
+	mov word [next_line_length], ax
+	mov word [file_length_lines], ax
+	mov word [file_length_bytes], ax
+
 	;; Load file bytes to screen
 	mov ax, 1000h
 	mov es, ax
 	xor di, di			; ES:DI <- 1000h:0000h = 10,000h - file location
 	mov cx, 512			; TODO: Change to actual file size
 
-	mov ah, 0Eh
 	.loop:
 		mov al, [ES:DI]		; Read ascii byte from file location
-		int 10h
-		inc di
-	loop .loop
+		mov [save_input_char], al
+		cmp al, 0Ah
+		jne .notNewline
+		mov word [cursor_x], ENDOFLINE
+		jmp .noconvert
 
-	dec di					; Fix off by one
+		.notNewline:
+		cmp al, 0Fh
+		jg .noconvert	
+		call hex_to_ascii
+
+		.noconvert:
+		cmp word [cursor_x], ENDOFLINE
+		jne .increment
+		mov word [cursor_x], 0		; Go down 1 row
+		inc word [cursor_y]
+		inc word [file_length_lines]
+
+		mov bx, [current_line_length]
+		mov [prev_line_length], bx
+		mov word [current_line_length], 0
+		jmp .go_on
+
+		.increment:
+		inc word [cursor_x]
+		.go_on:
+		mov bx, ' '
+		cmp al, 0Ah
+		cmove ax, bx				; Newline = space visually
+		push ax				; Character to print in AL
+		push word [cursor_y]
+		push word [cursor_x]
+		call print_char_text_mode
+		add sp, 6
+
+		mov al, [save_input_char]
+		stosb
+		inc word [current_line_length]
+		inc word [file_length_bytes]
+	loop .loop
 
 	mov word [save_di], di	; Save off di first
 
 	; Write keybinds at bottom of screen
 	mov si, keybinds_text_editor
-	mov cx, 50			; # of bytes to move
+	mov cx, 53			; # of bytes to move
 	call fill_out_bottom_editor_message	
 
 	mov ax, 1000h
 	mov es, ax			; Reset es to file location (10000h)
 	mov di, [save_di]	; Restore di value for file location
 	
-	;; TODO: Put code to format lines on newlines (0Ah) here
+	push word [cursor_y]	; Move cursor
+	push word [cursor_x]
+	call move_cursor
+	add sp, 4
 
 text_editor:
 	input_char_loop:
@@ -264,11 +310,67 @@ text_editor:
 		;; Check for text editor keybinds
 		cmp ax, CTRLR			; Return to kernel
 		je end_editor
-		;; TODO: Implement saving text file to disk here...
 		cmp ax, CTRLS			; Save file to disk
+		jne check_nav_keys_text	
 
-		jmp check_nav_keys_text	
+		;; Save to disk
+		mov si, blank_line
+		mov cx, 80
+		call write_bottom_screen_message
+		mov si, filename_string				; Enter file name at bottom of screen
+		mov cx, 17
+		call write_bottom_screen_message
+		mov word [cursor_y], 24
+		mov word [cursor_x], 17
+		push word [cursor_y]
+		push word [cursor_x]
 
+		call move_cursor
+		add sp, 4
+
+		mov ax, 800h			; Set ES to program location
+		mov es, ax
+		call input_file_name
+
+		;; Call save file
+		push word editor_filename	; 1st parm, file name
+		push word editor_filetype	; 2nd parm, file type
+		push word 0001h				; 3rd parm, file size (in hex sectors)
+		push word 1000h				; 4th parm, segment memory address for file
+		push word 0000h				; 5th parm, offset memory address for file
+
+		call save_file
+
+		add sp, 10					; Restore stack pointer after returning
+		cmp ax, 0
+		jne save_text_file_error			; Error occcurred, ax return code not 0
+		jmp save_text_file_success		; No error, return to normal
+
+		save_text_file_error:
+			mov si, save_file_error_msg
+			mov cx, 24
+			call write_bottom_screen_message
+			xor ax, ax
+			int 16h
+
+		save_text_file_success:
+			mov ax, 1000h
+			mov es, ax						; Reset ES to file location
+
+			mov si, keybinds_text_editor	; Write keybinds at bottom
+			mov cx, 53
+			call write_bottom_screen_message
+
+			mov word [cursor_x], 0			; Reset cursor to start of file
+			mov word [cursor_y], 0
+			push word [cursor_y]
+			push word [cursor_x]
+
+			call move_cursor
+			add sp, 4
+
+			jmp input_char_loop
+			
 		;; TODO: put backspace code here
 	
 		;; TODO: put delete key code here
@@ -963,6 +1065,7 @@ end_editor:
 	;; VARIABLES
 	;; --------------------------
 bottom_editor_msg:	times 80 db 0 
+blank_line: times 80 db ' '
 keybinds_hex_editor: db  ' $ = Run code ? = Return to kernel S = Save file to disk'
 ;; 56 length
 keybinds_text_editor: db  ' Ctrl-R = Return to kernel Ctrl-S = Save file to disk'
@@ -972,6 +1075,7 @@ new_or_current_string: db '(C)reate new file or (L)oad existing file?', 0
 choose_filetype_string: db '(B)inary/hex file or (O)ther file type (.txt, etc)?', 0
 ;; 51 length
 filename_string: db 'Enter file name: ', 0
+;; 17 length
 save_file_error_msg: db 'Save file error occurred'	; length of string = 24
 choose_file_msg: db 'File to load: ', 0
 editor_filename: times 10 db 0
