@@ -16,14 +16,27 @@ main_menu:
         ;; Get user input, print to screen & choose menu option/run command
         ;; --------------------------------------------------------------------
 get_input:
+	mov ax, 200h		; reset ES & DS segments to kernel area
+	mov es, ax
+	mov ds, ax
+
+	; Reset tokens data and arrays for next input line
+	mov di, tokens
+	xor ax, ax
+	mov cx, 50
+	rep stosb
+
+	mov di, tokens_length
+	mov cx, 5
+	rep stosw
+
+	mov byte [token_count], 0	
+
+	; Set up input line
 	mov si, prompt
 	call print_string
 	xor cx, cx			; reset byte counter of input
     mov si, cmdString   ; si now pointing to command string
-	
-	mov ax, 200h		; reset ES & DS segments to kernel area
-	mov es, ax
-	mov ds, ax
 	
 keyloop:
     xor ax, ax              ; ah = 00h al = 00h
@@ -31,7 +44,7 @@ keyloop:
 
     mov ah, 0Eh
     cmp al, 0Dh             ; user pressed enter?
-    je run_command			; run user input command or load file/pgm
+    je tokenize_input_line	; tokenize user input line
 	
 	cmp al, 08h				; backspace?
 	jne .not_backspace
@@ -47,15 +60,85 @@ keyloop:
     inc si                  ; go to next byte at si/cmdString
     jmp keyloop             ; loop for next character from user
 
-run_command:
+	;; Prompt/"Shell" commands
+tokenize_input_line:
 	cmp cx, 0
 	je input_not_found  	; handle empty input
 	
     mov byte [si], 0        ; else null terminate cmdString from si
 	mov si, cmdString		; reset si to point to start of user input
 
-	;; Prompt/"Shell" commands
-check_commands:
+	;; Tokenize input string "cmdString" into separate tokens
+	mov di, tokens			; DI <- tokens array		[5][10]
+	mov bx, tokens_length	; BX <- tokens_length array [5][2]
+	.get_token_loop:
+		lodsb				; mov al, [ds:si] & inc si
+		cmp al, 0h			; At end of input?
+		je check_commands
+
+		; Skip whitespace between tokens
+		.whitespace_loop:
+			cmp al, ' ' 
+			jne .alphanum_loop	
+			lodsb
+		jmp .whitespace_loop
+
+		; Get all alphanumeric characters for current token
+		; when not alphanumeric, skip and go to next token/whitespace check
+		.alphanum_loop:
+			cmp al, '0'					; Check numeric first
+			jl .next_token
+			cmp al, '9'
+			jg .check_uppercase
+			stosb
+			inc word [bx]		; increment length of current token
+			lodsb
+			jmp .alphanum_loop
+			
+			.check_uppercase:
+				cmp al, 'A'
+				jl .next_token
+				cmp al, 'Z'
+				jg .check_lowercase
+				stosb
+				inc word [bx]
+				lodsb
+				jmp .alphanum_loop
+
+			.check_lowercase:
+				cmp al, 'a'
+				jl .next_token
+				cmp al, 'z'
+				jg .next_token
+				stosb
+				inc word [bx]			
+				lodsb
+				jmp .alphanum_loop
+
+			.next_token:
+				inc byte [token_count]		; next token
+
+				; Move di to next token position in tokens array
+				mov word [save_bx], bx
+
+				xor bx, bx
+				mov bl, byte [token_count]
+				imul bx, 10
+				lea di, [tokens+bx]
+
+				; Move to next position in tokens_length array
+				mov bx, word [save_bx]
+				add bx, 2				; each length is 1 word long 
+				
+				dec si					; get token loop does lodsb again, prevent error here
+	jmp .get_token_loop
+
+check_commands:	
+	;; Get first token (command to run) & second token (if applicable e.g. file name)
+	xor ch, ch
+	mov cx, word [tokens_length]
+
+	mov si, tokens
 	push cx
 	mov di, cmdDir
 	repe cmpsb
@@ -103,6 +186,13 @@ check_commands:
 	repe cmpsb
 	je shutdown
 
+	pop cx
+	push cx
+	mov di, cmdDelFile
+	mov si, cmdString
+	repe cmpsb
+	je del_file
+
 	pop cx			; reset command length
 	
 	;; If command not input, search file table entries for user input file
@@ -148,7 +238,15 @@ restart_search:
     ;; -------------------------------------------------------------------
 found_program:
 	;; Get file extension - bytes 10-12 of file table entry
-	mov al, [ES:BX]
+	;; Skip over any spaces in file name if name < 10 characters
+	.skip_spaces:
+		mov al, [ES:BX]
+		cmp al, ' '
+		jne .file_extension
+		inc bx
+	jmp .skip_spaces
+
+	.file_extension:
 	mov [fileExt], al
 	mov al, [ES:BX+1]
 	mov [fileExt+1], al
@@ -299,6 +397,39 @@ clear_screen:
 	call clear_screen_text_mode
 	jmp get_input
 
+        ;; --------------------------------------------------------------------
+        ;; Delete a file from the disk
+        ;; --------------------------------------------------------------------
+del_file:
+		;; TODO: push arguments on stack before call
+		;; 1 - File name to delete
+		;; 2 - Length of file name
+	mov si, tokens	; File name is 2nd token in array, each token is 10 char max
+	add si, 10
+	mov di, token_file_name
+	xor ch, ch
+	mov cx, word [tokens_length+2]
+	rep movsb
+	mov cx, word [tokens_length+2]
+
+	push word token_file_name	; File name
+	push cx						; Length of file name
+
+	call delete_file
+
+	;; Clean up stack after call
+	add sp, 4
+
+	;; TODO: Check return code for errors
+	cmp ax, 0	; 0 = Success/Normal return
+
+	mov ax, 0E0Ah
+	int 10h
+	mov al, 0Dh
+	int 10h
+
+	jmp get_input
+
 	    ;; --------------------------------------------------------------------
         ;; Shutdown (QEMU)
         ;; --------------------------------------------------------------------
@@ -328,6 +459,7 @@ end_program:
 		include "../include/screen/clear_screen_text_mode.inc"
         include "../include/screen/resetGraphicsScreen.inc"
 		include "../include/type_conversions/hex_to_ascii.inc"
+		include "../include/disk/delete_file.inc"
 	
         ;; --------------------------------------------------------------------
         ;; Variables
@@ -356,6 +488,7 @@ cmdHlt:		db 'hlt',0      ; e(n)d current program by halting cpu
 cmdCls:		db 'cls',0	; clear screen by scrolling
 cmdShutdown: db 'shutdown',0 ; Close QEMU emulator
 cmdEditor:	db 'editor',0	; launch editor program
+cmdDelFile: db 'del',0		; Delete a file from disk
         
 printRegHeading:    db nl,'--------  ------------',nl,\
         'Register  Mem Location',nl,\
@@ -372,10 +505,16 @@ fileExt:	db '   ',0
 fileSize:	db 0
 fileBin:	db 'bin',0
 fileTxt:	db 'txt',0
+tokens: times 50 db 0		; tokens array, equivalent-ish to tokens[5][10]
+tokens_length: times 5 dw 0	; length of each token in tokens array (0-10)
+token_count: db 0			; How many tokens did the user enter?
+save_bx:	dw 0
+token_file_name: times 10 db 0
+
 cmdString:      db ''
 
         ;; --------------------------------------------------------------------
         ;; Sector Padding magic
         ;; --------------------------------------------------------------------
-        times 2048-($-$$) db 0   ; pads out 0s until we reach 1536th byte
+        times 2560-($-$$) db 0   ; pads out 0s until we reach 1536th byte
 

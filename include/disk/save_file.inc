@@ -66,14 +66,12 @@ save_file:
 		mov cx, 10
 
 		rep cmpsb
-		jne restart_check_saving
 		je found_file_saving
 		
-		restart_check_saving:
-			mov	si, file_name_saving
-			pop di
-			add di, 16			; go to next file table entry
-			jmp check_filename_saving
+		mov	si, file_name_saving
+		pop di
+		add di, 16			; go to next file table entry
+		jmp check_filename_saving
 
 	found_file_saving:
 		;; Reset disk
@@ -109,7 +107,7 @@ save_file:
 		;; Write changed filetable to disk - TODO: Assuming file table is 1 sector, 
 		;;   change later
 		xor ch, ch			; track #
-		mov cl, 06h			; sector # to start writing at
+		mov cl, 07h			; sector # to start writing at
 		xor dx, dx			; dh = head #, dl = drive #
 		mov word [saved_bx], bx	
 		xor ax, ax

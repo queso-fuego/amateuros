@@ -16,7 +16,7 @@ print_fileTable:
 	xor bx, bx		; ES:BX <- 100h:0000h = 1000h; file table memory location
 	
 	xor dx, dx		; DH = head #, DL = drive #
-	mov cx, 0006h	; CH = cylinder #, CL = starting sector # to read
+	mov cx, 0007h	; CH = cylinder #, CL = starting sector # to read
 
 retry_load:
 	mov ax, 0201h	; AH = 02h/int13h read disk sectors, AL = # of sectors to read
