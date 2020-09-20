@@ -1058,8 +1058,7 @@ end_editor:
 	include "../include/print/print_fileTable.inc"
 	include "../include/print/print_char_text_mode.inc"
 	include "../include/print/print_hex.inc"
-	include "../include/disk/save_file.inc"
-	include "../include/disk/load_file.inc"
+	include "../include/disk/file_ops.inc"
 	include "../include/type_conversions/hex_to_ascii.inc"
 	
 	;; VARIABLES
@@ -1097,4 +1096,4 @@ file_length_lines: dw 0
 file_length_bytes: dw 0
 
 	;; Sector padding
-	times 3584-($-$$) db 0
+	times 4096-($-$$) db 0

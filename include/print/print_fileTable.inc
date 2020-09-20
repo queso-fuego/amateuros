@@ -16,7 +16,7 @@ print_fileTable:
 	xor bx, bx		; ES:BX <- 100h:0000h = 1000h; file table memory location
 	
 	xor dx, dx		; DH = head #, DL = drive #
-	mov cx, 0007h	; CH = cylinder #, CL = starting sector # to read
+	mov cx, 0008h	; CH = cylinder #, CL = starting sector # to read
 
 retry_load:
 	mov ax, 0201h	; AH = 02h/int13h read disk sectors, AL = # of sectors to read
@@ -62,28 +62,29 @@ file_ext:
 	call print_blanks_loop
 	
 	inc bx
-	mov al, [ES:BX]
-	call hex_to_ascii
+	xor dx, dx		; Clear DX fully before printing 
+	mov dl, [ES:BX]
+	call print_hex
 	int 10h
 
 	;; Starting sector section
 	;; 9 blanks before starting sector
-	mov cx, 9
+	mov cx, 3
 	call print_blanks_loop
 	
 	inc bx
-	mov al, [ES:BX]
-	call hex_to_ascii
+	mov dl, [ES:BX]
+	call print_hex
 	int 10h
 
 	;; File size section
 	;; 14 blanks before file size
-	mov cx, 14
+	mov cx, 8
 	call print_blanks_loop
 	
 	inc bx
-	mov al, [ES:BX]
-	call hex_to_ascii
+	mov dl, [ES:BX]
+	call print_hex
 	int 10h
 	mov al, 0Ah
 	int 10h

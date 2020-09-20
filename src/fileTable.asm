@@ -14,10 +14,10 @@
 ;;; 			  127.5KB; Max file size overall = 255*512*255 bytes or ~32MB
 ;;; ---------------------------------
 	db 'bootSect  ','bin',00h,01h,01h,\
-	'kernel    ','bin',00h,02h,05h,\
-	'fileTable ','txt',00h,07h,01h,\
-	'calculator','bin',00h,08h,01h,\
-	'editor    ','bin',00h,09h,07h
+	'kernel    ','bin',00h,02h,06h,\
+	'fileTable ','txt',00h,08h,01h,\
+	'calculator','bin',00h,09h,01h,\
+	'editor    ','bin',00h,0Ah,08h
 
         ;; Sector padding magic!
         times 512-($-$$) db 0       ; pad rest of sector out with 0s

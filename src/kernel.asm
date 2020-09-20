@@ -20,7 +20,7 @@ get_input:
 	mov es, ax
 	mov ds, ax
 
-	; Reset tokens data and arrays for next input line
+	; Reset tokens data, arrays, and variables for next input line
 	mov di, tokens
 	xor ax, ax
 	mov cx, 50
@@ -31,6 +31,14 @@ get_input:
 	rep stosw
 
 	mov byte [token_count], 0	
+
+	xor al, al
+	mov di, token_file_name1
+	mov cx, 10
+	rep stosb
+	mov di, token_file_name2
+	mov cx, 10
+	rep stosb
 
 	; Set up input line
 	mov si, prompt
@@ -99,6 +107,15 @@ tokenize_input_line:
 				cmp al, 'A'
 				jl .next_token
 				cmp al, 'Z'
+				jg .check_underscore
+				stosb
+				inc word [bx]
+				lodsb
+				jmp .alphanum_loop
+
+			.check_underscore:
+				cmp al, '_'
+				jl .next_token
 				jg .check_lowercase
 				stosb
 				inc word [bx]
@@ -193,70 +210,60 @@ check_commands:
 	repe cmpsb
 	je del_file
 
+	pop cx			
+	push cx
+	mov di, cmdRenFile
+	mov si, cmdString
+	repe cmpsb
+	je ren_file
+
 	pop cx			; reset command length
-	
+
 	;; If command not input, search file table entries for user input file
 check_files:
 	mov ax, 100h		; reset ES:BX to start of file table (100h:0000h = 1000h)
 	mov es, ax
-    xor bx, bx
+    xor di, di
 	
 	mov si, cmdString	; reset si to start of user input string
 
-check_next_char:
-        mov al, [ES:BX]         ; get file table character
+kernel_check_next_name:
+        mov al, [ES:DI]         ; get file table character
         cmp al, 0               ; at end of file table?
         je input_not_found		; if so, no file/pgm found for user input :(
 
         cmp al, [si]            ; does user input match file table character?
         je start_compare
 
-		add bx, 16              ; if not, go to next file entry in table
-        jmp check_next_char
+		add di, 16              ; if not, go to next file entry in table
+        jmp kernel_check_next_name
 
 start_compare:
-        push bx                 ; save file table position
+        push di                 ; save file table position
 
-compare_loop:
-        mov al, [ES:BX]         ; get file table character
-        inc bx                  ; next byte in input/filetable
-        cmp al, [si]            ; does input match filetable char?
-        jne restart_search      ; if not, search again from this point in filetable
-
-        dec cl                  ; if it does match, decrement length counter
-        jz found_program        ; counter = 0, all of input found in filetable
-        inc si                  ; else go to next byte of input
-        jmp compare_loop
-
-restart_search:
-        mov si, cmdString       ; reset to start of user input
-        pop bx                  ; get saved file table position
-        inc bx                  ; go to next char in file table
-        jmp check_next_char     ; start checking again
+		rep cmpsb
+		je found_program
+        mov si, cmdString       ; otherwise reset to start of user input
+        pop di                  ; get saved file table position
+		add di, 16				; Next file table entry
+        jmp kernel_check_next_name     ; start checking again
 
 	;; Read disk sector of program to memory and execute it by far jumping
     ;; -------------------------------------------------------------------
 found_program:
-	;; Get file extension - bytes 10-12 of file table entry
-	;; Skip over any spaces in file name if name < 10 characters
-	.skip_spaces:
-		mov al, [ES:BX]
-		cmp al, ' '
-		jne .file_extension
-		inc bx
-	jmp .skip_spaces
+	pop di		; start_compare above pushes di, restore here to start of file name/table entry
 
+	;; Get file extension - bytes 10-12 of file table entry
 	.file_extension:
+	mov al, [ES:DI+10]
 	mov [fileExt], al
-	mov al, [ES:BX+1]
+	mov al, [ES:DI+11]
 	mov [fileExt+1], al
-	mov al, [ES:BX+2]
+	mov al, [ES:DI+12]
 	mov [fileExt+2], al
 	
-    add bx, 4			; go to starting sector # in file table entry
-    mov cl, [ES:BX]     ; sector number to start reading at
-	inc bx
-	mov bl, [ES:BX]		; file size in sectors / # of sectors to read
+    mov cl, [ES:DI+14]     ; sector number to start reading at
+	mov bl, [ES:DI+15]		; file size in sectors / # of sectors to read
 	mov byte [fileSize], bl
 
 	xor ax, ax
@@ -329,6 +336,7 @@ call_h_to_a:
 	jmp return_file_char
 	
 input_not_found:
+	pop cx					; In case program was not found
     mov si, failure         ; command not found! boo D:
     call print_string
     jmp get_input 
@@ -401,24 +409,62 @@ clear_screen:
         ;; Delete a file from the disk
         ;; --------------------------------------------------------------------
 del_file:
-		;; TODO: push arguments on stack before call
-		;; 1 - File name to delete
-		;; 2 - Length of file name
+	;; 1 - File name to delete
+	;; 2 - Length of file name
 	mov si, tokens	; File name is 2nd token in array, each token is 10 char max
 	add si, 10
-	mov di, token_file_name
+	mov di, token_file_name1
 	xor ch, ch
 	mov cx, word [tokens_length+2]
 	rep movsb
 	mov cx, word [tokens_length+2]
 
-	push word token_file_name	; File name
+	push word token_file_name1	; File name
 	push cx						; Length of file name
 
 	call delete_file
 
 	;; Clean up stack after call
 	add sp, 4
+
+	;; TODO: Check return code for errors
+	cmp ax, 0	; 0 = Success/Normal return
+
+	mov ax, 0E0Ah
+	int 10h
+	mov al, 0Dh
+	int 10h
+
+	jmp get_input
+
+        ;; --------------------------------------------------------------------
+        ;; Rename a file in the file table
+        ;; --------------------------------------------------------------------
+ren_file:
+	;; 1 - File to rename
+	;; 2 - Length of name to rename
+	;; 3 - New file name
+	;; 4 - New file name length
+	mov si, tokens	; File name is 2nd token in array, each token is 10 char max
+	add si, 10
+	mov di, token_file_name1
+	mov cx, word [tokens_length+2]
+	rep movsb
+	push word token_file_name1	; File name			- input 1
+	push word [tokens_length+2]	; File name length  - input 2
+
+	mov si, tokens	; New file name is 3rd token in array, each token is 10 char max
+	add si, 20
+	mov di, token_file_name2
+	mov cx, word [tokens_length+4]
+	rep movsb
+	push word token_file_name2	; New file name		   - input 3
+	push word [tokens_length+4] ; New file name length - input 4
+
+	call rename_file
+
+	;; Clean up stack after call
+	add sp, 8
 
 	;; TODO: Check return code for errors
 	cmp ax, 0	; 0 = Success/Normal return
@@ -459,7 +505,7 @@ end_program:
 		include "../include/screen/clear_screen_text_mode.inc"
         include "../include/screen/resetGraphicsScreen.inc"
 		include "../include/type_conversions/hex_to_ascii.inc"
-		include "../include/disk/delete_file.inc"
+		include "../include/disk/file_ops.inc"
 	
         ;; --------------------------------------------------------------------
         ;; Variables
@@ -489,6 +535,7 @@ cmdCls:		db 'cls',0	; clear screen by scrolling
 cmdShutdown: db 'shutdown',0 ; Close QEMU emulator
 cmdEditor:	db 'editor',0	; launch editor program
 cmdDelFile: db 'del',0		; Delete a file from disk
+cmdRenFile: db 'ren',0		; Rename a file in the file table
         
 printRegHeading:    db nl,'--------  ------------',nl,\
         'Register  Mem Location',nl,\
@@ -509,12 +556,13 @@ tokens: times 50 db 0		; tokens array, equivalent-ish to tokens[5][10]
 tokens_length: times 5 dw 0	; length of each token in tokens array (0-10)
 token_count: db 0			; How many tokens did the user enter?
 save_bx:	dw 0
-token_file_name: times 10 db 0
+token_file_name1: times 10 db 0
+token_file_name2: times 10 db 0
 
 cmdString:      db ''
 
         ;; --------------------------------------------------------------------
         ;; Sector Padding magic
         ;; --------------------------------------------------------------------
-        times 2560-($-$$) db 0   ; pads out 0s until we reach 1536th byte
+        times 3072-($-$$) db 0   ; pads out 0s until we reach 1536th byte
 
