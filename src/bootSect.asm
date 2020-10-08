@@ -10,7 +10,7 @@
         xor bx, bx            ; ES:BX = 100h:0000h = 1000h
 
         ;; Set up disk read
-		xor dx, dx				; dh = head #, dl = drive #
+		xor dx, dx
 		mov cx, 0008h			; ch = cylinder #, cl = starting sector to read
 
 load_file_table:
@@ -26,7 +26,7 @@ load_file_table:
         xor bx, bx            ; ES:BX = 200h:0000h = 2000h
 
         ;; Set up disk read
-		xor dx, dx				; dh = head #, dl = drive #
+		xor dx, dx
 		mov cx, 0002h			; ch = cylinder #, cl = starting sector to read
 
 load_kernel:
@@ -34,7 +34,6 @@ load_kernel:
         int 13h                ; BIOS interrupts for disk functions
 
         jc load_kernel         ; retry if disk read error (carry flag set/ = 1)
-
 
         ;; Reset segment registers for RAM
         mov ax, 200h

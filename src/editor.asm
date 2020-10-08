@@ -256,7 +256,16 @@ load_file_text:
 
 		.noconvert:
 		cmp word [cursor_x], ENDOFLINE
-		jne .increment
+		jne .print_char
+		mov bx, ' '
+		cmp al, 0Ah
+		cmove ax, bx		; Newline = space visually
+		push ax				; Character to print in AL
+		push word [cursor_y]
+		push word [cursor_x]
+		call print_char_text_mode
+		add sp, 6
+
 		mov word [cursor_x], 0		; Go down 1 row
 		inc word [cursor_y]
 		inc word [file_length_lines]
@@ -266,18 +275,16 @@ load_file_text:
 		mov word [current_line_length], 0
 		jmp .go_on
 
-		.increment:
-		inc word [cursor_x]
-		.go_on:
-		mov bx, ' '
-		cmp al, 0Ah
-		cmove ax, bx				; Newline = space visually
+		.print_char:
 		push ax				; Character to print in AL
 		push word [cursor_y]
 		push word [cursor_x]
 		call print_char_text_mode
 		add sp, 6
 
+		inc word [cursor_x]
+
+		.go_on:
 		mov al, [save_input_char]
 		stosb
 		inc word [current_line_length]
