@@ -11,7 +11,7 @@
 
         ;; Set up disk read
 		xor dx, dx
-		mov cx, 0008h			; ch = cylinder #, cl = starting sector to read
+		mov cx, 000Bh			; ch = cylinder #, cl = starting sector to read
 
 load_file_table:
 		mov ax, 0201h			; ah = 02h/int 13 read disk sectors; al = # of sectors to read
@@ -30,7 +30,7 @@ load_file_table:
 		mov cx, 0002h			; ch = cylinder #, cl = starting sector to read
 
 load_kernel:
-		mov ax, 0206h			; ah = 02h/int 13 read disk sectors; al = # of sectors to read
+		mov ax, 0209h			; ah = 02h/int 13 read disk sectors; al = # of sectors to read
         int 13h                ; BIOS interrupts for disk functions
 
         jc load_kernel         ; retry if disk read error (carry flag set/ = 1)

@@ -10,7 +10,15 @@ main_menu:
         
         ; print menu header & options 
         mov si, menuString
-        call print_string
+		push si
+		push word 0		; start printing at pos 0,0
+		push word 0
+        call print_string_text_mode
+		add sp, 6
+
+		; Initialize cursor position
+		mov word [kernel_cursor_y], bx	; row
+		mov word [kernel_cursor_x], cx	; column
 
         ;; --------------------------------------------------------------------
         ;; Get user input, print to screen & choose menu option/run command
@@ -40,9 +48,22 @@ get_input:
 	mov cx, 10
 	rep stosb
 
-	; Set up input line
+	; Print prompt
 	mov si, prompt
-	call print_string
+	push si						; Address of string to print - input 1
+	push word [kernel_cursor_y]	; Row to print to - input 2
+	push word [kernel_cursor_x]	; Col to print to - input 3
+	call print_string_text_mode
+	add sp, 6
+
+	; Move cursor after prompt
+	mov word [kernel_cursor_y], bx
+	mov word [kernel_cursor_x], cx
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call move_cursor
+	add sp, 4
+	
 	xor cx, cx			; reset byte counter of input
     mov si, cmdString   ; si now pointing to command string
 	
@@ -50,22 +71,54 @@ keyloop:
     xor ax, ax              ; ah = 00h al = 00h
     int 16h                 ; BIOS int get keystroke ah=0, al <- character
 
-    mov ah, 0Eh
     cmp al, 0Dh             ; user pressed enter?
     je tokenize_input_line	; tokenize user input line
 	
 	cmp al, 08h				; backspace?
 	jne .not_backspace
 	dec si					; yes, go back one char
+	jcxz .there
 	dec cx					; byte counter - 1
-    int 10h                 ; else print input character to screen
+	
+	.there:
+	cmp word [kernel_cursor_x], 0	; At start of line?
+	je keyloop						; Yes, skip
+
+	; Move cursor back 1 space
+	dec word [kernel_cursor_x]		; Otherwise move back
+
+	push word [kernel_cursor_y]		; row to move to - input 1
+	push word [kernel_cursor_x]		; col to move to - input 2
+	call move_cursor
+	add sp, 4
+
 	jmp keyloop
 
 .not_backspace:
-	int 10h
     mov [si], al            ; store input char to string
 	inc cx					; increment byte counter of input
+	mov word [save_cx], cx
     inc si                  ; go to next byte at si/cmdString
+
+	; Print input character to screen
+	xor ah, ah
+	push ax						; Character to print - input 1
+	push word [kernel_cursor_y]	; Row to print to - input 2
+	push word [kernel_cursor_x] ; Column to print to - input 3
+	call print_char_text_mode
+
+	add sp, 6					; Clean up stack
+
+	; Move cursor 
+	mov word [kernel_cursor_y], bx	; new cursor X/Y in BX/CX from print_char
+	mov word [kernel_cursor_x], cx
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call move_cursor
+
+	add sp, 4
+
+	mov cx, word [save_cx]
     jmp keyloop             ; loop for next character from user
 
 	;; Prompt/"Shell" commands
@@ -136,7 +189,7 @@ tokenize_input_line:
 				inc byte [token_count]		; next token
 
 				; Move di to next token position in tokens array
-				mov word [save_bx], bx
+				mov word [kernel_save_bx], bx
 
 				xor bx, bx
 				mov bl, byte [token_count]
@@ -144,7 +197,7 @@ tokenize_input_line:
 				lea di, [tokens+bx]
 
 				; Move to next position in tokens_length array
-				mov bx, word [save_bx]
+				mov bx, word [kernel_save_bx]
 				add bx, 2				; each length is 1 word long 
 				
 				dec si					; get token loop does lodsb again, prevent error here
@@ -263,6 +316,18 @@ found_program:
 	mov [fileExt+2], al
 	
     mov cl, [ES:DI+14]     ; sector number to start reading at
+	;; Get correct track # & sector #
+	xor ah, ah
+	mov al, cl
+	mov cl, 18	; 18 = number of sectors per track for a floppy disk
+	div cl		; AX / byte value (in CL); AL = quotient, AH = remainder
+	mov ch, al	; CH = track #, quotient
+	mov cl, ah	; CL = sector #, remainder
+	cmp cl, 0
+	jne .after
+	mov cl, 18	
+
+	.after:
 	mov bl, [ES:DI+15]		; file size in sectors / # of sectors to read
 	mov byte [fileSize], bl
 
@@ -284,7 +349,23 @@ found_program:
     jnc run_program	        ; carry flag not set, success
 
     mov si, pgmNotLoaded    ; else error, program did not load correctly
-    call print_string
+	;; Print string
+	push si
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+    call print_string_text_mode
+	add sp, 6
+
+	;; Update cursor position
+	mov word [kernel_cursor_y], bx
+	mov word [kernel_cursor_x], cx
+
+	;; Move cursor
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call move_cursor
+	add sp, 4
+
     jmp get_input		    ; go back to prompt for input
 
 run_program:
@@ -321,14 +402,60 @@ print_file_char:
 	jle call_h_to_a
 	
 return_file_char:	
-	int 10h     			; Print file character to screen
+	;; Print file character to screen
+	mov word [kernel_save_bx], bx
+	xor ah, ah
+	push ax
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call print_char_text_mode
+	add sp, 6
+
+	;; Move cursor
+	mov word [kernel_cursor_y], bx
+	mov word [kernel_cursor_x], cx
+	push bx
+	push cx
+	call move_cursor
+	add sp, 4
+
+	mov bx, word [kernel_save_bx]
 	inc bx
 	loop print_file_char	; Keep printing characters and decrement CX till 0
 
-	mov ax, 0E0Ah   		; Print newline after done printing file contents
-	int 10h
+	;; Print newline after done printing file contents
+	xor ah, ah
+	mov al, 0Ah
+	push ax
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call print_char_text_mode
+	add sp, 6
+
+	;; Move cursor
+	mov word [kernel_cursor_y], bx
+	mov word [kernel_cursor_x], cx
+	push bx
+	push cx
+	call move_cursor
+	add sp, 4
+
+	xor ah, ah
 	mov al, 0Dh
-	int 10h
+	push ax
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call print_char_text_mode
+	add sp, 6
+
+	;; Move cursor
+	mov word [kernel_cursor_y], bx
+	mov word [kernel_cursor_x], cx
+	push bx
+	push cx
+	call move_cursor
+	add sp, 4
+
 	jmp get_input   		; after all printed, go back to prompt
 
 call_h_to_a:
@@ -338,14 +465,35 @@ call_h_to_a:
 input_not_found:
 	pop cx					; In case program was not found
     mov si, failure         ; command not found! boo D:
-    call print_string
+	;; Print string
+	push si
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call print_string_text_mode
+	add sp, 6
+
+	;; Move cursor
+	mov word [kernel_cursor_y], bx
+	mov word [kernel_cursor_x], cx
+	push bx
+	push cx
+	call move_cursor
+	add sp, 4
+
     jmp get_input 
 
         ;; --------------------------------------------------------------------
         ;; File/Program browser & loader   
         ;; --------------------------------------------------------------------
 fileTable_print: 
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
 	call print_fileTable
+	add sp, 4
+
+	mov word [kernel_cursor_y], bx	; update cursor position
+	mov word [kernel_cursor_x], cx
+
 	jmp get_input
 
         ;; --------------------------------------------------------------------
@@ -359,9 +507,30 @@ reboot:
         ;; --------------------------------------------------------------------
 registers_print:
     mov si, printRegHeading 
-    call print_string
+	;; Print string
+	push si
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call print_string_text_mode
+	add sp, 6
 
+	;; Move cursor
+	mov word [kernel_cursor_y], bx
+	mov word [kernel_cursor_x], cx
+	push bx
+	push cx
+	call move_cursor
+	add sp, 4
+
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
     call print_registers
+	add sp, 4
+
+	;; Update cursor position
+	mov word [kernel_cursor_y], bx
+	mov word [kernel_cursor_x], cx
+
 	jmp get_input		; return to prompt '>:'
 	
         ;; --------------------------------------------------------------------
@@ -396,6 +565,15 @@ squareColLoop:
 
         mov ah, 00h
         int 16h                 ; get keystroke
+
+		; Temp Fix: reset text mode screen
+		mov ax, 0003h			; int 10h ah00 = set video mode; 80x25 16 colors text mode
+		int 10h
+		
+		mov ah, 0Bh				; int 10h ah 0Bh = set palette
+		mov bx, 0001h			; bl = bg color for text mode; blue
+		int 10h
+
         jmp main_menu
 
         ;; --------------------------------------------------------------------
@@ -403,6 +581,11 @@ squareColLoop:
         ;; --------------------------------------------------------------------
 clear_screen:
 	call clear_screen_text_mode
+
+	; Update cursor values for new position
+	mov word [kernel_cursor_y], 0
+	mov word [kernel_cursor_x], 0
+
 	jmp get_input
 
         ;; --------------------------------------------------------------------
@@ -430,11 +613,14 @@ del_file:
 	;; TODO: Check return code for errors
 	cmp ax, 0	; 0 = Success/Normal return
 
-	mov ax, 0E0Ah
-	int 10h
-	mov al, 0Dh
-	int 10h
-
+	; Move cursor down for newline
+	inc word [kernel_cursor_y]
+	mov word [kernel_cursor_x], 0
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call move_cursor
+	add sp, 4
+	
 	jmp get_input
 
         ;; --------------------------------------------------------------------
@@ -469,10 +655,13 @@ ren_file:
 	;; TODO: Check return code for errors
 	cmp ax, 0	; 0 = Success/Normal return
 
-	mov ax, 0E0Ah
-	int 10h
-	mov al, 0Dh
-	int 10h
+	; Move cursor down for newline
+	inc word [kernel_cursor_y]
+	mov word [kernel_cursor_x], 0
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call move_cursor
+	add sp, 4
 
 	jmp get_input
 
@@ -498,12 +687,14 @@ end_program:
         ;; --------------------------------------------------------------------
         ;; Include Files
         ;; --------------------------------------------------------------------
-        include "../include/print/print_string.inc"
+		include "../include/print/print_char_text_mode.inc"
+		include "../include/print/print_string_text_mode.inc"
         include "../include/print/print_hex.inc"
         include "../include/print/print_registers.inc"
 		include "../include/print/print_fileTable.inc"
 		include "../include/screen/clear_screen_text_mode.inc"
         include "../include/screen/resetGraphicsScreen.inc"
+		include "../include/screen/move_cursor.inc"
 		include "../include/type_conversions/hex_to_ascii.inc"
 		include "../include/disk/file_ops.inc"
 	
@@ -539,7 +730,7 @@ cmdRenFile: db 'ren',0		; Rename a file in the file table
         
 printRegHeading:    db nl,'--------  ------------',nl,\
         'Register  Mem Location',nl,\
-        '--------  ------------',nl,0
+        '--------  ------------',0
 
 notFoundString: db nl,'Program/file not found!, Try again? (Y)',nl,0
 sectNotFound:   db nl,'Sector not found!, Try again? (Y)',nl,0
@@ -555,14 +746,15 @@ fileTxt:	db 'txt',0
 tokens: times 50 db 0		; tokens array, equivalent-ish to tokens[5][10]
 tokens_length: times 5 dw 0	; length of each token in tokens array (0-10)
 token_count: db 0			; How many tokens did the user enter?
-save_bx:	dw 0
+kernel_save_bx:	dw 0
 token_file_name1: times 10 db 0
 token_file_name2: times 10 db 0
-
+kernel_cursor_x: dw 0
+kernel_cursor_y: dw 0
 cmdString:      db ''
 
         ;; --------------------------------------------------------------------
         ;; Sector Padding magic
         ;; --------------------------------------------------------------------
-        times 3072-($-$$) db 0   ; pads out 0s until we reach 1536th byte
+        times 4608-($-$$) db 0   ; pads out 0s until we reach 1536th byte
 

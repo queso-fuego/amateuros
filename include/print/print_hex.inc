@@ -1,12 +1,26 @@
 ;;;
 ;;; Prints hexidecimal values using register DX and print_string.asm
 ;;;
+;;; input 1: cursor Y position
+;;; input 2: cursor X position
+;;; output 1: new cursor Y position in BX
+;;; output 2: new cursor X position in CX
+;;;
 ;;; Ascii '0'-'9' = hex 30h-39h
 ;;; Ascii 'A'-'F' = hex 41h-46h
 ;;; Ascii 'a'-'f' = hex 61h-66h
 ;;;
 print_hex:
-        pusha           ; save all registers to the stack
+        push bp
+		mov bp, sp
+
+		push si
+
+		mov ax, [bp+6]
+		mov word [print_hex_cursor_y], ax
+		mov ax, [bp+4]	
+		mov word [print_hex_cursor_x], ax
+
         xor cx, cx      ; initialize loop counter 
 
 hex_loop:
@@ -32,11 +46,32 @@ move_intoBX:
         jmp hex_loop    ; loop for next hex digit in DX
         
 end_hexloop:
+		;; Print hex string
         mov si, hexString
-        call print_string
+		push si
+		push word [print_hex_cursor_y]
+		push word [print_hex_cursor_x]
+        call print_string_text_mode
+		add sp, 6
 
-        popa            ; restore all registers from the stack
+		; Move cursor
+		mov word [print_hex_cursor_y], bx
+		mov word [print_hex_cursor_x], cx
+		push bx
+		push cx
+		call move_cursor
+		add sp, 4
+
+		;; Reminder: New cursor X/Y is in BX/CX!
+
+		pop si
+
+		mov sp, bp
+		pop bp
+
         ret             ; return to caller
 
-        ;; Data
+;; VARIABLES
 hexString:      db '0x0000', 0
+print_hex_cursor_y: dw 0
+print_hex_cursor_x: dw 0

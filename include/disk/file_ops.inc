@@ -66,7 +66,7 @@ delete_file:
 		;; Write changed filetable to disk - TODO: Assuming file table is 1 sector, 
 		;;   change later
 		xor ch, ch			; track #
-		mov cl, 08h			; sector # to start writing at
+		mov cl, 0Bh			; sector # to start writing at
 		xor dx, dx			; dh = head #, dl = drive #
 		xor ax, ax
 		mov es, ax
@@ -167,8 +167,20 @@ load_file:
 		;; Set up parms for int 13h ah02h - read disk sectors
 		mov word [bp-2], 0	; Init error code to 'success'
 
-		xor ch, ch			; Track #
 		mov cl, [ES:DI+14]	; Sector # to start reading at
+
+		;; Get correct track and starting sector #s
+		xor ah, ah
+		mov al, cl
+		mov cl, 18	; 18 = number of sectors per track for a floppy disk
+		div cl		; AX / byte value (in CL); AL = quotient, AH = remainder
+		mov ch, al	; CH = track #, quotient
+		mov cl, ah	; CL = sector #, remainder
+		cmp cl, 0
+		jne .after
+		mov cl, 18	
+
+		.after:
 		mov ah, 02h			; int 13h ah02h
 		mov al, [ES:DI+15]	; # of sectors to read
 		mov dx, fs
@@ -267,7 +279,7 @@ rename_file:
 	mov word [bp-2], 0		; Init return code to success
 
 	xor ch, ch			; track #
-	mov cl, 08h			; sector # to start writing at
+	mov cl, 0Bh			; sector # to start writing at
 	xor dx, dx			; dh = head #, dl = drive #
 	xor ax, ax
 	mov es, ax
@@ -333,7 +345,7 @@ save_file:
 	call check_filename			; Check for filename in file table
 
 	cmp word [error_code], 0	; Check error code
-	je new_file					; Found existing file
+	je new_file					; Found existing file TODO: Change to je found_file
 
 	;; Otherwise check for free space in file table and write file at that entry
 	mov si, free_space
@@ -386,7 +398,7 @@ save_file:
 		;; Write changed filetable to disk - TODO: Assuming file table is 1 sector, 
 		;;   change later
 		xor ch, ch			; track #
-		mov cl, 08h			; sector # to start writing at
+		mov cl, 0Bh			; sector # to start writing at
 		xor dx, dx			; dh = head #, dl = drive #
 		mov word [saved_bx], bx	
 		xor ax, ax
@@ -405,11 +417,22 @@ save_file:
 
 		mov ax, fs
 		mov es, ax							; Segment address of file data to write
+		mov cl, byte [last_saved_sector]	; Sector # to start writing at
 
+		;; Get correct track and starting sector #s
+		xor ah, ah
+		mov al, cl
+		mov cl, 18	; 18 = number of sectors per track for a floppy disk
+		div cl		; AX / byte value (in CL); AL = quotient, AH = remainder
+		mov ch, al	; CH = track #, quotient
+		mov cl, ah	; CL = sector #, remainder
+		cmp cl, 0
+		jne .after
+		mov cl, 18	
+
+		.after:
 		mov ah, 03h							; int 13h ah 03h - write disk sectors	
 		mov al, byte [file_size]			; # of sectors to write
-		xor ch, ch							; track #
-		mov cl, byte [last_saved_sector]	; Sector # to start writing at
 		xor dx, dx							; dh = head #, dl = drive #
 		mov bx, word [saved_bx]				; ES:BX <- file data memory location	
 
@@ -471,8 +494,6 @@ save_file:
 		check_filename_return:
 			pop di				; restore di pos from stack
 			ret
-
-	;;;-------------------------------------
 	;;; Global return to caller
 	;;;-------------------------------------
 	return_to_caller:

@@ -2,7 +2,8 @@
 ;;; move_cursor.inc: moves hardware cursor to new row/col
 ;;; assuming VGA txt mode 03 - 80x25 characters, 16 colors
 ;;; Parms:
-;;; input 1: row/col as 2 bytes in a word
+;;; input 1: row to move to
+;;; input 2: col to move to
 ;;; output 1: error/return code in AX
 move_cursor:
 	push bp
