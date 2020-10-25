@@ -40,24 +40,53 @@ print_char_text_mode:
 	inc word [print_char_cursor_x]		; Update cursor position
 	cmp word [print_char_cursor_x], 80	; at end of line?
 	jne .end_print						; No, go on
-	inc word [print_char_cursor_y]		; Yes, move cursor for CRLF
-	add di, 160
-	mov bx, word [print_char_cursor_x]
+
+	mov bx, word [print_char_cursor_x]	; Yes, do a CR 1st, then LF
 	shl bx, 1
 	sub di, bx	
 	mov word [print_char_cursor_x], 0
 	
-	jmp .end_print
-
 	.LF:
-		inc word [print_char_cursor_y]	; Go down 1 row
-		add di, 160						; Go down "1 row" in video memory
+		inc word [print_char_cursor_y]		; Go down 1 row
+		cmp word [print_char_cursor_y], 25	; At bottom of screen?
+		jge .scroll_down
+
+		add di, 160							; Go down "1 row" in video memory
 		jmp .end_print
 	.CR:
 		mov bx, word [print_char_cursor_x]
 		shl bx, 1
 		sub di, bx							; Move to "beginning of line" in video memory
 		mov word [print_char_cursor_x], 0	; Move to beginning of line
+		jmp .end_print
+
+	.scroll_down:
+		;; Copy screen lines 1-24 into lines 0-23 (0-based),
+		;;   then clear out last line, line 24
+		;;   and continue printing
+		push es
+		push di
+		push ds
+		push si
+		
+		mov ax, 0B800h
+		mov es, ax
+		mov ds, ax
+		xor di, di
+		mov si, 160		; Byte location of screen line 1
+		mov cx, 80*24
+		rep movsw		; Copy lines 1-24 into lines 0-23
+		
+		mov ax, 1720h
+		mov cx, 80
+		rep stosw		; Clear line 24
+		
+		pop si
+		pop ds
+		pop di
+		pop es
+
+		dec word [print_char_cursor_y]	; set Y = line 24
 
 	.end_print:
 	mov word [bp-2], 0		; Return code 0 = success

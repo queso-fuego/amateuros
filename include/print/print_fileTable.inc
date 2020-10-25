@@ -40,7 +40,8 @@ print_fileTable:
 	mov es, bx
 	xor bx, bx		; ES:BX <- 100h:0000h = 1000h; file table memory location
 	
-	xor dx, dx		; DH = head #, DL = drive #
+	xor dx, dx		; DH = head #
+	mov dl, 80h		; DL = drive #
 	mov cx, 000Bh	; CH = cylinder #, CL = starting sector # to read
 
 retry_load:

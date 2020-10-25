@@ -332,7 +332,8 @@ found_program:
 	mov byte [fileSize], bl
 
 	xor ax, ax
-    mov dl, 00h         ; disk # 
+	xor dh, dh
+    mov dl, 80h			; drive #
     int 13h     		; int 13h ah 0 = reset disk system
 
     mov ax, 800h       ; memory location to load pgm to
@@ -343,7 +344,7 @@ found_program:
     mov ah, 02h         ; int 13h ah 2 = read disk sectors to memory
     mov ch, 00h         ; track #
     mov dh, 00h         ; head #
-    mov dl, 00h         ; drive #
+    mov dl, 80h			; drive #
 
     int 13h
     jnc run_program	        ; carry flag not set, success
@@ -378,12 +379,13 @@ run_program:
 	mov di, fileBin
 	repe cmpsb
 	jne print_txt_file
-	
+
     mov ax, 800h       ; program loaded, set segment registers to location
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
+
     jmp 800h:0000h     ; far jump to program to execute
 	
 print_txt_file:
@@ -605,6 +607,7 @@ del_file:
 	push word token_file_name1	; File name
 	push cx						; Length of file name
 
+	mov dl, 80h
 	call delete_file
 
 	;; Clean up stack after call

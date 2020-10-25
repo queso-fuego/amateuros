@@ -23,6 +23,5 @@ clear_screen_text_mode:
 	xor dx, dx		; dh = row to move to, dl = col
 	int 10h
 
-
 	popa
 	ret

@@ -125,7 +125,7 @@ load_existing_file:
 	push word editor_filename	;; 1st parm - file name
 	push word 1000h				;; 2nd parm - segment to load to
 	push word 0000h				;; 3rd parm - offset to load to
-	
+		
 	call load_file
 
 	;; Reset stack
@@ -232,7 +232,6 @@ load_file_hex:
 		call move_cursor
 		add sp, 4
 
-		inc word [cursor_x]
 		mov al, [ES:DI]
 		and al, 00001111b	; Get 2nd nibble into al
 		call hex_to_ascii
@@ -252,11 +251,11 @@ load_file_hex:
 		call move_cursor
 		add sp, 4
 
-		inc word [cursor_x]
-		cmp word [cursor_x], ENDOFLINE
-		je go_down_one_line
-		mov al, ' '
 		;; Print char in AL
+		cmp word [cursor_x], 0	; At start of line?
+		je iterate_loop			; if so, don't print a space
+
+		mov al, ' '				; else print space between bytes
 		xor ah, ah
 		push ax
 		push word [cursor_y]
@@ -272,21 +271,13 @@ load_file_hex:
 		call move_cursor
 		add sp, 4
 
-		inc word [cursor_x]
-		jmp iterate_loop
-
-		go_down_one_line:
-		mov word [cursor_x], 0
-		inc word [cursor_y]
-
 		iterate_loop:
 		inc di
 		inc word [editor_filesize]
 
 		mov cx, word [save_cx]
 		dec cx
-		jnz load_file_hex_loop
-;;	loop load_file_hex_loop	
+	jnz load_file_hex_loop
 
 	mov word [save_di], di	; Save off di first
 
@@ -1258,6 +1249,7 @@ end_editor:
         mov es, ax
         mov fs, ax
         mov gs, ax
+
         jmp 200h:0000h			; far jump back to kernel
 
 	;; include files

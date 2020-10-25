@@ -10,7 +10,7 @@
         xor bx, bx            ; ES:BX = 100h:0000h = 1000h
 
         ;; Set up disk read
-		xor dx, dx
+		mov dx, 0080h
 		mov cx, 000Bh			; ch = cylinder #, cl = starting sector to read
 
 load_file_table:
@@ -26,7 +26,7 @@ load_file_table:
         xor bx, bx            ; ES:BX = 200h:0000h = 2000h
 
         ;; Set up disk read
-		xor dx, dx
+		mov dx, 0080h
 		mov cx, 0002h			; ch = cylinder #, cl = starting sector to read
 
 load_kernel:
@@ -55,7 +55,7 @@ load_kernel:
 		mov bx, 0001h			; bl = bg color for text mode; blue
 		int 10h
 
-        jmp 2000h		         ; never return from this!
+        jmp 200h:0000h	            ; never return from this!
 
         ;; Boot sector magic
         times 510-($-$$) db 0   ; pads out 0s until we reach 510th byte
