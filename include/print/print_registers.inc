@@ -1,319 +1,289 @@
 ;;;
 ;;; print_registers.asm: prints registers and memory addresses to screen
 ;;;
-;;;	input 1: cursor Y position
-;;; input 2: cursor X position
-;;; output 1: new cursor Y position in BX
-;;; output 2: new cursor X position in CX
+;;;	input 1: cursor Y position (address, not value)
+;;; input 2: cursor X position (address, not value)
 print_registers:
 	push bp
 	mov bp, sp
 
 	mov ax, [bp+6]
-	mov word [print_registers_cursor_y], ax
+	mov word [csr_y_addr], ax
 	mov ax, [bp+4]
-	mov word [print_registers_cursor_x], ax
+	mov word [csr_x_addr], ax
 
-    mov si, regString
+    mov si, printRegHeading 
 	;; Print string
 	push si
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
+	call move_cursor
+	add sp, 4
+
+	;; Print string for DX
+    mov si, regString
+	push si
+	push word [csr_y_addr]
+	push word [csr_x_addr]
+	call print_string_text_mode
+	add sp, 6
+
+	;; Move cursor
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
 	;; Print hex value
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
     call print_hex          ; print DX
 	add sp, 4
 
-	;; Update cursor position
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-
+	;; Print string for AX
     mov byte [regString+2], 'a'
-	;; Print string
 	push si
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
+	;; Print hex value
     mov dx, ax
-	;; Print hex value
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
-    call print_hex          ; print AX
+	push word [csr_y_addr]
+	push word [csr_x_addr]
+    call print_hex          ; print AX value
 	add sp, 4
 
-	;; Update cursor position
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-
+	;; Print string for BX
     mov byte [regString+2], 'b'
-	;; Print string
 	push si
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
+	;; Print hex value
     mov dx, bx
-	;; Print hex value
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
-    call print_hex          ; print BX
+	push word [csr_y_addr]
+	push word [csr_x_addr]
+    call print_hex          ; print BX value
 	add sp, 4
 
-	;; Update cursor position
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-
+	;; Print string
     mov byte [regString+2], 'c'
-	;; Print string
 	push si
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
+	;; Print hex value
     mov dx, cx
-	;; Print hex value
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
-    call print_hex          ; print CX
+	push word [csr_y_addr]
+	push word [csr_x_addr]
+    call print_hex          ; print CX value
 	add sp, 4
 
-	;; Update cursor position
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-
+	;; Print string
     mov word [regString+2], 'si'
-	;; Print string
 	push si
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
+	;; Print hex value
     mov dx, si
-	;; Print hex value
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
-    call print_hex          ; print SI
+	push word [csr_y_addr]
+	push word [csr_x_addr]
+    call print_hex          ; print SI value
 	add sp, 4
 
-	;; Update cursor position
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-
-    mov byte [regString+2], 'd'
 	;; Print string
+    mov byte [regString+2], 'd'
 	push si
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
+	;; Print hex value
     mov dx, di
-	;; Print hex value
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
-    call print_hex          ; print DI
+	push word [csr_y_addr]
+	push word [csr_x_addr]
+    call print_hex          ; print DI value
 	add sp, 4
 
-	;; Update cursor position
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-
+	;; Print string
     mov word [regString+2], 'cs'
-	;; Print string
 	push si
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
+	;; Print hex value
     mov dx, cs
-	;; Print hex value
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
-    call print_hex          ; print CS
+	push word [csr_y_addr]
+	push word [csr_x_addr]
+    call print_hex          ; print CS value
 	add sp, 4
 
-	;; Update cursor position
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-
+	;; Print string
     mov byte [regString+2], 'd'
-	;; Print string
 	push si
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
+	;; Print hex value
     mov dx, ds
-	;; Print hex value
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
-    call print_hex          ; print DS
+	push word [csr_y_addr]
+	push word [csr_x_addr]
+    call print_hex          ; print DS value
 	add sp, 4
 
-	;; Update cursor position
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-
+	;; Print string
     mov byte [regString+2], 'e'
-	;; Print string
 	push si
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
+	;; Print hex value
     mov dx, es
-	;; Print hex value
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
-    call print_hex          ; print ES
+	push word [csr_y_addr]
+	push word [csr_x_addr]
+    call print_hex          ; print ES value
 	add sp, 4
 
-	;; Update cursor position
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-
-	mov byte [regString+2], 's'
 	;; Print string
+	mov byte [regString+2], 's'
 	push si
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
-    mov dx, ss
 	;; Print hex value
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
-    call print_hex          ; print SS
+    mov dx, ss
+	push word [csr_y_addr]
+	push word [csr_x_addr]
+    call print_hex          ; print SS value
 	add sp, 4
 
-	;; Update cursor position
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-
-	xor ah, ah
-	mov al, 0Ah
 	;; Print char
-	push ax 
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word 000Ah 
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
-	xor ah, ah
-	mov al, 0Dh
 	;; Print char
-	push ax 
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	push word 000Dh 
+	push word [csr_y_addr]
+	push word [csr_x_addr]
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [print_registers_cursor_y], bx
-	mov word [print_registers_cursor_x], cx
-	push word [print_registers_cursor_y]
-	push word [print_registers_cursor_x]
+	mov bx, [csr_y_addr]
+	push word [bx]			; Cursor Y value
+	mov bx, [csr_x_addr]
+	push word [bx]			; Cursor X value
 	call move_cursor
 	add sp, 4
 
@@ -322,7 +292,13 @@ print_registers:
 
     ret
 
-        ;; Variables
+;; Variables
+nl equ 0Ah,0Dh ; CR/LF
+
+printRegHeading:    db nl,'--------  ------------',nl,\
+        'Register  Mem Location',nl,\
+        '--------  ------------',0
+
 regString:  db 0Ah,0Dh,'dx        ',0 ; hold string of current register name and memory address
-print_registers_cursor_y: dw 0
-print_registers_cursor_x: dw 0
+csr_x_addr: dw 0
+csr_y_addr: dw 0

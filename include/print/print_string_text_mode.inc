@@ -2,11 +2,9 @@
 ;;; print_string_text_mode: Print a string to video memory
 ;;; Parms:
 ;;;  input 1: address of string
-;;;  input 2: row to print to	 (value, not address)
-;;;  input 3: column to print to (value, not address)
+;;;  input 2: row to print to	 (address, not value)
+;;;  input 3: column to print to (address, not value)
 ;;;  output 1: return code in AX
-;;;  output 2: new cursor row value in BX
-;;;	 output 3: new cursor col value in CX 
 ;;;----------------------------------------------
 print_string_text_mode:
 	push bp
@@ -16,17 +14,17 @@ print_string_text_mode:
 	push es
 	push di
 	push si
+	push bx
+	push cx
+	push dx
 
 	mov ax, 0B800h	; set up ES:DI to print to vga color text mode memory
 	mov es, ax
 
-	mov ax, [bp+6]	; save cursor values
-	mov word [print_string_cursor_y], ax	
-	mov ax, [bp+4]
-	mov word [print_string_cursor_x], ax	
-
-	imul di, [bp+6], 160	; Row to print to start printing at, in bytes
-	imul ax, [bp+4], 2		; Col to print to start printing at, in bytes
+	mov bx, [bp+6]			; Cursor Y address
+	imul di, [bx], 160
+	mov bx, [bp+4]			; Cursor X address
+	imul ax, [bx], 2		; Col to print to start printing at, in bytes
 	add di, ax				; DI = row*sizeof(row) + col*sizeof(col)
 
 	mov si, [bp+8]			; Start of string to print (in SI)
@@ -41,27 +39,30 @@ print_string_text_mode:
 		cmp al, 0Dh			; Carriage return?
 		je .CR
 		stosw				; Print character to string by storing AL in [ES:DI]
-		inc word [print_string_cursor_x]		; Update cursor position
-		cmp word [print_string_cursor_x], 80	; at end of line?
+
+		inc word [bx]		; Update cursor position
+		cmp word [bx], 80	; at end of line?
 		jne .loop								; No, go on
 
-		mov bx, word [print_string_cursor_x]	; Yes, do a CR 1st, then LF
-		shl bx, 1
-		sub di, bx
-		mov word [print_string_cursor_x], 0
+		mov dx, word [bx]	; Yes, do a CR 1st, then LF
+		shl dx, 1
+		sub di, dx
+		mov word [bx], 0
 
 		.LF:
-			inc word [print_string_cursor_y]		; Go down 1 row
-			cmp word [print_string_cursor_y], 25	; At bottom of screen?
+			mov bx, [bp+6]						; Cursor Y address
+			inc word [bx]		; Go down 1 row
+			cmp word [bx], 25	; At bottom of screen?
 			jge .scroll_down
 
 			add di, 160								; Go down "1 row" in video memory
+			mov bx, [bp+4]						; Cursor X address
 			jmp .loop
 		.CR:
-			mov bx, word [print_string_cursor_x]
-			shl bx, 1
-			sub di, bx							; Move to "beginning of line" in vid mem
-			mov word [print_string_cursor_x], 0	; Move to beginning of line
+			mov dx, word [bx]
+			shl dx, 1
+			sub di, dx
+			mov word [bx], 0
 			jmp .loop
 
 		.scroll_down:
@@ -90,15 +91,17 @@ print_string_text_mode:
 			pop di
 			pop es
 
-			dec word [print_string_cursor_y]	; set Y = line 24
+			dec word [bx]	; set Y = line 24
+			mov bx, [bp+4]						; Cursor X address
 	jmp .loop
 
 	.end_print:
 	mov word [bp-2], 0		; Return code 0 = success
 	mov ax, [bp-2]
-	mov bx, word [print_string_cursor_y]	; new cursor row value
-	mov cx, word [print_string_cursor_x]	; new cursor col value
 
+	pop dx
+	pop cx
+	pop bx
 	pop si
 	pop di
 	pop es
@@ -107,7 +110,3 @@ print_string_text_mode:
 	pop bp
 
 	ret
-
-;; VARIABLES
-print_string_cursor_x: dw 0
-print_string_cursor_y: dw 0

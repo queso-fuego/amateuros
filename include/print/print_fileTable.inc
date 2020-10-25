@@ -1,34 +1,31 @@
 ;;;
 ;;; print_fileTable.asm: prints file table entries to screen
 ;;;
-;;;	input 1: cursor Y position
-;;; input 2: cursor X position
-;;;	output 1: new cursor Y position in BX
-;;; output 2: new cursor X position in CX
-;;;	ASSUME THIS IS A KERNEL ONLY INCLUDE FILE - VARIABLES/etc. MAY BE IN KERNEL.ASM, NOT HERE
+;;;	input 1: cursor Y position (address, not value)
+;;; input 2: cursor X position (address, not value)
 ;;;
 print_fileTable:
 	push bp
 	mov bp, sp
 
 	mov ax, [bp+6]
-	mov word [fileTable_cursor_y], ax
+	mov word [fileTable_csr_y], ax	; Cursor Y address
 	mov ax, [bp+4]	
-	mov word [fileTable_cursor_x], ax
+	mov word [fileTable_csr_x], ax	; Cursor X address
 
 	;; Print file table heading
 	mov si, fileTableHeading
 	push si
-	push word [fileTable_cursor_y]
-	push word [fileTable_cursor_x]
+	push word [fileTable_csr_y]
+	push word [fileTable_csr_x]
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [fileTable_cursor_y], bx
-	mov word [fileTable_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [fileTable_csr_y]
+	push word [bx]				; Cursor Y value
+	mov bx, [fileTable_csr_x]
+	push word [bx]				; Cursor X value
 	call move_cursor
 	add sp, 4
 
@@ -65,16 +62,16 @@ filename_loop:
 	;; Otherwise print char in al to screen
 	xor ah, ah
 	push ax
-	push word [fileTable_cursor_y]
-	push word [fileTable_cursor_x]
+	push word [fileTable_csr_y]
+	push word [fileTable_csr_x]
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [fileTable_cursor_y], bx
-	mov word [fileTable_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [fileTable_csr_y]
+	push word [bx]				; Cursor Y value
+	mov bx, [fileTable_csr_x]
+	push word [bx]				; Cursor X value
 	call move_cursor
 	add sp, 4
 
@@ -100,16 +97,16 @@ file_ext:
 	;; Print char
 	mov word [save_bx], bx
 	push ax
-	push word [fileTable_cursor_y]
-	push word [fileTable_cursor_x]
+	push word [fileTable_csr_y]
+	push word [fileTable_csr_x]
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [fileTable_cursor_y], bx
-	mov word [fileTable_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [fileTable_csr_y]
+	push word [bx]				; Cursor Y value
+	mov bx, [fileTable_csr_x]
+	push word [bx]				; Cursor X value
 	call move_cursor
 	add sp, 4
 
@@ -122,16 +119,16 @@ file_ext:
 	mov word [save_bx], bx
 	xor ah, ah
 	push ax
-	push word [fileTable_cursor_y]
-	push word [fileTable_cursor_x]
+	push word [fileTable_csr_y]
+	push word [fileTable_csr_x]
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [fileTable_cursor_y], bx
-	mov word [fileTable_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [fileTable_csr_y]
+	push word [bx]				; Cursor Y value
+	mov bx, [fileTable_csr_x]
+	push word [bx]				; Cursor X value
 	call move_cursor
 	add sp, 4
 
@@ -144,16 +141,16 @@ file_ext:
 	mov word [save_bx], bx
 	xor ah, ah
 	push ax
-	push word [fileTable_cursor_y]
-	push word [fileTable_cursor_x]
+	push word [fileTable_csr_y]
+	push word [fileTable_csr_x]
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [fileTable_cursor_y], bx
-	mov word [fileTable_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [fileTable_csr_y]
+	push word [bx]				; Cursor Y value
+	mov bx, [fileTable_csr_x]
+	push word [bx]				; Cursor X value
 	call move_cursor
 	add sp, 4
 
@@ -169,14 +166,10 @@ file_ext:
 	mov word [save_bx], bx
 
 	;; Print hex value
-	push word [fileTable_cursor_y]
-	push word [fileTable_cursor_x]
+	push word [fileTable_csr_y]
+	push word [fileTable_csr_x]
 	call print_hex
 	add sp, 4
-
-	;; Update cursor position
-	mov word [fileTable_cursor_y], bx
-	mov word [fileTable_cursor_x], cx
 
 	;; Starting sector section
 	;; 9 blanks before starting sector
@@ -190,14 +183,10 @@ file_ext:
 	mov word [save_bx], bx
 
 	;; Print hex value
-	push word [fileTable_cursor_y]
-	push word [fileTable_cursor_x]
+	push word [fileTable_csr_y]
+	push word [fileTable_csr_x]
 	call print_hex
 	add sp, 4
-
-	;; Update cursor position
-	mov word [fileTable_cursor_y], bx
-	mov word [fileTable_cursor_x], cx
 
 	;; File size section
 	;; 14 blanks before file size
@@ -211,14 +200,10 @@ file_ext:
 	mov word [save_bx], bx
 
 	;; Print hex value
-	push word [fileTable_cursor_y]
-	push word [fileTable_cursor_x]
+	push word [fileTable_csr_y]
+	push word [fileTable_csr_x]
 	call print_hex
 	add sp, 4
-
-	;; Update cursor position
-	mov word [fileTable_cursor_y], bx
-	mov word [fileTable_cursor_x], cx
 
 	mov bx, word [save_bx]
 	mov al, 0Ah		; line feed
@@ -226,16 +211,16 @@ file_ext:
 	;; Print char
 	xor ah, ah
 	push ax
-	push word [fileTable_cursor_y]
-	push word [fileTable_cursor_x]
+	push word [fileTable_csr_y]
+	push word [fileTable_csr_x]
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [fileTable_cursor_y], bx
-	mov word [fileTable_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [fileTable_csr_y]
+	push word [bx]				; Cursor Y value
+	mov bx, [fileTable_csr_x]
+	push word [bx]				; Cursor X value
 	call move_cursor
 	add sp, 4
 
@@ -244,16 +229,16 @@ file_ext:
 	;; Print char
 	xor ah, ah
 	push ax
-	push word [fileTable_cursor_y]
-	push word [fileTable_cursor_x]
+	push word [fileTable_csr_y]
+	push word [fileTable_csr_x]
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [fileTable_cursor_y], bx
-	mov word [fileTable_cursor_x], cx
-	push bx
-	push cx
+	mov bx, [fileTable_csr_y]
+	push word [bx]				; Cursor Y value
+	mov bx, [fileTable_csr_x]
+	push word [bx]				; Cursor X value
 	call move_cursor
 	add sp, 4
 
@@ -264,9 +249,6 @@ file_ext:
 	jmp filename_loop
 	
 end_print_fileTable:
-	mov bx, word [fileTable_cursor_y]	; New cursor Y position
-	mov cx, word [fileTable_cursor_x]	; New cursor X position
-
 	mov sp, bp
 	pop bp
 
@@ -282,16 +264,16 @@ print_blanks_loop:
 
 		;; Print char
 		push ax
-		push word [fileTable_cursor_y]
-		push word [fileTable_cursor_x]
+		push word [fileTable_csr_y]
+		push word [fileTable_csr_x]
 		call print_char_text_mode
 		add sp, 6
 
 		;; Move cursor
-		mov word [fileTable_cursor_y], bx
-		mov word [fileTable_cursor_x], cx
-		push bx
-		push cx
+		mov bx, [fileTable_csr_y]
+		push word [bx]				; Cursor Y value
+		mov bx, [fileTable_csr_x]
+		push word [bx]				; Cursor X value
 		call move_cursor
 		add sp, 4
 
@@ -306,13 +288,13 @@ print_blanks_loop:
 ;; CONSTANTS
 nl equ 0Ah,0Dh
 
-fileTable_cursor_x: dw 0
-fileTable_cursor_y: dw 0
+fileTable_csr_x: dw 0
+fileTable_csr_y: dw 0
 blanks_num: dw 0
 save_bx: dw 0
 save_cx: dw 0
 
-fileTableHeading:   db nl,\
+fileTableHeading: db nl,\
 	'---------   ---------   -------   ------------   --------------',\
 	nl,'File Name   Extension   Entry #   Start Sector   Size (sectors)',\
 	nl,'---------   ---------   -------   ------------   --------------',\

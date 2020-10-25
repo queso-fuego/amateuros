@@ -36,16 +36,14 @@ reset_editor:
 	mov si, new_or_current_string
 	;; Print string
 	push si
-	push word [cursor_y]
-	push word [cursor_x]
+	push word cursor_y
+	push word cursor_x
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [cursor_y], bx
-	mov word [cursor_x], cx
-	push bx
-	push cx
+	push word [cursor_y]
+	push word [cursor_x]
 	call move_cursor
 	add sp, 4
 
@@ -66,16 +64,14 @@ create_new_file:
 	mov si, choose_filetype_string
 	;; Print string
 	push si
-	push word [cursor_y]
-	push word [cursor_x]
+	push word cursor_y
+	push word cursor_x
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [cursor_y], bx
-	mov word [cursor_x], cx
-	push bx
-	push cx
+	push word [cursor_y]
+	push word [cursor_x]
 	call move_cursor
 	add sp, 4
 
@@ -89,27 +85,22 @@ create_new_file:
 	je new_file_text
 
 load_existing_file:
-	push word [cursor_y]
-	push word [cursor_x]
+	push word cursor_y
+	push word cursor_x
 	call print_fileTable
 	add sp, 4
 
-	mov word [cursor_y], bx
-	mov word [cursor_x], cx
-
-	mov si, choose_file_msg
 	;; Print string
+	mov si, choose_file_msg
 	push si
-	push word [cursor_y]
-	push word [cursor_x]
+	push word cursor_y
+	push word cursor_x
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [cursor_y], bx
-	mov word [cursor_x], cx
-	push bx
-	push cx
+	push word [cursor_y]
+	push word [cursor_x]
 	call move_cursor
 	add sp, 4
 
@@ -219,16 +210,14 @@ load_file_hex:
 		;; Print char
 		xor ah, ah
 		push ax
-		push word [cursor_y]
-		push word [cursor_x]
+		push word cursor_y
+		push word cursor_x
 		call print_char_text_mode
 		add sp, 6
 
 		;; Move cursor
-		mov word [cursor_y], bx
-		mov word [cursor_x], cx
-		push bx
-		push cx
+		push word [cursor_y]
+		push word [cursor_x]
 		call move_cursor
 		add sp, 4
 
@@ -238,16 +227,14 @@ load_file_hex:
 		;; Print char in AL
 		xor ah, ah
 		push ax
-		push word [cursor_y]
-		push word [cursor_x]
+		push word cursor_y
+		push word cursor_x
 		call print_char_text_mode
 		add sp, 6
 
 		;; Move cursor
-		mov word [cursor_y], bx
-		mov word [cursor_x], cx
-		push bx
-		push cx
+		push word [cursor_y]
+		push word [cursor_x]
 		call move_cursor
 		add sp, 4
 
@@ -258,16 +245,14 @@ load_file_hex:
 		mov al, ' '				; else print space between bytes
 		xor ah, ah
 		push ax
-		push word [cursor_y]
-		push word [cursor_x]
+		push word cursor_y
+		push word cursor_x
 		call print_char_text_mode
 		add sp, 6
 
 		;; Move cursor
-		mov word [cursor_y], bx
-		mov word [cursor_x], cx
-		push bx
-		push cx
+		push word [cursor_y]
+		push word [cursor_x]
 		call move_cursor
 		add sp, 4
 
@@ -375,8 +360,8 @@ load_file_text:
 		cmp al, 0Ah
 		cmove ax, bx		; Newline = space visually
 		push ax				; Character to print in AL
-		push word [cursor_y]
-		push word [cursor_x]
+		push word cursor_y
+		push word cursor_x
 		call print_char_text_mode
 		add sp, 6
 
@@ -391,16 +376,14 @@ load_file_text:
 
 		.print_char:
 		push ax				; Character to print in AL
-		push word [cursor_y]
-		push word [cursor_x]
+		push word cursor_y
+		push word cursor_x
 		call print_char_text_mode
 		add sp, 6
 
 		;; Move cursor
-		mov word [cursor_y], bx
-		mov word [cursor_x], cx
-		push bx
-		push cx
+		push word [cursor_y]
+		push word [cursor_x]
 		call move_cursor
 		add sp, 4
 
@@ -708,8 +691,8 @@ text_editor:
 
 			xor ah, ah
 			push ax
-			push word [cursor_y]
-			push word [cursor_x]
+			push word cursor_y
+			push word cursor_x
 			call print_char_text_mode
 			add sp, 6
 
@@ -755,8 +738,8 @@ text_editor:
 			
 			.print_to_screen:
 			push ax					; char to print in AL
-			push word [cursor_y]
-			push word [cursor_x]
+			push word cursor_y
+			push word cursor_x
 			call print_char_text_mode
 	
 			add sp, 6
@@ -808,8 +791,8 @@ get_next_hex_char:
 
 	;; Blank out 1st nibble of hex byte
 	push word 0020h			; space ' ' in ascii
-	push word [cursor_y]	 
-	push word [cursor_x]
+	push word cursor_y 
+	push word cursor_x
 	call print_char_text_mode
 
 	add sp, 6				; restore stack
@@ -819,9 +802,9 @@ get_next_hex_char:
 
 	;; Blank out 2nd nibble of hex byte
 	push word 0020h			; space ' ' in ascii
-	push word [cursor_y]	 
+	push word cursor_y	 
 	inc word [cursor_x]		; 2nd nibble of hex byte
-	push word [cursor_x]
+	push word cursor_x
 	call print_char_text_mode
 
 	add sp, 6				; restore stack
@@ -846,8 +829,8 @@ get_next_hex_char:
 
 		;; Blank out 1st nibble of hex byte
 		push word 0020h			; space ' ' in ascii
-		push word [cursor_y]	 
-		push word [cursor_x]
+		push word cursor_y	 
+		push word cursor_x
 		call print_char_text_mode
 
 		add sp, 6				; restore stack
@@ -857,9 +840,9 @@ get_next_hex_char:
 
 		;; Blank out 2nd nibble of hex byte
 		push word 0020h			; space ' ' in ascii
-		push word [cursor_y]	 
+		push word cursor_y	 
 		inc word [cursor_x]		; 2nd nibble of hex byte
-		push word [cursor_x]
+		push word cursor_x
 		call print_char_text_mode
 	
 		add sp, 6				; restore stack
@@ -1004,8 +987,8 @@ get_next_hex_char:
 	convert_input:
 		;; Print character
 		push ax
-		push word [cursor_y]
-		push word [cursor_x]
+		push word cursor_y
+		push word cursor_x
 		call print_char_text_mode
 		add sp, 6
 		
@@ -1042,8 +1025,8 @@ put_hex_byte:
 	mov al, ' '		; print space to screen
 	;; Print character
 	push ax
-	push word [cursor_y]
-	push word [cursor_x]
+	push word cursor_y
+	push word cursor_x
 	call print_char_text_mode
 	add sp, 6
 	
@@ -1106,18 +1089,13 @@ enter_file_name:
 	mov word [cursor_y], 0
 	mov word [cursor_x], 0
 
-	;; TODO: Cleanup print_string_text_mode calls everywhere, only need to push
-	;;  string address, not SI. e.g. push filename_string, NOT mov si, string & push si
 	mov si, filename_string
 	;; Print string
 	push si
-	push word [cursor_y]
-	push word [cursor_x]
+	push word cursor_y
+	push word cursor_x
 	call print_string_text_mode
 	add sp, 6
-
-	mov word [cursor_y], bx
-	mov word [cursor_x], cx
 
 	;; Restore extra segment
 	mov ax, 800h
@@ -1197,16 +1175,14 @@ input_file_name:
 
 		;; Print character
 		push ax
-		push word [cursor_y]
-		push word [cursor_x]
+		push word cursor_y
+		push word cursor_x
 		call print_char_text_mode
 		add sp, 6
 
 		;; Move cursor
-		mov word [cursor_y], bx	; update cursor position from print_char
-		mov word [cursor_x], cx
-		push bx
-		push cx
+		push word [cursor_y]
+		push word [cursor_x]
 		call move_cursor
 		add sp, 4
 

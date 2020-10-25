@@ -8,17 +8,13 @@ main_menu:
         ;; Reset screen state
         call clear_screen_text_mode
         
-        ; print menu header & options 
+        ; Print OS boot message
         mov si, menuString
 		push si
-		push word 0		; start printing at pos 0,0
-		push word 0
+		push word kernel_cursor_y		
+		push word kernel_cursor_x
         call print_string_text_mode
 		add sp, 6
-
-		; Initialize cursor position
-		mov word [kernel_cursor_y], bx	; row
-		mov word [kernel_cursor_x], cx	; column
 
         ;; --------------------------------------------------------------------
         ;; Get user input, print to screen & choose menu option/run command
@@ -51,14 +47,12 @@ get_input:
 	; Print prompt
 	mov si, prompt
 	push si						; Address of string to print - input 1
-	push word [kernel_cursor_y]	; Row to print to - input 2
-	push word [kernel_cursor_x]	; Col to print to - input 3
+	push word kernel_cursor_y	; Row to print to - input 2
+	push word kernel_cursor_x	; Col to print to - input 3
 	call print_string_text_mode
 	add sp, 6
 
 	; Move cursor after prompt
-	mov word [kernel_cursor_y], bx
-	mov word [kernel_cursor_x], cx
 	push word [kernel_cursor_y]
 	push word [kernel_cursor_x]
 	call move_cursor
@@ -103,19 +97,15 @@ keyloop:
 	; Print input character to screen
 	xor ah, ah
 	push ax						; Character to print - input 1
-	push word [kernel_cursor_y]	; Row to print to - input 2
-	push word [kernel_cursor_x] ; Column to print to - input 3
+	push word kernel_cursor_y	; Row to print to - input 2
+	push word kernel_cursor_x	; Column to print to - input 3
 	call print_char_text_mode
-
 	add sp, 6					; Clean up stack
 
 	; Move cursor 
-	mov word [kernel_cursor_y], bx	; new cursor X/Y in BX/CX from print_char
-	mov word [kernel_cursor_x], cx
 	push word [kernel_cursor_y]
 	push word [kernel_cursor_x]
 	call move_cursor
-
 	add sp, 4
 
 	mov cx, word [save_cx]
@@ -352,14 +342,10 @@ found_program:
     mov si, pgmNotLoaded    ; else error, program did not load correctly
 	;; Print string
 	push si
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push word kernel_cursor_y
+	push word kernel_cursor_x
     call print_string_text_mode
 	add sp, 6
-
-	;; Update cursor position
-	mov word [kernel_cursor_y], bx
-	mov word [kernel_cursor_x], cx
 
 	;; Move cursor
 	push word [kernel_cursor_y]
@@ -379,6 +365,10 @@ run_program:
 	mov di, fileBin
 	repe cmpsb
 	jne print_txt_file
+
+	;; Reset cursor positions so printing is good when returning to kernel later
+	mov word [kernel_cursor_y], 0
+	mov word [kernel_cursor_x], 0
 
     mov ax, 800h       ; program loaded, set segment registers to location
     mov ds, ax
@@ -408,16 +398,14 @@ return_file_char:
 	mov word [kernel_save_bx], bx
 	xor ah, ah
 	push ax
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push word kernel_cursor_y
+	push word kernel_cursor_x
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [kernel_cursor_y], bx
-	mov word [kernel_cursor_x], cx
-	push bx
-	push cx
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
 	call move_cursor
 	add sp, 4
 
@@ -426,35 +414,27 @@ return_file_char:
 	loop print_file_char	; Keep printing characters and decrement CX till 0
 
 	;; Print newline after done printing file contents
-	xor ah, ah
-	mov al, 0Ah
-	push ax
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push word 000Ah
+	push word kernel_cursor_y
+	push word kernel_cursor_x
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [kernel_cursor_y], bx
-	mov word [kernel_cursor_x], cx
-	push bx
-	push cx
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
 	call move_cursor
 	add sp, 4
-
-	xor ah, ah
-	mov al, 0Dh
-	push ax
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	
+	push 000Dh
+	push word kernel_cursor_y
+	push word kernel_cursor_x
 	call print_char_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [kernel_cursor_y], bx
-	mov word [kernel_cursor_x], cx
-	push bx
-	push cx
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
 	call move_cursor
 	add sp, 4
 
@@ -469,16 +449,14 @@ input_not_found:
     mov si, failure         ; command not found! boo D:
 	;; Print string
 	push si
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push word kernel_cursor_y
+	push word kernel_cursor_x
 	call print_string_text_mode
 	add sp, 6
 
 	;; Move cursor
-	mov word [kernel_cursor_y], bx
-	mov word [kernel_cursor_x], cx
-	push bx
-	push cx
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
 	call move_cursor
 	add sp, 4
 
@@ -488,13 +466,10 @@ input_not_found:
         ;; File/Program browser & loader   
         ;; --------------------------------------------------------------------
 fileTable_print: 
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push word kernel_cursor_y
+	push word kernel_cursor_x
 	call print_fileTable
 	add sp, 4
-
-	mov word [kernel_cursor_y], bx	; update cursor position
-	mov word [kernel_cursor_x], cx
 
 	jmp get_input
 
@@ -508,30 +483,10 @@ reboot:
         ;; Print Register Values
         ;; --------------------------------------------------------------------
 registers_print:
-    mov si, printRegHeading 
-	;; Print string
-	push si
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
-	call print_string_text_mode
-	add sp, 6
-
-	;; Move cursor
-	mov word [kernel_cursor_y], bx
-	mov word [kernel_cursor_x], cx
-	push bx
-	push cx
-	call move_cursor
-	add sp, 4
-
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push word kernel_cursor_y
+	push word kernel_cursor_x
     call print_registers
 	add sp, 4
-
-	;; Update cursor position
-	mov word [kernel_cursor_y], bx
-	mov word [kernel_cursor_x], cx
 
 	jmp get_input		; return to prompt '>:'
 	
@@ -731,10 +686,6 @@ cmdEditor:	db 'editor',0	; launch editor program
 cmdDelFile: db 'del',0		; Delete a file from disk
 cmdRenFile: db 'ren',0		; Rename a file in the file table
         
-printRegHeading:    db nl,'--------  ------------',nl,\
-        'Register  Mem Location',nl,\
-        '--------  ------------',0
-
 notFoundString: db nl,'Program/file not found!, Try again? (Y)',nl,0
 sectNotFound:   db nl,'Sector not found!, Try again? (Y)',nl,0
 
