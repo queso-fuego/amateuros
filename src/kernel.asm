@@ -5,6 +5,9 @@
         ;; Screen & Menu Set up
         ;; --------------------------------------------------------------------
 main_menu:
+		;; Get passed drive number
+		mov byte [kernel_drive_num], dl
+
         ;; Reset screen state
         call clear_screen_text_mode
         
@@ -70,7 +73,8 @@ keyloop:
 	
 	cmp al, 08h				; backspace?
 	jne .not_backspace
-	dec si					; yes, go back one char
+
+	dec si					; yes, go back one char in cmdString
 	jcxz .there
 	dec cx					; byte counter - 1
 	
@@ -81,8 +85,17 @@ keyloop:
 	; Move cursor back 1 space
 	dec word [kernel_cursor_x]		; Otherwise move back
 
-	push word [kernel_cursor_y]		; row to move to - input 1
-	push word [kernel_cursor_x]		; col to move to - input 2
+	;; Print a space at cursor
+	push word 0020h
+	push word kernel_cursor_y
+	push word kernel_cursor_x
+	call print_char_text_mode
+	add sp, 6
+
+	; Move cursor back 1 space again because print_char moves it forward
+	dec word [kernel_cursor_x]
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
 	call move_cursor
 	add sp, 4
 
@@ -323,10 +336,10 @@ found_program:
 
 	xor ax, ax
 	xor dh, dh
-    mov dl, 80h			; drive #
+    mov dl, [kernel_drive_num]	; drive #
     int 13h     		; int 13h ah 0 = reset disk system
 
-    mov ax, 800h       ; memory location to load pgm to
+    mov ax, 800h        ; memory location to load pgm to
     mov es, ax
 	mov al, bl  		; # of sectors to read
     xor bx, bx          ; ES:BX <- 800h:0000h = 8000h
@@ -334,7 +347,7 @@ found_program:
     mov ah, 02h         ; int 13h ah 2 = read disk sectors to memory
     mov ch, 00h         ; track #
     mov dh, 00h         ; head #
-    mov dl, 80h			; drive #
+    mov dl, [kernel_drive_num]	; drive #
 
     int 13h
     jnc run_program	        ; carry flag not set, success
@@ -369,6 +382,8 @@ run_program:
 	;; Reset cursor positions so printing is good when returning to kernel later
 	mov word [kernel_cursor_y], 0
 	mov word [kernel_cursor_x], 0
+
+	mov dl, [kernel_drive_num]	; Store drive # to use
 
     mov ax, 800h       ; program loaded, set segment registers to location
     mov ds, ax
@@ -466,6 +481,7 @@ input_not_found:
         ;; File/Program browser & loader   
         ;; --------------------------------------------------------------------
 fileTable_print: 
+	mov dl, [kernel_drive_num]			; pass drive #
 	push word kernel_cursor_y
 	push word kernel_cursor_x
 	call print_fileTable
@@ -562,7 +578,7 @@ del_file:
 	push word token_file_name1	; File name
 	push cx						; Length of file name
 
-	mov dl, 80h
+	mov dl, [kernel_drive_num]
 	call delete_file
 
 	;; Clean up stack after call
@@ -571,14 +587,31 @@ del_file:
 	;; TODO: Check return code for errors
 	cmp ax, 0	; 0 = Success/Normal return
 
-	; Move cursor down for newline
-	inc word [kernel_cursor_y]
-	mov word [kernel_cursor_x], 0
+	; Print newline when done
+	push 000Ah
+	push kernel_cursor_y
+	push kernel_cursor_x
+	call print_char_text_mode
+	add sp, 6
+
+	; Move cursor 
 	push word [kernel_cursor_y]
 	push word [kernel_cursor_x]
 	call move_cursor
 	add sp, 4
-	
+
+	push 000Dh
+	push kernel_cursor_y
+	push kernel_cursor_x
+	call print_char_text_mode
+	add sp, 6
+
+	; Move cursor 
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call move_cursor
+	add sp, 4
+
 	jmp get_input
 
         ;; --------------------------------------------------------------------
@@ -605,6 +638,7 @@ ren_file:
 	push word token_file_name2	; New file name		   - input 3
 	push word [tokens_length+4] ; New file name length - input 4
 
+	mov dl, [kernel_drive_num]
 	call rename_file
 
 	;; Clean up stack after call
@@ -613,9 +647,26 @@ ren_file:
 	;; TODO: Check return code for errors
 	cmp ax, 0	; 0 = Success/Normal return
 
-	; Move cursor down for newline
-	inc word [kernel_cursor_y]
-	mov word [kernel_cursor_x], 0
+	; Print newline when done
+	push 000Ah
+	push kernel_cursor_y
+	push kernel_cursor_x
+	call print_char_text_mode
+	add sp, 6
+
+	; Move cursor 
+	push word [kernel_cursor_y]
+	push word [kernel_cursor_x]
+	call move_cursor
+	add sp, 4
+
+	push 000Dh
+	push kernel_cursor_y
+	push kernel_cursor_x
+	call print_char_text_mode
+	add sp, 6
+
+	; Move cursor 
 	push word [kernel_cursor_y]
 	push word [kernel_cursor_x]
 	call move_cursor
@@ -659,9 +710,11 @@ end_program:
         ;; --------------------------------------------------------------------
         ;; Variables
         ;; --------------------------------------------------------------------
-	;; Carriage return/linefeed; "newline"
-	nl equ 0Ah,0Dh
-	
+;; CONSTANTS
+nl equ 0Ah,0Dh	; Carriage return/linefeed; "newline"
+SPACE equ 20h	; ASCII space character	
+
+;; REGULAR VARIABLES
 menuString:     db '---------------------------------',nl,\
         'Kernel Booted, Welcome to QuesOS!',nl,\
         '---------------------------------',nl,nl,0
@@ -705,10 +758,11 @@ token_file_name1: times 10 db 0
 token_file_name2: times 10 db 0
 kernel_cursor_x: dw 0
 kernel_cursor_y: dw 0
-cmdString:      db ''
+kernel_drive_num: db 0
+cmdString: times 255 db 0
 
         ;; --------------------------------------------------------------------
         ;; Sector Padding magic
         ;; --------------------------------------------------------------------
-        times 4608-($-$$) db 0   ; pads out 0s until we reach 1536th byte
+        times 5120-($-$$) db 0   ; pads out 0s until we reach 1536th byte
 

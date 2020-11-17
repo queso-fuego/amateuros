@@ -12,6 +12,8 @@ delete_file:
 	push si
 	push bx
 
+	mov byte [file_drive_num], dl		; Store passed in drive #
+
 	;; Get parms off stack 
 	mov bx, [bp+4]	; Length of file name
 	mov si, [bp+6]	; File name to delete
@@ -46,7 +48,7 @@ delete_file:
 
 		;; Reset disk
 		xor ax, ax		; int 13h ah 00h - reset disk 
-		mov dl, 80h		; drive #
+		mov dl, [file_drive_num]		; drive #
 		int 13h 
 		
 		;; Write changed file table entry first
@@ -67,9 +69,9 @@ delete_file:
 		;; Write changed filetable to disk - TODO: Assuming file table is 1 sector, 
 		;;   change later
 		xor ch, ch			; track #
-		mov cl, 0Bh			; sector # to start writing at
-		xor dx, dx			; dh = head #
-		mov dl, 80h		; drive #
+		mov cl, 0Ch			; sector # to start writing at
+		xor dh, dh			; dh = head #
+		mov dl, [file_drive_num]		; drive #
 		xor ax, ax
 		mov es, ax
 		mov bx, 1000h		; ES:BX <- 0000h:1000h (file table memory location)
@@ -101,7 +103,7 @@ delete_file:
 		xor ch, ch							; track #
 		mov cl, byte [starting_sector]	; Sector # to start writing at
 		xor dx, dx							; dh = head #
-		mov dl, 80h		; drive #
+		mov dl, [file_drive_num]		; drive #
 		xor bx, bx							; ES:BX <- file data memory location	
 
 		mov word [bp-2], 0	; Success, normal return
@@ -132,7 +134,7 @@ load_file:
 	push fs
 	push si
 
-	mov byte [file_drive_number], dl
+	mov byte [file_drive_num], dl
 
 	;; Get parms off stack - reverse order/LIFO!!
 	mov bx, [bp+4]	; 1st parm off stack, offset memory address
@@ -166,7 +168,7 @@ load_file:
 		
 		;; Reset disk
 		xor ax, ax		; int 13h ah 00h - reset disk 
-		mov dl, 80h		; drive #
+		mov dl, [file_drive_num]		; drive #
 		int 13h 
 		
 		;; Set up parms for int 13h ah02h - read disk sectors
@@ -191,7 +193,7 @@ load_file:
 		mov dx, fs
 		mov es, dx		 	; segment address to load to; BX already set
 		xor dx, dx			; dh = head #
-		mov dl, 80h		; drive #
+		mov dl, [file_drive_num]		; drive #
 		
 		int 13h
 		jnc load_function_epilogue
@@ -229,7 +231,7 @@ rename_file:
 	push cx
 	push si
 
-	mov byte [file_drive_number], dl
+	mov byte [file_drive_num], dl
 
 	;; Get parms off stack
 	mov si, [bp+4]	; New file name length
@@ -279,16 +281,16 @@ rename_file:
 
 	;; Reset disk
 	xor ax, ax
-	mov dl, 80h		; drive #
+	mov dl, [file_drive_num]		; drive #
 	int 13h
 	
 	;; Write changed file table data to disk
 	mov word [bp-2], 0		; Init return code to success
 
 	xor ch, ch			; track #
-	mov cl, 0Bh			; sector # to start writing at
+	mov cl, 0Ch			; sector # to start writing at
 	xor dx, dx			; dh = head #
-	mov dl, 80h		; drive #
+	mov dl, [file_drive_num]		; drive #
 	xor ax, ax
 	mov es, ax
 	mov bx, 1000h		; ES:BX <- 0000h:1000h (file table memory location)
@@ -323,7 +325,7 @@ save_file:
 	push cx		
 	push si
 
-	mov byte [file_drive_number], dl
+	mov byte [file_drive_num], dl
 
 	;; Get parms off stack - reverse order
 	mov bx, [bp+4]
@@ -377,7 +379,7 @@ save_file:
 	new_file:
 		;; Reset disk
 		xor ax, ax		; int 13h ah 00h - reset disk 
-		mov dl, 80h		; drive #
+		mov dl, [file_drive_num]		; drive #
 		int 13h 
 
 		;; Grab previous file table entry's starting sector + file size
@@ -406,9 +408,9 @@ save_file:
 		;; Write changed filetable to disk - TODO: Assuming file table is 1 sector, 
 		;;   change later
 		xor ch, ch			; track #
-		mov cl, 0Bh			; sector # to start writing at
+		mov cl, 0Ch			; sector # to start writing at
 		xor dx, dx			; dh = head #
-		mov dl, 80h		; drive #
+		mov dl, [file_drive_num]		; drive #
 		mov word [saved_bx], bx	
 		xor ax, ax
 		mov es, ax
@@ -443,7 +445,7 @@ save_file:
 		mov ah, 03h							; int 13h ah 03h - write disk sectors	
 		mov al, byte [file_size]			; # of sectors to write
 		xor dx, dx							; dh = head #
-		mov dl, 80h		; drive #
+		mov dl, [file_drive_num]			; drive #
 		mov bx, word [saved_bx]				; ES:BX <- file data memory location	
 
 		int 13h
@@ -523,4 +525,4 @@ free_space: db 'FREE SPACE'
 last_saved_sector: db 0
 saved_bx: dw 0
 error_code: dw 0
-file_drive_number: db 0
+file_drive_num: db 0

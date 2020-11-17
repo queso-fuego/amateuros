@@ -1,4 +1,3 @@
-        call clear_screen_text_mode
 	
         mov si, testMsg
         ;; call print_string
@@ -28,7 +27,6 @@ end_print:
         mov gs, ax
         jmp 200h:000h				; far jump back to kernel
 
-        include "../include/screen/clear_screen_text_mode.inc"
 
 testMsg:        db 'Program Loaded!',0
 

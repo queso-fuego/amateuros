@@ -26,6 +26,8 @@ DELKEY equ 53h
 	;; LOGIC
 	;; -------------------------
 reset_editor:	
+	mov byte [editor_drive_num], dl		; Save passed in drive #
+
 	;; Clear the screen
 	call clear_screen_text_mode
 
@@ -117,6 +119,7 @@ load_existing_file:
 	push word 1000h				;; 2nd parm - segment to load to
 	push word 0000h				;; 3rd parm - offset to load to
 		
+	mov dl, [editor_drive_num]
 	call load_file
 
 	;; Reset stack
@@ -166,6 +169,7 @@ load_file_success:
 	
 new_file_hex:
 	call clear_screen_text_mode
+
 	;; Initialize cursor pos
 	mov word [cursor_y], 0
 	mov word [cursor_x], 0
@@ -450,6 +454,7 @@ text_editor:
 		push word 1000h				; 4th parm, segment memory address for file
 		push word 0000h				; 5th parm, offset memory address for file
 
+		mov dl, [editor_drive_num]
 		call save_file
 
 		add sp, 10					; Restore stack pointer after returning
@@ -696,9 +701,6 @@ text_editor:
 			call print_char_text_mode
 			add sp, 6
 
-			mov word [cursor_y], bx			; update cursor position after print_char
-			mov word [cursor_x], cx
-
 			inc word [cursor_y]				; go down 1 line (line feed)
 
 			mov al, 0Ah						; Use line feed as end of line char
@@ -741,11 +743,7 @@ text_editor:
 			push word cursor_y
 			push word cursor_x
 			call print_char_text_mode
-	
 			add sp, 6
-
-			mov word [cursor_y], bx	; update cursor position from print_char
-			mov word [cursor_x], cx
 
 			;; Move cursor 1 character forward
 			;; TODO: Assuming insert mode, not overwrite! Move rest of file data 
@@ -773,7 +771,6 @@ get_next_hex_char:
 	xor ax, ax
 	int 16h				; BIOS get keystroke int 16h ah 00h, al <- input char
 	mov byte [save_scancode], ah
-	mov ah, 0Eh
 
 	;; Check for hex editor keybinds
 	cmp al, RUNINPUT	; at end of user input?
@@ -794,11 +791,7 @@ get_next_hex_char:
 	push word cursor_y 
 	push word cursor_x
 	call print_char_text_mode
-
 	add sp, 6				; restore stack
-
-	mov word [cursor_y], bx
-	mov word [cursor_x], cx
 
 	;; Blank out 2nd nibble of hex byte
 	push word 0020h			; space ' ' in ascii
@@ -806,11 +799,7 @@ get_next_hex_char:
 	inc word [cursor_x]		; 2nd nibble of hex byte
 	push word cursor_x
 	call print_char_text_mode
-
 	add sp, 6				; restore stack
-
-	mov word [cursor_y], bx
-	mov word [cursor_x], cx
 
 	;; Move cursor 1 full hex byte left
 	sub word [cursor_x], 4	; cursor_x was on 2nd nibble, so go 1 extra
@@ -832,11 +821,7 @@ get_next_hex_char:
 		push word cursor_y	 
 		push word cursor_x
 		call print_char_text_mode
-
 		add sp, 6				; restore stack
-
-		mov word [cursor_y], bx
-		mov word [cursor_x], cx
 
 		;; Blank out 2nd nibble of hex byte
 		push word 0020h			; space ' ' in ascii
@@ -844,11 +829,7 @@ get_next_hex_char:
 		inc word [cursor_x]		; 2nd nibble of hex byte
 		push word cursor_x
 		call print_char_text_mode
-	
 		add sp, 6				; restore stack
-
-		mov word [cursor_y], bx
-		mov word [cursor_x], cx
 
 		mov [ES:DI], byte 00h	; Make current byte 0 in file
 
@@ -991,11 +972,13 @@ get_next_hex_char:
 		push word cursor_x
 		call print_char_text_mode
 		add sp, 6
-		
-		mov word [cursor_y], bx
-		mov word [cursor_x], cx
 
-		inc word [cursor_x]
+		;; Move cursor
+		push word [cursor_y]
+		push word [cursor_x]
+		call move_cursor
+		add sp, 4
+		
 		call ascii_to_hex  	; else convert al to hexidecimal first
 		inc cx				; increment byte counter
 		cmp cx, 2			;; 2 ascii bytes = 1 hex byte
@@ -1019,27 +1002,25 @@ put_hex_byte:
 	mov al, [hex_byte]
 	stosb			; put hex byte(2 hex digits) into 10000h memory area, and inc di/point to next byte
 	inc word [editor_filesize]  ; Increment file size byte counter
-	xor cx, cx		; reset byte counter
-	cmp word [cursor_x], ENDOFLINE
-	je move_down_one_row
-	mov al, ' '		; print space to screen
+	xor cx, cx					; reset byte counter
+	cmp word [cursor_x], 0		; At start of line?
+	je return_from_hex
+	mov al, ' '					; print space to screen if not at start of line
+
 	;; Print character
 	push ax
 	push word cursor_y
 	push word cursor_x
 	call print_char_text_mode
 	add sp, 6
-	
-	mov word [cursor_y], bx
-	mov word [cursor_x], cx
 
-	inc word [cursor_x]
+	;; Move cursor
+	push word [cursor_y]
+	push word [cursor_x]
+	call move_cursor
+	add sp, 4
+
 	jmp return_from_hex
-
-	move_down_one_row:
-		mov word [cursor_x], 0	; beginning of next line on screen
-		inc word [cursor_y]		; one line down
-		jmp return_from_hex
 
 ascii_to_hex:
 	cmp al, '9'		; is input ascii '0'-'9'?
@@ -1120,6 +1101,7 @@ enter_file_name:
 	push word 1000h				; 4th parm, segment memory address for file
 	push word 0000h				; 5th parm, offset memory address for file
 	
+	mov dl, [editor_drive_num]
 	call save_file
 
 	add sp, 10					; Restore stack pointer after returning
@@ -1217,6 +1199,8 @@ fill_out_bottom_editor_message:
 
 ;; End program
 end_editor:	
+		mov dl, [editor_drive_num]		; Store drive # in DX for kernel
+
         mov ax, 200h
         mov es, ax
         xor bx, bx              ; ES:BX <- 2000h:0000h
@@ -1257,6 +1241,7 @@ choose_file_msg: db 'File to load: ', 0
 editor_filename: times 10 db 0
 editor_filetype: times 3 db 0
 editor_filesize: dw 0
+editor_drive_num: db 0
 extBin: db 'bin'
 load_file_error_msg: db 'Load file error occurred' ; length of string = 24
 hex_byte:	db 00h		; 1 byte/2 hex digits

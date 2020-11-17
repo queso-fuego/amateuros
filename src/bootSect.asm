@@ -10,8 +10,9 @@
         xor bx, bx            ; ES:BX = 100h:0000h = 1000h
 
         ;; Set up disk read
-		mov dx, 0080h
-		mov cx, 000Bh			; ch = cylinder #, cl = starting sector to read
+		xor dh, dh				
+		mov byte [drive_num], dl	; DL contains initial drive # on boot
+		mov cx, 000Ch			; ch = cylinder #, cl = starting sector to read
 
 load_file_table:
 		mov ax, 0201h			; ah = 02h/int 13 read disk sectors; al = # of sectors to read
@@ -26,14 +27,17 @@ load_file_table:
         xor bx, bx            ; ES:BX = 200h:0000h = 2000h
 
         ;; Set up disk read
-		mov dx, 0080h
+		xor dh, dh
+		mov dl, byte [drive_num]
 		mov cx, 0002h			; ch = cylinder #, cl = starting sector to read
 
 load_kernel:
-		mov ax, 0209h			; ah = 02h/int 13 read disk sectors; al = # of sectors to read
+		mov ax, 020Ah			; ah = 02h/int 13 read disk sectors; al = # of sectors to read
         int 13h                ; BIOS interrupts for disk functions
 
         jc load_kernel         ; retry if disk read error (carry flag set/ = 1)
+
+		mov dl, byte [drive_num]
 
         ;; Reset segment registers for RAM
         mov ax, 200h
@@ -57,7 +61,10 @@ load_kernel:
 
         jmp 200h:0000h	            ; never return from this!
 
-        ;; Boot sector magic
-        times 510-($-$$) db 0   ; pads out 0s until we reach 510th byte
+;; VARIABLES
+drive_num: db 0
 
-        dw 0AA55h               ; BIOS magic number; BOOT magic #
+;; Boot sector magic
+times 510-($-$$) db 0   ; pads out 0s until we reach 510th byte
+
+dw 0AA55h               ; BIOS magic number; BOOT magic #

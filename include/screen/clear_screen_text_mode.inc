@@ -16,12 +16,10 @@ clear_screen_text_mode:
 	rep	stosw
 
 	;; Move hardware cursor after
-	mov ah, 02h		; int 10h ah 02h = move hardware cursor
-	xor bh, bh		; page #
-	mov dh, 2
-	mov dl, 2
-	xor dx, dx		; dh = row to move to, dl = col
-	int 10h
+	push word 0
+	push word 0
+	call move_cursor
+	add sp, 4
 
 	popa
 	ret

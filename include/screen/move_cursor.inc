@@ -34,10 +34,6 @@ move_cursor:
 	mov al, bl
 	out dx, al
 
-;;	mov ah, 02h		; int 10h ah 02h = move cursor
-;;	mov bh, 00h
-;;	int 10h
-	
 	;; Write the cursor high byte (BH)	
 	mov al, 0Eh		; CRT index register, cursor high byte
 	mov dx, 03D4h

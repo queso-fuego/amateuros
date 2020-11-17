@@ -8,6 +8,8 @@ print_fileTable:
 	push bp
 	mov bp, sp
 
+	mov byte [fileTable_drive_num], dl	; Get passed in drive #
+
 	mov ax, [bp+6]
 	mov word [fileTable_csr_y], ax	; Cursor Y address
 	mov ax, [bp+4]	
@@ -37,9 +39,9 @@ print_fileTable:
 	mov es, bx
 	xor bx, bx		; ES:BX <- 100h:0000h = 1000h; file table memory location
 	
-	xor dx, dx		; DH = head #
-	mov dl, 80h		; DL = drive #
-	mov cx, 000Bh	; CH = cylinder #, CL = starting sector # to read
+	xor dh, dh		; DH = head #
+	mov dl, [fileTable_drive_num]		; DL = drive #
+	mov cx, 000Ch	; CH = cylinder #, CL = starting sector # to read
 
 retry_load:
 	mov ax, 0201h	; AH = 02h/int13h read disk sectors, AL = # of sectors to read
@@ -290,6 +292,7 @@ nl equ 0Ah,0Dh
 
 fileTable_csr_x: dw 0
 fileTable_csr_y: dw 0
+fileTable_drive_num: db 0
 blanks_num: dw 0
 save_bx: dw 0
 save_cx: dw 0
