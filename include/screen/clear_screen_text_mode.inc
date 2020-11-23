@@ -3,7 +3,10 @@
 ;;; assuming VGA txt mode 03 - 80x25 characters, 16 colors
 ;;;
 clear_screen_text_mode:
-	pusha
+	push es
+	push ax
+	push cx
+	push di
 
 	mov ax, 0B800h	; set up video memory
 	mov es, ax
@@ -21,5 +24,8 @@ clear_screen_text_mode:
 	call move_cursor
 	add sp, 4
 
-	popa
+	pop di
+	pop cx
+	pop ax
+	pop es
 	ret

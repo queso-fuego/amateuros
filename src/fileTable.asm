@@ -16,8 +16,8 @@
 	db 'bootSect  ','bin',00h,01h,01h,\
 	'kernel    ','bin',00h,02h,0Ah,\
 	'fileTable ','txt',00h,0Ch,01h,\
-	'calculator','bin',00h,0Dh,01h,\
-	'editor    ','bin',00h,0Eh,0Ah
+	'calculator','bin',00h,0Dh,03h,\
+	'editor    ','bin',00h,10h,0Ah
 
         ;; Sector padding magic!
         times 512-($-$$) db 0       ; pad rest of sector out with 0s
