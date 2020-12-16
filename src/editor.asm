@@ -49,12 +49,14 @@ reset_editor:
 	call move_cursor
 	add sp, 4
 
-	xor ah, ah
-	int 16h
+    .keyloop:
+    call get_key        ; Get keystroke, char returned in AL
+
 	cmp al, CREATENEW	; Create new file?
 	je create_new_file
 	cmp al, LOADCURR	; or load an existing file?
 	je load_existing_file
+    jmp .keyloop
 
 create_new_file:
 	call clear_screen_text_mode
@@ -77,8 +79,7 @@ create_new_file:
 	call move_cursor
 	add sp, 4
 
-	xor ah, ah
-	int 16h
+    call get_key
 
 	mov word [editor_filesize], 0	; Reset file size byte counter
 	cmp al, BINFILE
@@ -87,6 +88,7 @@ create_new_file:
 	je new_file_text
 
 load_existing_file:
+    mov dl, [editor_drive_num]
 	push word cursor_y
 	push word cursor_x
 	call print_fileTable
@@ -135,8 +137,8 @@ load_file_error:
 	mov cx, 24
 	call write_bottom_screen_message
 
-	xor ax, ax
-	int 16h
+    call get_key
+
 	call clear_screen_text_mode
 
 	;; Initialize cursor pos
@@ -418,15 +420,19 @@ load_file_text:
 
 text_editor:
 	input_char_loop:
-		xor ah, ah
-		int 16h			; Keyboard scancode in AH, char in AL
+        call get_key
+
+        ;; TODO: Find a way for get_key to return scancode in AH
 		mov byte [save_scancode], ah	
 		mov byte [save_input_char], al
 
 		;; Check for text editor keybinds
-		cmp ax, CTRLR			; Return to kernel
+        cmp bh, 02h             ; CTRL Key pressed in get_key
+        jne check_nav_keys_text
+
+		cmp al, 'r' 			; CTRLR Return to kernel
 		je end_editor
-		cmp ax, CTRLS			; Save file to disk
+		cmp al, 's' 			; CTRLS Save file to disk
 		jne check_nav_keys_text	
 
 		;; Save to disk
@@ -466,8 +472,8 @@ text_editor:
 			mov si, save_file_error_msg
 			mov cx, 24
 			call write_bottom_screen_message
-			xor ax, ax
-			int 16h
+
+            call get_key
 
 		save_text_file_success:
 			mov ax, 1000h
@@ -768,8 +774,7 @@ hex_editor:
 	mov word [cursor_y], 0
 
 get_next_hex_char:
-	xor ax, ax
-	int 16h				; BIOS get keystroke int 16h ah 00h, al <- input char
+    call get_key
 	mov byte [save_scancode], ah
 
 	;; Check for hex editor keybinds
@@ -1114,8 +1119,7 @@ save_file_error:
 	mov cx, 24
 	call write_bottom_screen_message
 
-	xor ax, ax
-	int 16h
+    call get_key
 
 save_file_success:
 	call clear_screen_text_mode			; Clear screen on success
@@ -1151,8 +1155,7 @@ input_file_name:
 	.input_filename_loop:
 		mov word [save_cx], cx
 
-		xor ah, ah		; Get keystroke
-		int 16h
+        call get_key
 		stosb			; Store character to filename variable
 
 		;; Print character
@@ -1221,6 +1224,7 @@ end_editor:
 	include "../include/print/print_hex.inc"				; print_fileTable uses this
 	include "../include/disk/file_ops.inc"
 	include "../include/type_conversions/hex_to_ascii.inc"
+	include "../include/keyboard/get_key.inc"
 	
 	;; VARIABLES
 	;; --------------------------
@@ -1258,4 +1262,4 @@ file_length_lines: dw 0
 file_length_bytes: dw 0
 
 	;; Sector padding
-	times 5120-($-$$) db 0
+	times 5632-($-$$) db 0 

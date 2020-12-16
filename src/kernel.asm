@@ -65,12 +65,11 @@ get_input:
     mov si, cmdString   ; si now pointing to command string
 	
 keyloop:
-    xor ax, ax              ; ah = 00h al = 00h
-    int 16h                 ; BIOS int get keystroke ah=0, al <- character
+    call get_key            ; Get ascii char from scancode from port 60h into AL
 
     cmp al, 0Dh             ; user pressed enter?
-    je tokenize_input_line	; tokenize user input line
-	
+    je tokenize_input_line  ; tokenize user input line
+    
 	cmp al, 08h				; backspace?
 	jne .not_backspace
 
@@ -536,18 +535,9 @@ squareColLoop:
         cmp dx, 150
         jne squareColLoop       ; pixels for next row
 
-        mov ah, 00h
-        int 16h                 ; get keystroke
+        call get_key            ; get keystroke, char in AL
 
-		; Temp Fix: reset text mode screen
-		mov ax, 0003h			; int 10h ah00 = set video mode; 80x25 16 colors text mode
-		int 10h
-		
-		mov ah, 0Bh				; int 10h ah 0Bh = set palette
-		mov bx, 0001h			; bl = bg color for text mode; blue
-		int 10h
-
-        jmp main_menu
+        jmp reboot              ; Jump to reset vector, reset errything TODO: TEMP FIX
 
         ;; --------------------------------------------------------------------
         ;; Clear Screen
@@ -706,6 +696,7 @@ end_program:
 		include "../include/screen/move_cursor.inc"
 		include "../include/type_conversions/hex_to_ascii.inc"
 		include "../include/disk/file_ops.inc"
+        include "../include/keyboard/get_key.inc"
 	
         ;; --------------------------------------------------------------------
         ;; Variables

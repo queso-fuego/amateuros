@@ -13,6 +13,7 @@ include "../include/screen/move_cursor.inc"
 include "../include/print/print_char_text_mode.inc"
 include "../include/print/print_string_text_mode.inc"
 include "../include/print/print_hex.inc"
+include "../include/keyboard/get_key.inc"
 
 ;; Constants
 TRUE equ 1
@@ -31,8 +32,8 @@ result: dw 0
 
 ;; Get line of input
 keyloop:
-	xor ah, ah
-	int 16h		; Get keystroke, ah = scancode, al = ascii char
+    call get_key    ; Char in AL
+
 	cmp al, 0Dh	; Enter key / Carriage return?
 	je start_parse
 	cmp al, 1Bh	; Escape key 
