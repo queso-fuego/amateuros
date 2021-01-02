@@ -122,7 +122,9 @@ delete_file:
 ;;;
 ;;; load_file: Read a file from filetable and its sectors into a memory location
 ;;;
-;;; Parms: SI - File name, ES:BX - memory location (ES - memory address for segment; BX - memory address for offset) to load file data to
+;;; input 1: File name (address)
+;;; input 2: Memory segment to load data to
+;;; input 3: Memory offset to load data to
 ;;;
 load_file:
 	;; Function prologue - save callers stack values & registers
@@ -505,6 +507,7 @@ save_file:
 		check_filename_return:
 			pop di				; restore di pos from stack
 			ret
+
 	;;; Global return to caller
 	;;;-------------------------------------
 	return_to_caller:

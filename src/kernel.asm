@@ -275,83 +275,22 @@ check_commands:
 	pop cx			; reset command length
 
 	;; If command not input, search file table entries for user input file
-check_files:
-	mov ax, 100h		; reset ES:BX to start of file table (100h:0000h = 1000h)
-	mov es, ax
-    xor di, di
-	
-	mov si, cmdString	; reset si to start of user input string
-
-kernel_check_next_name:
-        mov al, [ES:DI]         ; get file table character
-        cmp al, 0               ; at end of file table?
-        je input_not_found		; if so, no file/pgm found for user input :(
-
-        cmp al, [si]            ; does user input match file table character?
-        je start_compare
-
-		add di, 16              ; if not, go to next file entry in table
-        jmp kernel_check_next_name
-
-start_compare:
-        push di                 ; save file table position
-
-		rep cmpsb
-		je found_program
-        mov si, cmdString       ; otherwise reset to start of user input
-        pop di                  ; get saved file table position
-		add di, 16				; Next file table entry
-        jmp kernel_check_next_name     ; start checking again
-
-	;; Read disk sector of program to memory and execute it by far jumping
-    ;; -------------------------------------------------------------------
-found_program:
-	pop di		; start_compare above pushes di, restore here to start of file name/table entry
-
-	;; Get file extension - bytes 10-12 of file table entry
-	.file_extension:
-	mov al, [ES:DI+10]
-	mov [fileExt], al
-	mov al, [ES:DI+11]
-	mov [fileExt+1], al
-	mov al, [ES:DI+12]
-	mov [fileExt+2], al
-	
-    mov cl, [ES:DI+14]     ; sector number to start reading at
-	;; Get correct track # & sector #
-	xor ah, ah
-	mov al, cl
-	mov cl, 18	; 18 = number of sectors per track for a floppy disk
-	div cl		; AX / byte value (in CL); AL = quotient, AH = remainder
-	mov ch, al	; CH = track #, quotient
-	mov cl, ah	; CL = sector #, remainder
-	cmp cl, 0
-	jne .after
-	mov cl, 18	
-
-	.after:
-	mov bl, [ES:DI+15]		; file size in sectors / # of sectors to read
-	mov byte [fileSize], bl
-
-	xor ax, ax
-	xor dh, dh
-    mov dl, [kernel_drive_num]	; drive #
-    int 13h     		; int 13h ah 0 = reset disk system
-
-    mov ax, 800h        ; memory location to load pgm to
-    mov es, ax
-	mov al, bl  		; # of sectors to read
-    xor bx, bx          ; ES:BX <- 800h:0000h = 8000h
-
-    mov ah, 02h         ; int 13h ah 2 = read disk sectors to memory
-    mov ch, 00h         ; track #
-    mov dh, 00h         ; head #
+    ;; Call load_file function to load program/file to memory address 8000h
+    ;; Return values from load_file:
+    ;;   AX - Return/error code (0 = Success, !0 = error)
+    ;;   BX - File type/extension (.bin/.txt, etc)
     mov dl, [kernel_drive_num]	; drive #
 
-    int 13h
-    jnc run_program	        ; carry flag not set, success
+    push word cmdString         ; Input 1: file name (address)
+    push word 0000h             ; Input 2: memory segment to load to
+    push word 8000h             ; Input 3: memory offset to load to
+    call load_file
+    add sp, 6
 
-    mov si, pgmNotLoaded    ; else error, program did not load correctly
+    cmp ax, 0               ; Return code, 0 if successful
+    je run_program	        
+
+    mov si, pgmNotLoaded    ; Error, program did not load correctly
 	;; Print string
 	push si
 	push word kernel_cursor_y
@@ -370,6 +309,20 @@ found_program:
 run_program:
 	;; Check file extension in file table entry, if 'bin'/binary, then far jump & run
 	;;   Else if 'txt', then print content to screen
+    ;; Move ES & DS back to kernel space
+    mov ax, 200h
+    mov ds, ax
+    mov es, ax
+
+    ;; File extension/type is returned in BX from call to load_file
+    mov di, fileExt
+    mov al, [bx]
+    stosb
+    mov al, [bx+1]
+    stosb
+    mov al, [bx+2]
+    stosb
+    
 	mov cx, 3
 	mov si, fileExt
 	mov ax, 200h  		; Reset es to kernel space for comparison (ES = DS)
@@ -395,12 +348,13 @@ run_program:
 print_txt_file:
 	mov ax, 800h 		; Set ES back to file memory location
 	mov es, ax	    	; ES <- 8000h
-	xor cx, cx
-	mov ah, 0Eh
+    xor bx, bx          ; Using BX as offset for memory location below
 	
 	;; Get size of filesize in bytes (512 byte per sector)
 add_cx_size:		
-	imul cx, word [fileSize], 512 
+    ;; TODO: Change this later - currently assuming text files are only 1 sector
+;;	imul cx, word [fileSize], 512 
+    mov cx, 512
 
 print_file_char:
 	mov al, [ES:BX]
@@ -509,34 +463,9 @@ registers_print:
         ;; Graphics Mode Test(s)
         ;; --------------------------------------------------------------------
 graphics_test:
-        call resetGraphicsScreen
-
-        ;; Test Square
-        mov ah, 0Ch           ; int 10h ah 0Ch - write gfx pixel
-        mov al, 02h           ; green
-        mov bh, 00h           ; page number
-
-        ;; Starting pixel of square
-        mov cx, 100           ; column #
-        mov dx, 100           ; row #
-        int 10h
-
-        ;; Pixels for columns 
-squareColLoop:
-        inc cx
-        int 10h
-        cmp cx, 150
-        jne squareColLoop
-
-        ;; Go down one row
-        inc dx
-        int 10h
-        mov cx, 99 
-        cmp dx, 150
-        jne squareColLoop       ; pixels for next row
-
-        call get_key            ; get keystroke, char in AL
-
+        ;; TODO: Fill this out later after moving to a VBE graphics mode,
+        ;;   Put examples of graphics primitives here such as: Line drawing, triangles,
+        ;;    squares, other polygons, circles, etc.
         jmp reboot              ; Jump to reset vector, reset errything TODO: TEMP FIX
 
         ;; --------------------------------------------------------------------

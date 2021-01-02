@@ -35,23 +35,18 @@ print_fileTable:
     ;;   and program names & sector numbers to screen
     ;; --------------------------------------------------------------------
 	;; Load file table sector from disk to memory, to get any updates
+    push word fileTable_name
+    push word 0000h
+    push word 1000h
+    call load_file
+    add sp, 6
+
 	mov bx, 100h
 	mov es, bx
 	xor bx, bx		; ES:BX <- 100h:0000h = 1000h; file table memory location
 	
-	xor dh, dh		; DH = head #
-	mov dl, [fileTable_drive_num]		; DL = drive #
-	mov cx, 000Ch	; CH = cylinder #, CL = starting sector # to read
-
-retry_load:
-	mov ax, 0201h	; AH = 02h/int13h read disk sectors, AL = # of sectors to read
-
-	int 13h
-	jc retry_load
-
 	;; Now read file table from memory location 1000h
     xor cx, cx              ; reset counter for # of bytes at current filetable entry
-    mov ax, 100h            ; file table location
 
 filename_loop:
     mov al, [ES:BX]
@@ -293,6 +288,7 @@ nl equ 0Ah,0Dh
 fileTable_csr_x: dw 0
 fileTable_csr_y: dw 0
 fileTable_drive_num: db 0
+fileTable_name: db 'fileTable',0
 blanks_num: dw 0
 save_bx: dw 0
 save_cx: dw 0
