@@ -35,6 +35,7 @@ print_fileTable:
     ;;   and program names & sector numbers to screen
     ;; --------------------------------------------------------------------
 	;; Load file table sector from disk to memory, to get any updates
+    mov dl, [fileTable_drive_num]   
     push word fileTable_name
     push word 0000h
     push word 1000h
@@ -288,7 +289,7 @@ nl equ 0Ah,0Dh
 fileTable_csr_x: dw 0
 fileTable_csr_y: dw 0
 fileTable_drive_num: db 0
-fileTable_name: db 'fileTable',0
+fileTable_name: db 'fileTable '
 blanks_num: dw 0
 save_bx: dw 0
 save_cx: dw 0

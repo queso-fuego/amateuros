@@ -45,8 +45,8 @@ next_scancode:
 	test al, 80h			; is it a break code? Bit 7 set
 	jne next_scancode		; Yes, skip
 
-    cmp al, 39h             ; NEW Current end of scancode lookup table
-    jg return               ; NEW Beyond lookup table, just return here
+    cmp al, 39h             ; Current end of scancode lookup table
+    jg return               ; Beyond lookup table, just return here
 
 	mov bx, scancode_to_ascii	
 	xlatb						; DS:BX = lookup table, AL = DS:BX + AL, or table[AL]
@@ -99,7 +99,7 @@ check_other_chars:
 
 return:
     ;; Character should be in AL at this point 
-    mov ah, [scancode]  ;;NEW
+    mov ah, [scancode]  
 
     ;; Move shift or control status to bh
     xor bh, bh                  ; Initialize to 0 for neither key pressed

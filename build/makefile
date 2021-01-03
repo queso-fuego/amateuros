@@ -10,7 +10,7 @@ OS:
 	rm ../bin/*[!OS].bin
 
 run:
-	qemu-system-i386 -drive format=raw,file=../bin/OS.bin,index=0,media=disk
+	qemu-system-i386 -drive format=raw,file=../bin/OS.bin,if=ide,index=0,media=disk
 
 clean:
 	rm -f ../bin/*.bin

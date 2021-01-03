@@ -5,19 +5,19 @@
         ;; Screen & Menu Set up
         ;; --------------------------------------------------------------------
 main_menu:
-		;; Get passed drive number
-		mov byte [kernel_drive_num], dl
+    ;; Get passed drive number
+    mov byte [kernel_drive_num], dl
 
-        ;; Reset screen state
-        call clear_screen_text_mode
-        
-        ; Print OS boot message
-        mov si, menuString
-		push si
-		push word kernel_cursor_y		
-		push word kernel_cursor_x
-        call print_string_text_mode
-		add sp, 6
+    ;; Reset screen state
+    call clear_screen_text_mode
+    
+    ; Print OS boot message
+    mov si, menuString
+    push si
+    push word kernel_cursor_y		
+    push word kernel_cursor_x
+    call print_string_text_mode
+    add sp, 6
 
         ;; --------------------------------------------------------------------
         ;; Get user input, print to screen & choose menu option/run command
