@@ -621,7 +621,6 @@ end_program:
         include "../include/print/print_registers.inc"
 		include "../include/print/print_fileTable.inc"
 		include "../include/screen/clear_screen_text_mode.inc"
-        include "../include/screen/resetGraphicsScreen.inc"
 		include "../include/screen/move_cursor.inc"
 		include "../include/type_conversions/hex_to_ascii.inc"
 		include "../include/disk/file_ops.inc"
