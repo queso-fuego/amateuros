@@ -684,5 +684,4 @@ cmdString: times 255 db 0
         ;; --------------------------------------------------------------------
         ;; Sector Padding magic
         ;; --------------------------------------------------------------------
-        times 5120-($-$$) db 0   ; pads out 0s until we reach 1536th byte
-
+        times 5632-($-$$) db 0   ; pads out 0s until we reach 1536th byte

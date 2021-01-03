@@ -17,7 +17,7 @@
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 0Ch         ; Sector to start reading at (sectors are 0-based!)
+    mov al, 0Dh         ; Sector to start reading at (sectors are 0-based!)
     out dx, al
 
     mov dx, 1F4h        ; Cylinder low port
@@ -52,7 +52,7 @@
     in al, dx
 
     ;; READ KERNEL INTO MEMORY SECOND
-    mov bl, 9           ; Will be reading 10 sectors
+    mov bl, 10          ; Will be reading 11 sectors
     mov di, 2000h       ; Memory address to read sectors into (0000h:2000h)
 
     mov dx, 1F6h        ; Head & drive # port
@@ -62,7 +62,7 @@
     out dx, al          ; Send head/drive #
 
     mov dx, 1F2h        ; Sector count port
-    mov al, 0Ah         ; # of sectors to read
+    mov al, 0Bh         ; # of sectors to read
     out dx, al
 
     mov dx, 1F3h        ; Sector # port

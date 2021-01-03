@@ -118,7 +118,7 @@ load_existing_file:
 	;; Load file from input file name
 	;; Set up parms to pass
 	push word editor_filename	;; 1st parm - file name
-	push word 1000h				;; 2nd parm - segment to load to
+	push word 1000h				;; 2nd parm - segment to load to (address 10000h)
 	push word 0000h				;; 3rd parm - offset to load to
 		
 	mov dl, [editor_drive_num]

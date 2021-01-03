@@ -46,11 +46,6 @@ delete_file:
 		mov al, [ES:DI+15]
 		mov byte [file_size], al
 
-		;; Reset disk
-		xor ax, ax		; int 13h ah 00h - reset disk 
-		mov dl, [file_drive_num]		; drive #
-		int 13h 
-		
 		;; Write changed file table entry first
 		mov cx, 10
 		mov si, free_space	; File name
@@ -66,22 +61,62 @@ delete_file:
 		mov al, byte [file_size]
 		stosb							; File size
 
-		;; Write changed filetable to disk - TODO: Assuming file table is 1 sector, 
+        ;; TODO: Assuming file table is 1 sector 
+		;; Write changed filetable to disk - 
 		;;   change later
-		xor ch, ch			; track #
-		mov cl, 0Ch			; sector # to start writing at
-		xor dh, dh			; dh = head #
-		mov dl, [file_drive_num]		; drive #
-		xor ax, ax
-		mov es, ax
-		mov bx, 1000h		; ES:BX <- 0000h:1000h (file table memory location)
-		mov ah, 03h			; int 13h ah 03h - write disk sectors	
-		mov al, 01h			; # of sectors to write
-	
-		int 13h
-		jnc write_blank_file_data ; Success, now write file data
+        mov dx, 1F6h             ; Head & drive # port
+        mov al, [file_drive_num] ; Drive # - hard disk 1
+        and al, 0Fh              ; Head # (low nibble)
+        or al, 0A0h              ; default high nibble to 'primary' drive (drive 1), 'secondary' drive (drive 2) would be hex B or 1011b
+        out dx, al               ; Send head/drive #
+
+        mov dx, 1F2h        ; Sector count port
+        mov al, 1           ; # of sectors to read
+        out dx, al
+
+        mov dx, 1F3h        ; Sector # port
+        mov al, 0Dh         ; Sector to start writing at (sectors are 0-based!)
+        out dx, al
+
+        mov dx, 1F4h        ; Cylinder low port
+        xor al, al          ; Cylinder low #
+        out dx, al
+
+        mov dx, 1F5h        ; Cylinder high port
+        xor al, al          ; Cylinder high #
+        out dx, al
+
+        mov dx, 1F7h        ; Command port (writing port 1F7h)
+        mov al, 30h         ; Write with retry
+        out dx, al
+
+    .loop:
+        in al, dx           ; Status register (reading port 1F7h)
+        test al, 8          ; Sector buffer requires servicing
+        je .loop            ; Keep trying until sector buffer is ready
+
+        push ds             ; Save DS
+        xor ax, ax
+        mov ds, ax
+        mov si, 1000h       ; Memory address to write sector from (0000h:1000h)
+
+        mov cx, 256         ; # of words to write for 1 sector
+        mov dx, 1F0h        ; Data port, writing 
+
+    .write_loop:
+        outsw               ; Write bytes from (DS:)SI into DX port
+        jmp $+2             ; Small delay after each word written to port
+        loop .write_loop
+
+        ;; Send cache flush command after write command is finished
+        mov al, 0E7h
+        mov dx, 1F7h
+        out dx, al
+
+        pop ds              ; Restore DS
 
 		;; TODO: Handle disk write error for file table here...
+        ;;   Check error ata pio register here...
 
 	write_blank_file_data:
 		;; Set up memory location to write NULL data to (ES:BX)
@@ -95,23 +130,65 @@ delete_file:
 		mov cl, byte [file_size]
 		imul cx, 512
 		rep stosb
-
 		
 		; Write zeroed-out data to disk
-		mov ah, 03h							; int 13h ah 03h - write disk sectors	
-		mov al, byte [file_size]		; # of sectors to write
-		xor ch, ch							; track #
-		mov cl, byte [starting_sector]	; Sector # to start writing at
-		xor dx, dx							; dh = head #
-		mov dl, [file_drive_num]		; drive #
-		xor bx, bx							; ES:BX <- file data memory location	
+        mov dx, 1F6h             ; Head & drive # port
+        mov al, [file_drive_num] ; Drive # - hard disk 1
+        and al, 0Fh              ; Head # (low nibble)
+        or al, 0A0h              ; default high nibble to 'primary' drive (drive 1), 'secondary' drive (drive 2) would be hex B or 1011b
+        out dx, al               ; Send head/drive #
+
+        mov dx, 1F2h            ; Sector count port
+        mov al, [file_size]     ; # of sectors to read
+        out dx, al
+
+        mov dx, 1F3h                ; Sector # port
+        mov al, [starting_sector]   ; Sector to start writing at (sectors are 0-based!)
+        out dx, al
+
+        mov dx, 1F4h            ; Cylinder low port
+        xor al, al              ; Cylinder low #
+        out dx, al
+
+        mov dx, 1F5h            ; Cylinder high port
+        xor al, al              ; Cylinder high #
+        out dx, al
+
+        mov dx, 1F7h            ; Command port (writing port 1F7h)
+        mov al, 30h             ; Write with retry
+        out dx, al
+
+    .loop:
+        in al, dx               ; Status register (reading port 1F7h)
+        test al, 8              ; Sector buffer requires servicing
+        je .loop                ; Keep trying until sector buffer is ready
+
+        push ds                 ; Save DS
+        xor ax, ax
+        mov ds, ax
+        mov si, 8000h           ; Memory address to write sectors from (0000h:8000h)
+
+        xor bh, bh
+        mov bl, [starting_sector]
+        imul cx, bx, 256            ; CX = # of words for 1 sector * # of sectors
+        mov dx, 1F0h        ; Data port, writing 
+
+    .write_loop:
+        outsw               ; Write bytes from (DS:)SI into DX port
+        jmp $+2             ; Small delay after each word written to port
+        loop .write_loop
+
+        ;; Send cache flush command after write command is finished
+        mov al, 0E7h
+        mov dx, 1F7h
+        out dx, al
+
+        pop ds              ; Restore DS
 
 		mov word [bp-2], 0	; Success, normal return
 
-		int 13h
-		jnc del_function_epilogue
-
-		mov word [bp-2], 1	; Write file data error occurred
+        ;; TODO: Check error register here
+;;		jnc del_function_epilogue
 
 	del_function_epilogue:
 		pop bx			; Restore registers - reverse order
@@ -134,6 +211,7 @@ load_file:
 
 	push bx		; Save modified registers
 	push fs
+    push dx
 	push si
 
 	mov byte [file_drive_num], dl
@@ -168,44 +246,80 @@ load_file:
 		mov al, [ES:DI+12]
 		mov byte [file_type+2], al
 		
-		;; Reset disk
-		xor ax, ax		; int 13h ah 00h - reset disk 
-		mov dl, [file_drive_num]		; drive #
-		int 13h 
-		
-		;; Set up parms for int 13h ah02h - read disk sectors
 		mov word [bp-2], 0	; Init error code to 'success'
 
-		mov cl, [ES:DI+14]	; Sector # to start reading at
-
-		;; Get correct track and starting sector #s
-		xor ah, ah
-		mov al, cl
-		mov cl, 18	; 18 = number of sectors per track for a floppy disk
-		div cl		; AX / byte value (in CL); AL = quotient, AH = remainder
-		mov ch, al	; CH = track #, quotient
-		mov cl, ah	; CL = sector #, remainder
-		cmp cl, 0
-		jne .after
-		mov cl, 18	
-
 		.after:
-		mov ah, 02h			; int 13h ah02h
-		mov al, [ES:DI+15]	; # of sectors to read
-		mov dx, fs
-		mov es, dx		 	; segment address to load to; BX already set
-		xor dx, dx			; dh = head #
-		mov dl, [file_drive_num]		; drive #
-		
-		int 13h
-		jnc load_function_epilogue
+		mov al, [ES:DI+15]	            ; # of sectors to read
+        mov byte [file_size], al
 
-		;; Otherwise handle error here...
-		file_load_error:	
-			mov word [bp-2], 1	; Signifies error occurred
+		mov al, [ES:DI+14]	; Sector # to start reading at 
+        mov byte [starting_sector], al     
+
+        ;; Read sectors using ATA PIO ports
+        push es             ; Save values
+        push di
+	    mov es, [bp+6]	    ; 2nd parm off stack, segment memory address to read into
+	    mov di, [bp+4]	    ; 1st parm off stack, offset memory address to read into
+        mov bl, [file_size] ; Will be reading <file_size> # of sectors
+        dec bl
+
+        mov dx, 1F6h             ; Head & drive # port
+        mov al, [file_drive_num] ; Drive # - hard disk 1
+        and al, 0Fh              ; Head # (low nibble)
+        or al, 0A0h              ; default high nibble to 'primary' drive (drive 1), 'secondary' drive (drive 2) would be hex B or 1011b
+        out dx, al               ; Send head/drive #
+
+        mov dx, 1F2h             ; Sector count port
+        mov al, [file_size]      ; # of sectors to read
+        out dx, al
+
+        mov dx, 1F3h              ; Sector # port
+        mov al, [starting_sector] ; Sector to start reading at (sectors are 0-based!!)
+        out dx, al
+
+        mov dx, 1F4h        ; Cylinder low port
+        xor al, al          ; Cylinder low #
+        out dx, al
+
+        mov dx, 1F5h        ; Cylinder high port
+        xor al, al          ; Cylinder high #
+        out dx, al
+
+        mov dx, 1F7h        ; Command port (writing port 1F7h)
+        mov al, 20h         ; Read with retry
+        out dx, al
+
+    ;; Poll status port after reading 1 sector
+    .load_next_sector:
+        in al, dx               ; Status register (reading port 1F7h)
+        test al, 8              ; Sector buffer requires servicing
+        je .load_next_sector    ; Keep trying until sector buffer is ready
+
+        mov cx, 256         ; # of words to read for 1 sector
+        mov dx, 1F0h        ; Data port, reading 
+        rep insw            ; Read bytes from DX port # into (ES:)DI, CX # of times
+        
+        ;; 400ns delay - Read alternate status register
+        mov dx, 3F6h
+        in al, dx
+        in al, dx
+        in al, dx
+        in al, dx
+
+        cmp bl, 0
+        je load_function_epilogue
+
+        dec bl
+        mov dx, 1F7h
+        jmp .load_next_sector
 
 		load_function_epilogue:
+        ;; TODO: Check error register here
+
 			;; Restore callers stack values & registers
+            pop di
+            pop es
+
 			pop si
 			pop dx
 			pop fs
@@ -215,7 +329,6 @@ load_file:
 			mov bx, file_type
 
 			jmp return_to_caller	; Global return for this file
-
 ;;;
 ;;; rename_file.inc: rename a file in the file table!!
 ;;;
@@ -229,6 +342,7 @@ rename_file:
 	push bp
 	mov bp, sp
 	sub sp, 2
+
 	push bx
 	push cx
 	push si
@@ -281,26 +395,65 @@ rename_file:
 	mov cx, word [new_file_name_length]
 	rep movsb
 
-	;; Reset disk
-	xor ax, ax
-	mov dl, [file_drive_num]		; drive #
-	int 13h
-	
 	;; Write changed file table data to disk
 	mov word [bp-2], 0		; Init return code to success
 
-	xor ch, ch			; track #
-	mov cl, 0Ch			; sector # to start writing at
-	xor dx, dx			; dh = head #
-	mov dl, [file_drive_num]		; drive #
-	xor ax, ax
-	mov es, ax
-	mov bx, 1000h		; ES:BX <- 0000h:1000h (file table memory location)
-	mov ah, 03h			; int 13h ah 03h - write disk sectors	
-	mov al, 01h			; # of sectors to write
-	
-	int 13h
-	jnc ren_function_epilogue ; Success
+    ;; Write changed filetable to disk - 
+    ;;   change later
+    mov dx, 1F6h             ; Head & drive # port
+    mov al, [file_drive_num] ; Drive # - hard disk 1
+    and al, 0Fh              ; Head # (low nibble)
+    or al, 0A0h              ; default high nibble to 'primary' drive (drive 1), 'secondary' drive (drive 2) would be hex B or 1011b
+    out dx, al               ; Send head/drive #
+
+    mov dx, 1F2h        ; Sector count port
+    mov al, 1           ; # of sectors to write
+    out dx, al
+
+    mov dx, 1F3h        ; Sector # port
+    mov al, 0Dh         ; Sector to start writing at (sectors are 0-based!)
+    out dx, al
+
+    mov dx, 1F4h        ; Cylinder low port
+    xor al, al          ; Cylinder low #
+    out dx, al
+
+    mov dx, 1F5h        ; Cylinder high port
+    xor al, al          ; Cylinder high #
+    out dx, al
+
+    mov dx, 1F7h        ; Command port (writing port 1F7h)
+    mov al, 30h         ; Write with retry
+    out dx, al
+
+.loop:
+    in al, dx           ; Status register (reading port 1F7h)
+    test al, 8          ; Sector buffer requires servicing
+    je .loop            ; Keep trying until sector buffer is ready
+
+    push ds             ; Save DS
+    xor ax, ax
+    mov ds, ax
+    mov si, 1000h       ; Memory address to write sector from (0000h:1000h)
+
+    mov cx, 256         ; # of words to write for 1 sector
+    mov dx, 1F0h        ; Data port, writing 
+
+.write_loop:
+    outsw               ; Write bytes from (DS:)SI into DX port
+    jmp $+2             ; Small delay after each word written to port
+    loop .write_loop
+
+    ;; Send cache flush command after write command is finished
+    mov al, 0E7h
+    mov dx, 1F7h
+    out dx, al
+
+    pop ds              ; Restore DS
+
+    jmp ren_function_epilogue
+
+    ;; TODO: Check error registers here
 
 	mov word [bp-2], 1		; Error on writing file table
 
@@ -314,14 +467,18 @@ rename_file:
 ;;;
 ;;; save_file.inc: Save file data to disk
 ;;;
-;;; Parms: File name, file type (bin or other), file size (in hex sectors), 
-;;;        memory location to save data from
+;;; Input 1: File name (address)
+;;; Input 2: File type (.bin,.txt,etc)
+;;; Input 3: File size (in hex sectors)
+;;; Input 4: Memory segment to save from
+;;; Input 5: Memory offset to save from
 ;;;
 save_file:
 	;; Function prologue - save callers stack values & registers
 	push bp
 	mov bp, sp
 	sub sp, 2		; Make room for local stack variable - error code
+
 	push bx
 	push fs			
 	push cx		
@@ -379,11 +536,6 @@ save_file:
 		;; TODO: Otherwise handle write sectors error here...
 
 	new_file:
-		;; Reset disk
-		xor ax, ax		; int 13h ah 00h - reset disk 
-		mov dl, [file_drive_num]		; drive #
-		int 13h 
-
 		;; Grab previous file table entry's starting sector + file size
 		;;  for new starting sector
 		sub di, 16
@@ -393,13 +545,14 @@ save_file:
 		add di, 16
 
 		;; Create new file table entry at end of current entries
-		;; File name
 		mov cx, 10
 		mov si, file_name
 		rep movsb			; Move 10 bytes of file name in si to file table in di
+
 		mov cx, 3
 		mov si, file_type
 		rep movsb						; Move 3 bytes of file type in si to file table
+
 		xor al, al
 		stosb							; Directory entry # (0 = first entry)
 		mov al, byte [last_saved_sector]	
@@ -407,51 +560,120 @@ save_file:
 		mov al, byte [file_size]
 		stosb							; File size
 
-		;; Write changed filetable to disk - TODO: Assuming file table is 1 sector, 
+        ;; TODO: Assuming file table is 1 sector 
+		;; Write changed filetable to disk - 
 		;;   change later
-		xor ch, ch			; track #
-		mov cl, 0Ch			; sector # to start writing at
-		xor dx, dx			; dh = head #
-		mov dl, [file_drive_num]		; drive #
-		mov word [saved_bx], bx	
-		xor ax, ax
-		mov es, ax
-		mov bx, 1000h		; ES:BX <- 0000h:1000h (file table memory location)
-		mov ah, 03h			; int 13h ah 03h - write disk sectors	
-		mov al, 01h			; # of sectors to write
-	
-		int 13h
-		jnc write_file_data ; Success, now write file data
+        mov dx, 1F6h             ; Head & drive # port
+        mov al, [file_drive_num] ; Drive # - hard disk 1
+        and al, 0Fh              ; Head # (low nibble)
+        or al, 0A0h              ; default high nibble to 'primary' drive (drive 1), 'secondary' drive (drive 2) would be hex B or 1011b
+        out dx, al               ; Send head/drive #
+
+        mov dx, 1F2h        ; Sector count port
+        mov al, 1           ; # of sectors to write
+        out dx, al
+
+        mov dx, 1F3h        ; Sector # port
+        mov al, 0Dh         ; Sector to start writing at (sectors are 0-based!)
+        out dx, al
+
+        mov dx, 1F4h        ; Cylinder low port
+        xor al, al          ; Cylinder low #
+        out dx, al
+
+        mov dx, 1F5h        ; Cylinder high port
+        xor al, al          ; Cylinder high #
+        out dx, al
+
+        mov dx, 1F7h        ; Command port (writing port 1F7h)
+        mov al, 30h         ; Write with retry
+        out dx, al
+
+    .loop:
+        in al, dx           ; Status register (reading port 1F7h)
+        test al, 8          ; Sector buffer requires servicing
+        je .loop            ; Keep trying until sector buffer is ready
+
+        push ds             ; Save DS
+        xor ax, ax
+        mov ds, ax
+        mov si, 1000h       ; Memory address to write sector from (0000h:1000h)
+
+        mov cx, 256         ; # of words to write for 1 sector
+        mov dx, 1F0h        ; Data port, writing 
+
+    .write_loop:
+        outsw               ; Write bytes from (DS:)SI into DX port
+        jmp $+2             ; Small delay after each word written to port
+        loop .write_loop
+
+        ;; Send cache flush command after write command is finished
+        mov al, 0E7h
+        mov dx, 1F7h
+        out dx, al
+
+        pop ds              ; Restore DS
 
 		;; TODO: Handle disk write error for file table here...
 
 	write_file_data:
 		mov word [bp-2], 0					; Init error code to 'success'
 
-		mov ax, fs
-		mov es, ax							; Segment address of file data to write
-		mov cl, byte [last_saved_sector]	; Sector # to start writing at
-
-		;; Get correct track and starting sector #s
-		xor ah, ah
-		mov al, cl
-		mov cl, 18	; 18 = number of sectors per track for a floppy disk
-		div cl		; AX / byte value (in CL); AL = quotient, AH = remainder
-		mov ch, al	; CH = track #, quotient
-		mov cl, ah	; CL = sector #, remainder
-		cmp cl, 0
-		jne .after
-		mov cl, 18	
-
 		.after:
-		mov ah, 03h							; int 13h ah 03h - write disk sectors	
-		mov al, byte [file_size]			; # of sectors to write
-		xor dx, dx							; dh = head #
-		mov dl, [file_drive_num]			; drive #
-		mov bx, word [saved_bx]				; ES:BX <- file data memory location	
+        ;; Write file data to disk
+        mov dx, 1F6h             ; Head & drive # port
+        mov al, [file_drive_num] ; Drive # - hard disk 1
+        and al, 0Fh              ; Head # (low nibble)
+        or al, 0A0h              ; default high nibble to 'primary' drive (drive 1), 'secondary' drive (drive 2) would be hex B or 1011b
+        out dx, al               ; Send head/drive #
 
-		int 13h
-		jnc save_function_epilogue
+        mov dx, 1F2h            ; Sector count port
+        mov al, [file_size]     ; # of sectors to write
+        out dx, al
+
+        mov dx, 1F3h                ; Sector # port
+        mov al, [last_saved_sector]   ; Sector to start writing at (sectors are 0-based!) 
+        out dx, al
+
+        mov dx, 1F4h            ; Cylinder low port
+        xor al, al              ; Cylinder low #
+        out dx, al
+
+        mov dx, 1F5h            ; Cylinder high port
+        xor al, al              ; Cylinder high #
+        out dx, al
+
+        mov dx, 1F7h            ; Command port (writing port 1F7h)
+        mov al, 30h             ; Write with retry
+        out dx, al
+
+    .loop:
+        in al, dx               ; Status register (reading port 1F7h)
+        test al, 8              ; Sector buffer requires servicing
+        je .loop                ; Keep trying until sector buffer is ready
+
+        push ds                 ; Save DS
+        mov ds, [bp+6]          ; Memory segment to save data from 
+        mov si, [bp+4]          ; Memory offset to save data from
+
+        xor bh, bh
+        mov bl, [file_size]
+        imul cx, bx, 256    ; CX = # of words for 1 sector * # of sectors
+        mov dx, 1F0h        ; Data port, writing 
+
+    .write_loop:
+        outsw               ; Write bytes from (DS:)SI into DX port
+        jmp $+2             ; Small delay after each word written to port
+        loop .write_loop
+
+        ;; Send cache flush command after write command is finished
+        mov al, 0E7h
+        mov dx, 1F7h
+        out dx, al
+
+        pop ds              ; Restore DS
+
+    jmp save_function_epilogue
 
 		;; TODO: Handle disk write error for file data here...
 		mov word [bp-2], 1	; Signifies error occurred
