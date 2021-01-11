@@ -4,6 +4,7 @@
 ;;; Parms: 
 ;;;  input 1: AL - hex character to convert
 ;;;  output 1: AL - converted ASCII character
+use32
 hex_to_ascii:
 	mov ah, 0Eh
 	add al, 30h		; convert to ascii number

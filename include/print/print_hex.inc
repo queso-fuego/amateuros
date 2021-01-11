@@ -8,6 +8,7 @@
 ;;; Ascii 'A'-'F' = hex 41h-46h
 ;;; Ascii 'a'-'f' = hex 61h-66h
 ;;;
+use32
 print_hex:
         push bp
 		mov bp, sp

@@ -3,6 +3,7 @@
 ;;;                data port 60h
 ;;; Output 1: Ascii char in AL
 ;;;
+use32
 get_key:
     jmp next_scancode
 

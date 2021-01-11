@@ -2,30 +2,27 @@
 ;;; clear_screen_text_mode.inc: clears screen by writing to video memory 
 ;;; assuming VGA txt mode 03 - 80x25 characters, 16 colors
 ;;;
+use32
 clear_screen_text_mode:
-	push es
-	push ax
-	push cx
-	push di
+	push eax
+	push ecx
+	push edi
 
-	mov ax, 0B800h	; set up video memory
-	mov es, ax
-	xor di, di		; es:di <- B8000:0000
+	mov edi, 0B8000h
 
-	mov ah, 17h		; blue background, light gray foreground
-	mov al, ' '		; space
+    mov ax, 1720h   ; blue bg, light gray fg, space
 	mov cx, 80*25	; Number of characters to write
 	
 	rep	stosw
 
 	;; Move hardware cursor after
-	push word 0
-	push word 0
+	push dword 0
+	push dword 0
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
-	pop di
-	pop cx
-	pop ax
-	pop es
+	pop edi
+	pop ecx
+	pop eax
+
 	ret

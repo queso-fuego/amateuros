@@ -5,6 +5,7 @@
 ;;; Parms: 1 - File name to delete
 ;;;		   2 - Length of file name
 ;;;
+use32
 delete_file:
 	push bp
 	mov bp, sp
@@ -200,8 +201,9 @@ delete_file:
 ;;; load_file: Read a file from filetable and its sectors into a memory location
 ;;;
 ;;; input 1: File name (address)
-;;; input 2: Memory segment to load data to
-;;; input 3: Memory offset to load data to
+;;; input 2: File name length   NEW
+;;; input 3: Memory segment to load data to
+;;; input 4: Memory offset to load data to
 ;;;
 load_file:
 	;; Function prologue - save callers stack values & registers
@@ -219,16 +221,18 @@ load_file:
 	;; Get parms off stack - reverse order/LIFO!!
 	mov bx, [bp+4]	; 1st parm off stack, offset memory address
 	mov fs, [bp+6]	; 2nd parm, segment memory address
-	mov si, [bp+8]	; 3rd parm, file name (address)
+    mov cx, [bp+8]  ; 3rd parm, file name length
+	mov si, [bp+10]	; 4th parm, file name (address)
+
+    ;; Copy filename length to variable
+    mov word [file_name_length], cx     
 
 	;; Copy filename to variable
-	mov cx, 10
-	mov di, file_name
+	mov di, file_name  
 	rep movsb
 		
 	;; Reset file_name address
 	mov si, file_name
-
 	call check_filename			; Check for filename in file table
 
 	cmp word [error_code], 0	; Check error code

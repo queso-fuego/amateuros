@@ -1,3 +1,4 @@
+use32
 calc_setup:
 	mov byte [calc_drive_number], dl	; Store passed in drive number
 
@@ -398,4 +399,4 @@ print_newline:
 	ret
 
 ;; Sector padding
-times 1536-($-$$) db 0 
+times 2560-($-$$) db 0 

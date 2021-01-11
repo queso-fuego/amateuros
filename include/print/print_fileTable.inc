@@ -4,6 +4,7 @@
 ;;;	input 1: cursor Y position (address, not value)
 ;;; input 2: cursor X position (address, not value)
 ;;;
+use32
 print_fileTable:
 	push bp
 	mov bp, sp
@@ -37,6 +38,7 @@ print_fileTable:
 	;; Load file table sector from disk to memory, to get any updates
     mov dl, [fileTable_drive_num]   
     push word fileTable_name
+    push word 10   
     push word 0000h
     push word 1000h
     call load_file

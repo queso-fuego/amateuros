@@ -1,23 +1,28 @@
 ;;; =========================================================================== 
 ;;; Kernel.asm: basic 'kernel' loaded from our bootsector
 ;;; ===========================================================================
+use32
+org 2000h   
         ;; --------------------------------------------------------------------
         ;; Screen & Menu Set up
         ;; --------------------------------------------------------------------
 main_menu:
     ;; Get passed drive number
-    mov byte [kernel_drive_num], dl
+    mov [kernel_drive_num], dx
 
     ;; Reset screen state
     call clear_screen_text_mode
-    
+
     ; Print OS boot message
-    mov si, menuString
-    push si
-    push word kernel_cursor_y		
-    push word kernel_cursor_x
+    push dword menuString
+    push dword kernel_cursor_y		
+    push dword kernel_cursor_x
     call print_string_text_mode
-    add sp, 6
+    add esp, 12
+
+    ;; DEBUGGING
+    cli
+    hlt
 
         ;; --------------------------------------------------------------------
         ;; Get user input, print to screen & choose menu option/run command
@@ -56,8 +61,8 @@ get_input:
 	add sp, 6
 
 	; Move cursor after prompt
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
 	add sp, 4
 	
@@ -282,6 +287,7 @@ check_commands:
     mov dl, [kernel_drive_num]	; drive #
 
     push word cmdString         ; Input 1: file name (address)
+    push word [tokens_length]   ; Input 2: file name length
     push word 0000h             ; Input 2: memory segment to load to
     push word 8000h             ; Input 3: memory offset to load to
     call load_file
@@ -634,10 +640,9 @@ nl equ 0Ah,0Dh	; Carriage return/linefeed; "newline"
 SPACE equ 20h	; ASCII space character	
 
 ;; REGULAR VARIABLES
-menuString:     db '---------------------------------',nl,\
+menuString: db '---------------------------------',nl,\
         'Kernel Booted, Welcome to QuesOS!',nl,\
         '---------------------------------',nl,nl,0
-	
 prompt:	db '>:',0
 	
 success:        db nl,'Program Found!',nl,0
@@ -677,10 +682,10 @@ token_file_name1: times 10 db 0
 token_file_name2: times 10 db 0
 kernel_cursor_x: dw 0
 kernel_cursor_y: dw 0
-kernel_drive_num: db 0
+kernel_drive_num: dw 0
 cmdString: times 255 db 0
 
         ;; --------------------------------------------------------------------
         ;; Sector Padding magic
         ;; --------------------------------------------------------------------
-        times 5632-($-$$) db 0   ; pads out 0s until we reach 1536th byte
+        times 7168-($-$$) db 0   ; pads out the rest with 0s

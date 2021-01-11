@@ -3,6 +3,7 @@
 ;;;
 ;;;	input 1: cursor Y position (address, not value)
 ;;; input 2: cursor X position (address, not value)
+use32
 print_registers:
 	push bp
 	mov bp, sp

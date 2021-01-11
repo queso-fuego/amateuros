@@ -6,28 +6,29 @@
 ;;;  input 3: column to print to (address, not value)
 ;;;  output 1: return code in AX
 ;;;----------------------------------------------
+use32
 print_string_text_mode:
-	push bp
-	mov bp, sp
-	sub sp, 2		; error/return code
+	push ebp
+	mov ebp, esp
+	sub esp, 4		; error/return code
 
-	push es
-	push di
-	push si
-	push bx
-	push cx
-	push dx
+	push edi
+	push esi
+	push ebx
+	push ecx
+	push edx
 
-	mov ax, 0B800h	; set up ES:DI to print to vga color text mode memory
-	mov es, ax
+    ;; Set up EDI with row/col to print to
+    mov edi, 0B8000h        ; Start of vga color text mode video memory
+	mov ebx, [ebp+12]		; Cursor Y address
+	imul si, [ebx], 160    ; Row to print to, in bytes
+	mov ebx, [ebp+8]		; Cursor X address
+	imul ax, [ebx], 2		; Col to print to , in bytes
+	add si, ax			; DI = row*sizeof(row) + col*sizeof(col)
 
-	mov bx, [bp+6]			; Cursor Y address
-	imul di, [bx], 160
-	mov bx, [bp+4]			; Cursor X address
-	imul ax, [bx], 2		; Col to print to start printing at, in bytes
-	add di, ax				; DI = row*sizeof(row) + col*sizeof(col)
+    add di, si            
 
-	mov si, [bp+8]			; Start of string to print (in SI)
+	mov esi, [ebp+16]		; Start of string to print (in SI)
 	mov ah,	17h				; Colors to print (VGA 17h = blue bg, light grey fg)
 
 	.loop:
@@ -40,45 +41,41 @@ print_string_text_mode:
 		je .CR
 		stosw				; Print character to string by storing AL in [ES:DI]
 
-		inc word [bx]		; Update cursor position
-		cmp word [bx], 80	; at end of line?
+		inc word [ebx]		; Update cursor position
+		cmp word [ebx], 80	; at end of line?
 		jne .loop								; No, go on
 
-		mov dx, word [bx]	; Yes, do a CR 1st, then LF
+		mov dx, word [ebx]	; Yes, do a CR 1st, then LF
 		shl dx, 1
 		sub di, dx
-		mov word [bx], 0
+		mov word [ebx], 0
 
 		.LF:
-			mov bx, [bp+6]						; Cursor Y address
-			inc word [bx]		; Go down 1 row
-			cmp word [bx], 25	; At bottom of screen?
+			mov ebx, [ebp+12]						; Cursor Y address
+			inc word [ebx]		; Go down 1 row
+			cmp word [ebx], 25	; At bottom of screen?
 			jge .scroll_down
 
 			add di, 160								; Go down "1 row" in video memory
-			mov bx, [bp+4]						; Cursor X address
+			mov ebx, [ebp+8]						; Cursor X address
 			jmp .loop
 		.CR:
-			mov dx, word [bx]
+			mov dx, word [ebx]
 			shl dx, 1
 			sub di, dx
-			mov word [bx], 0
+			mov word [ebx], 0
 			jmp .loop
 
 		.scroll_down:
 			;; Copy screen lines 1-24 into lines 0-23 (0-based),
 			;;   then clear out last line, line 24
 			;;   and continue printing
-			push es
-			push di
-			push ds
-			push si
+			push edi
+			push esi
 		
-			mov ax, 0B800h
-			mov es, ax
-			mov ds, ax
-			xor di, di
-			mov si, 160		; Byte location of screen line 1
+	    	mov edi, 0B8000h
+	    	mov esi, edi
+			add esi, 160		; Byte location of screen line 1
 			mov cx, 80*24
 			rep movsw		; Copy lines 1-24 into lines 0-23
 			
@@ -86,27 +83,24 @@ print_string_text_mode:
 			mov cx, 80
 			rep stosw		; Clear line 24
 			
-			pop si
-			pop ds
-			pop di
-			pop es
+			pop esi
+			pop edi
 
-			dec word [bx]	; set Y = line 24
-			mov bx, [bp+4]						; Cursor X address
+			dec word [ebx]	; set Y = line 24
+			mov ebx, [ebp+8]						; Cursor X address
 	jmp .loop
 
 	.end_print:
-	mov word [bp-2], 0		; Return code 0 = success
-	mov ax, [bp-2]
+	mov dword [ebp-4], 0		; Return code 0 = success
+	mov eax, [ebp-4]
 
-	pop dx
-	pop cx
-	pop bx
-	pop si
-	pop di
-	pop es
+	pop edx
+	pop ecx
+	pop ebx
+	pop esi
+	pop edi
 
-	mov sp, bp
-	pop bp
+	mov esp, ebp
+	pop ebp
 
 	ret

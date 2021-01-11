@@ -1,6 +1,7 @@
 ;;;
 ;;; "Simple" boot loader that uses ATA PIO ports to read from disk into memory
 ;;;
+use16
     org 7C00h              ; 'origin' of Boot code; helps make sure addresses don't change
 
     mov byte [drive_num], dl	; DL contains initial drive # on boot
@@ -17,7 +18,7 @@
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 0Dh         ; Sector to start reading at (sectors are 0-based!)
+    mov al, 0Fh         ; Sector to start reading at (sectors are 0-based!)
     out dx, al
 
     mov dx, 1F4h        ; Cylinder low port
@@ -52,7 +53,7 @@
     in al, dx
 
     ;; READ KERNEL INTO MEMORY SECOND
-    mov bl, 10          ; Will be reading 11 sectors
+    mov bl, 0Dh         ; Will be reading 14 sectors NEW
     mov di, 2000h       ; Memory address to read sectors into (0000h:2000h)
 
     mov dx, 1F6h        ; Head & drive # port
@@ -62,7 +63,7 @@
     out dx, al          ; Send head/drive #
 
     mov dx, 1F2h        ; Sector count port
-    mov al, 0Bh         ; # of sectors to read
+    mov al, 0Eh         ; # of sectors to read
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
@@ -99,41 +100,68 @@ kernel_loop:
     in al, dx
 
     cmp bl, 0
-    je jump_to_kernel
+    je load_GDT
 
     dec bl
     mov dx, 1F7h
     jmp kernel_loop
 
-jump_to_kernel:
-    ;; Set registers for kernel memory location
+    ;; Set up GDT
+    GDT_start:
+    ;; Offset 0h
+    dq 0h           ;; 1st descriptor required to be NULL descriptor
+
+    ;; Offset 08h
+    .code:
+    dw 0FFFFh       ; Segment limit 1 - 2 bytes
+    dw 0h           ; Segment base 1 - 2 bytes
+    db 0h           ; Segment base 2 - 1 byte
+    db 10011010b    ; Access byte - bits: 7 - Present, 6-5 - privelege level (0 = kernel), 4 - descriptor type (code/data)
+                    ;  3 - executable y/n, 2 - direction/conforming (grow up from base to limit), 1 - read/write, 0 - accessed (CPU sets this)
+    db 11001111b    ; bits: 7 - granularity (4KiB), 6 - size (32bit protected mode), 3-0 segment limit 2 - 4 bits
+    db 0h           ; Segment base 3 - 1 byte
+
+    ;; Offset 10h
+    .data:
+    dw 0FFFFh       ; Segment limit 1 - 2 bytes
+    dw 0h           ; Segment base 1 - 2 bytes
+    db 0h           ; Segment base 2 - 1 byte
+    db 10010010b    ; Access byte
+    db 11001111b    ; bits: 7 - granularity (4KiB), 6 - size (32bit protected mode), 3-0 segment limit 2 - 4 bits
+    db 0h           ; Segment base 3 - 1 byte
+
+    ;; Load GDT
+    GDT_Desc:
+    dw ($ - GDT_start - 1)
+    dd GDT_start
+
+    load_GDT:
     mov dl, [drive_num]
-    mov ax, 200h
-    mov ds, ax              ; data segment
-    mov es, ax              ; extra segment
-    mov fs, ax              ; ""
-    mov gs, ax              ; ""
+    cli             ; Clear interrupts first
+    lgdt [GDT_Desc] ; Load the GDT to the cpu
 
-    ;; Set up stack
-    mov sp, 0FFFFh			; stack pointer
-    mov ax, 900h
-    mov ss, ax              ; stack segment
+    mov eax, cr0
+    or eax, 1       ; Set protected mode bit
+    mov cr0, eax    ; Turn on protected mode
 
-    ;; Set up initial video mode & palette before going to kernel
-    mov ax, 0003h			; int 10h ah00 = set video mode; 80x25 16 colors text mode
-    int 10h
+    jmp 08h:set_segments   ; Do a far jump to set CS register
     
-    mov ah, 0Bh				; int 10h ah 0Bh = set palette
-    mov bx, 0001h			; bl = bg color for text mode; blue
-    int 10h
+use32                    ; We are officially in 32 bit mode now
+    set_segments:
+    mov ax, 10h          ; Set to data segment descriptor
+    mov ds, ax
+    mov es, ax                  
+    mov fs, ax                 
+    mov gs, ax                
+    mov ss, ax
+    mov esp, 090000h	    ; Set up stack pointer
 
-    ;; Far jump to kernel
-    jmp 0200h:0000h	        ; never return from this!
+    sti                 ; Enable interrupts
+    jmp 08h:2000h              ; Jump to kernel
 
 ;; VARIABLES
 drive_num: db 0
 
 ;; Boot sector magic
 times 510-($-$$) db 0   ; pads out 0s until we reach 510th byte
-
 dw 0AA55h               ; BIOS magic number; BOOT magic #

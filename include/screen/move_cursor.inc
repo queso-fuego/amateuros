@@ -5,52 +5,53 @@
 ;;; input 1: row to move to
 ;;; input 2: col to move to
 ;;; output 1: error/return code in AX
+use32
 move_cursor:
-	push bp
-	mov bp, sp	
-	sub sp, 2		; Local stack variable - error/return code
+	push ebp
+	mov ebp, esp	
+	sub esp, 4		; Local stack variable - error/return code
 
-	push dx			; save modified register
-	push bx
+	push edx			; save modified register
+	push ebx
 
 	;; Get parm off stack
-	mov dx, [bp+4]	; DX = row/col to move cursor to, DL = column value
-	mov ax, [bp+6]	; AL = row value
+	mov dx, [ebp+8]	     ; DX = column value
+	mov ax, [ebp+12]     ; AX = row value
 
 	;; Calculate cursor bytes
 	;; Y pos * size of row + X pos
-	xor ah, ah
 	imul bx, ax, 80 
-	xor dh, dh
 	add bx, dx
 
 	;; Move cursor using CRT Microcontroller ports!!
 	;; Write the cursor low byte (BL)	
-	mov al, 0Fh		; CRT index register, cursor low byte
+	mov ax, 0Fh		; CRT index register, cursor low byte
 	mov dx, 03D4h
-	out dx, al
+	out dx, ax
 
 	mov dx, 03D5h	; CRT data register
+    xor ah, ah
 	mov al, bl
-	out dx, al
+	out dx, ax
 
 	;; Write the cursor high byte (BH)	
+    xor ah, ah
 	mov al, 0Eh		; CRT index register, cursor high byte
 	mov dx, 03D4h
-	out dx, al
+	out dx, ax
 
 	mov dx, 03D5h	; CRT data register
+    xor ah, ah
 	mov al, bh
-	out dx, al
+	out dx, ax
 
-	mov word [bp-2], 0	; return code 0 = success!
+	mov dword [ebp-4], 0	; return code 0 = success!
+	mov eax, [ebp-4]
 
-	mov ax, [bp-2]
+	pop ebx
+	pop edx
 
-	pop bx
-	pop dx
-
-	mov sp, bp
-	pop bp
+	mov esp, ebp
+	pop ebp
 
 	ret

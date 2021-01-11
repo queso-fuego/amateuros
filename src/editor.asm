@@ -1,6 +1,7 @@
 ;;;
 ;;; editor.asm/bin: text editor with "modes", from hexidecimal monitor to ascii editing
 ;;;
+use32
 	;; CONSTANTS
 	;; --------------------------
 ENDPGM   equ '?'
@@ -118,8 +119,9 @@ load_existing_file:
 	;; Load file from input file name
 	;; Set up parms to pass
 	push word editor_filename	;; 1st parm - file name
-	push word 1000h				;; 2nd parm - segment to load to (address 10000h)
-	push word 0000h				;; 3rd parm - offset to load to
+    push word 10                ;; 2nd parm - file name length
+	push word 1000h				;; 3rd parm - segment to load to (address 10000h)
+	push word 0000h				;; 4th parm - offset to load to
 		
 	mov dl, [editor_drive_num]
 	call load_file
@@ -1262,4 +1264,4 @@ file_length_lines: dw 0
 file_length_bytes: dw 0
 
 	;; Sector padding
-	times 5632-($-$$) db 0 
+	times 7680-($-$$) db 0 
