@@ -7,49 +7,50 @@
 ;;;
 use32
 delete_file:
-	push bp
-	mov bp, sp
-	sub sp, 2	; Local variable on stack - error/return code
-	push si
-	push bx
+	push ebp
+	mov ebp, esp
+	sub esp, 4	; Local variable on stack - error/return code
+
+	push esi
+	push ebx
 
 	mov byte [file_drive_num], dl		; Store passed in drive #
 
 	;; Get parms off stack 
-	mov bx, [bp+4]	; Length of file name
-	mov si, [bp+6]	; File name to delete
+	mov bx, [ebp+8]	    ; Length of file name
+	mov esi, [ebp+12]	; File name to delete
 
 	;; Copy filename to variable
 	mov cx, bx
-	mov di, file_name
+	mov edi, file_name
 	rep	movsb
 
 	;; Copy filename length to variable
 	mov word [file_name_length], bx
 
 	;; Reset file name address
-	mov si, file_name
+	mov esi, file_name
 
 	call check_filename			; Check for filename in file table
 
 	cmp word [error_code], 0	; Check error code
 	je .found_file
 
-	mov word [bp-2], 1			; error occurred
+	mov dword [ebp-4], 1			; error occurred
 	jmp del_function_epilogue
 	
 	.found_file:
 		; Get starting sector
-		mov al, [ES:DI+14]
+		mov al, [EDI+14]
 		mov byte [starting_sector], al
 
 		; Get file size
-		mov al, [ES:DI+15]
+		mov al, [EDI+15]
 		mov byte [file_size], al
 
 		;; Write changed file table entry first
 		mov cx, 10
-		mov si, free_space	; File name
+		mov esi, free_space	; File name
 		rep movsb			; Move 10 bytes of file name in si to file table in di
 
 		mov cx, 3
@@ -76,7 +77,7 @@ delete_file:
         out dx, al
 
         mov dx, 1F3h        ; Sector # port
-        mov al, 0Dh         ; Sector to start writing at (sectors are 0-based!)
+        mov al, 10h         ; Sector to start writing at (sectors are 0-based!)
         out dx, al
 
         mov dx, 1F4h        ; Cylinder low port
@@ -96,9 +97,6 @@ delete_file:
         test al, 8          ; Sector buffer requires servicing
         je .loop            ; Keep trying until sector buffer is ready
 
-        push ds             ; Save DS
-        xor ax, ax
-        mov ds, ax
         mov si, 1000h       ; Memory address to write sector from (0000h:1000h)
 
         mov cx, 256         ; # of words to write for 1 sector
@@ -114,16 +112,12 @@ delete_file:
         mov dx, 1F7h
         out dx, al
 
-        pop ds              ; Restore DS
-
 		;; TODO: Handle disk write error for file table here...
         ;;   Check error ata pio register here...
 
 	write_blank_file_data:
 		;; Set up memory location to write NULL data to (ES:BX)
-		mov ax, 800h
-		mov es, ax					; Segment address of file data to write (800h:0000h = 8000h)
-		xor di, di
+        mov di, 8000h           ; File data will be at address 8000h
 
 		; Write nulls to memory location
 		xor ax, ax
@@ -164,9 +158,6 @@ delete_file:
         test al, 8              ; Sector buffer requires servicing
         je .loop                ; Keep trying until sector buffer is ready
 
-        push ds                 ; Save DS
-        xor ax, ax
-        mov ds, ax
         mov si, 8000h           ; Memory address to write sectors from (0000h:8000h)
 
         xor bh, bh
@@ -184,16 +175,14 @@ delete_file:
         mov dx, 1F7h
         out dx, al
 
-        pop ds              ; Restore DS
-
-		mov word [bp-2], 0	; Success, normal return
+		mov dword [ebp-4], 0	; Success, normal return
 
         ;; TODO: Check error register here
 ;;		jnc del_function_epilogue
 
 	del_function_epilogue:
-		pop bx			; Restore registers - reverse order
-		pop si
+		pop ebx			; Restore registers - reverse order
+		pop esi
 
 		jmp return_to_caller	; Global return for this file
 
@@ -201,69 +190,64 @@ delete_file:
 ;;; load_file: Read a file from filetable and its sectors into a memory location
 ;;;
 ;;; input 1: File name (address)
-;;; input 2: File name length   NEW
-;;; input 3: Memory segment to load data to
-;;; input 4: Memory offset to load data to
+;;; input 2: File name length   
+;;; input 3: Memory offset to load data to
 ;;;
 load_file:
 	;; Function prologue - save callers stack values & registers
-	push bp
-	mov bp, sp
-	sub sp, 2		; Make room for local stack variable - error code
+	push ebp
+	mov ebp, esp
+	sub esp, 4		; Make room for local stack variable - error code
 
-	push bx		; Save modified registers
-	push fs
-    push dx
-	push si
+	push ebx		; Save modified registers
+    push edx
+	push esi
 
 	mov byte [file_drive_num], dl
 
 	;; Get parms off stack - reverse order/LIFO!!
-	mov bx, [bp+4]	; 1st parm off stack, offset memory address
-	mov fs, [bp+6]	; 2nd parm, segment memory address
-    mov cx, [bp+8]  ; 3rd parm, file name length
-	mov si, [bp+10]	; 4th parm, file name (address)
+	mov ebx, [ebp+8]	; 1st parm off stack, offset memory address
+    mov ecx, [ebp+12]   ; 2nd parm, file name length
+	mov esi, [ebp+16]	; 3rd parm, file name (address)
 
     ;; Copy filename length to variable
     mov word [file_name_length], cx     
 
 	;; Copy filename to variable
-	mov di, file_name  
+	mov edi, file_name  
 	rep movsb
 		
 	;; Reset file_name address
-	mov si, file_name
+	mov esi, file_name
 	call check_filename			; Check for filename in file table
 
 	cmp word [error_code], 0	; Check error code
 	je .found_file
 
-	mov word [bp-2], 1			; error occurred
+	mov dword [ebp-4], 1			; error occurred
 	jmp load_function_epilogue
 
 	.found_file:
 		;; Get file type into variable to pass back
-		mov al, [ES:DI+10]
+		mov al, [DI+10]
 		mov byte [file_type], al
-		mov al, [ES:DI+11]
+		mov al, [DI+11]
 		mov byte [file_type+1], al
-		mov al, [ES:DI+12]
+		mov al, [DI+12]
 		mov byte [file_type+2], al
 		
-		mov word [bp-2], 0	; Init error code to 'success'
+		mov dword [ebp-4], 0	; Init error code to 'success'
 
 		.after:
-		mov al, [ES:DI+15]	            ; # of sectors to read
+		mov al, [DI+15]	            ; # of sectors to read
         mov byte [file_size], al
 
-		mov al, [ES:DI+14]	; Sector # to start reading at 
+		mov al, [DI+14]	; Sector # to start reading at 
         mov byte [starting_sector], al     
 
         ;; Read sectors using ATA PIO ports
-        push es             ; Save values
-        push di
-	    mov es, [bp+6]	    ; 2nd parm off stack, segment memory address to read into
-	    mov di, [bp+4]	    ; 1st parm off stack, offset memory address to read into
+        push edi
+	    mov edi, [ebp+8]	; 1st parm off stack, offset memory address to read into
         mov bl, [file_size] ; Will be reading <file_size> # of sectors
         dec bl
 
@@ -299,9 +283,9 @@ load_file:
         test al, 8              ; Sector buffer requires servicing
         je .load_next_sector    ; Keep trying until sector buffer is ready
 
-        mov cx, 256         ; # of words to read for 1 sector
+        mov cx, 128         ; # of double words to read for 1 sector
         mov dx, 1F0h        ; Data port, reading 
-        rep insw            ; Read bytes from DX port # into (ES:)DI, CX # of times
+        rep insd            ; Read bytes from DX port # into EDI, CX # of times
         
         ;; 400ns delay - Read alternate status register
         mov dx, 3F6h
@@ -321,43 +305,41 @@ load_file:
         ;; TODO: Check error register here
 
 			;; Restore callers stack values & registers
-            pop di
-            pop es
+            pop edi
 
-			pop si
-			pop dx
-			pop fs
-			pop bx
+			pop esi
+			pop edx
+			pop ebx
 
 			;; Return file type in BX
-			mov bx, file_type
+			mov ebx, file_type
 
 			jmp return_to_caller	; Global return for this file
 ;;;
 ;;; rename_file.inc: rename a file in the file table!!
 ;;;
 ;;; parms:
-;;;		input 1: File name
+;;;		input 1: File name  (address)
 ;;;		input 2: File name length
-;;;		input 3: New file name
+;;;		input 3: New file name  (address)
 ;;;		input 4: New file name length
 ;;;
 rename_file:
-	push bp
-	mov bp, sp
-	sub sp, 2
+	push ebp
+	mov ebp, esp
+	sub esp, 4
 
-	push bx
-	push cx
-	push si
+	push ebx
+	push ecx
+	push esi
 
 	mov byte [file_drive_num], dl
 
 	;; Get parms off stack
-	mov si, [bp+4]	; New file name length
-	mov dx, [bp+6]	; New file name
-	mov cx, [bp+8]	; File name length
-	mov bx, [bp+10] ; Old file name
+	mov si, [ebp+8]	; New file name length
+	mov edx, [ebp+12]	; New file name
+	mov cx, [ebp+16]	; File name length
+	mov ebx, [ebp+20]   ; Old file name
 
 	;; Put file name len into variable
 	mov word [file_name_length], cx
@@ -366,26 +348,26 @@ rename_file:
 	mov word [new_file_name_length], si
 
 	;; Put og filename into variable
-	mov si, bx
-	mov di, file_name
+	mov esi, ebx
+	mov edi, file_name
 	mov cx, word [file_name_length]
 	rep movsb
 	
 	;; Put new g filename into variable
-	mov si, dx
-	mov di, new_file_name
+	mov esi, edx
+	mov edi, new_file_name
 	mov cx, word [new_file_name_length]
 	rep movsb
 
 	;; Reset file name address
-	mov si, file_name
+	mov esi, file_name
 
 	call check_filename			; Check for filename in file table
 
 	cmp word [error_code], 0	; Check error code
 	je .found_file
 
-	mov word [bp-2], 1			; error occurred
+	mov dword [ebp-4], 1			; error occurred
 	jmp ren_function_epilogue
 
 	.found_file:
@@ -394,13 +376,13 @@ rename_file:
 	mov cx, 10
 	rep stosb
 
-	sub di, 10
-	mov si, new_file_name
+	sub edi, 10
+	mov esi, new_file_name
 	mov cx, word [new_file_name_length]
 	rep movsb
 
 	;; Write changed file table data to disk
-	mov word [bp-2], 0		; Init return code to success
+	mov dword [ebp-4], 0		; Init return code to success
 
     ;; Write changed filetable to disk - 
     ;;   change later
@@ -415,7 +397,7 @@ rename_file:
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 0Dh         ; Sector to start writing at (sectors are 0-based!)
+    mov al, 10h         ; Sector to start writing at (sectors are 0-based!)
     out dx, al
 
     mov dx, 1F4h        ; Cylinder low port
@@ -435,9 +417,6 @@ rename_file:
     test al, 8          ; Sector buffer requires servicing
     je .loop            ; Keep trying until sector buffer is ready
 
-    push ds             ; Save DS
-    xor ax, ax
-    mov ds, ax
     mov si, 1000h       ; Memory address to write sector from (0000h:1000h)
 
     mov cx, 256         ; # of words to write for 1 sector
@@ -453,18 +432,16 @@ rename_file:
     mov dx, 1F7h
     out dx, al
 
-    pop ds              ; Restore DS
-
     jmp ren_function_epilogue
 
     ;; TODO: Check error registers here
 
-	mov word [bp-2], 1		; Error on writing file table
+	mov dword [ebp-4], 1		; Error on writing file table
 
 	ren_function_epilogue:
-		pop si
-		pop cx
-		pop bx
+		pop esi
+		pop ecx
+		pop ebx
 
 		jmp return_to_caller	; Global return for this file
 
@@ -474,45 +451,42 @@ rename_file:
 ;;; Input 1: File name (address)
 ;;; Input 2: File type (.bin,.txt,etc)
 ;;; Input 3: File size (in hex sectors)
-;;; Input 4: Memory segment to save from
-;;; Input 5: Memory offset to save from
+;;; Input 4: Memory offset to save from
 ;;;
 save_file:
 	;; Function prologue - save callers stack values & registers
-	push bp
-	mov bp, sp
-	sub sp, 2		; Make room for local stack variable - error code
+	push ebp
+	mov ebp, esp
+	sub esp, 4		; Make room for local stack variable - error code
 
-	push bx
-	push fs			
-	push cx		
-	push si
+	push ebx
+	push ecx		
+	push esi
 
 	mov byte [file_drive_num], dl
 
 	;; Get parms off stack - reverse order
-	mov bx, [bp+4]
-	mov fs, [bp+6]		; FS:BX memory location to save data from
-	mov cx, [bp+8]		; File size
-	mov dx, [bp+10]		; File type
-	mov si, [bp+12]		; File name
+	mov ebx, [ebp+8]     ; Memory offset to save from
+	mov cx, [ebp+12]	; File size
+	mov edx, [ebp+16]	; File type
+	mov esi, [ebp+20]	; File name
 	
 	;; Copy file size to variable
 	mov byte [file_size], cl
 
 	;; Copy filename to variable
 	mov cx, 10
-	mov di, file_name
+	mov edi, file_name
 	rep	movsb
 
 	;; Copy file type to variable
-	mov di, file_type
-	mov si, dx
+	mov edi, file_type
+	mov esi, edx
 	mov cx, 3
 	rep movsb
 
 	;; Reset file_name address
-	mov si, file_name
+	mov esi, file_name
 	mov word [file_name_length], 10
 
 	call check_filename			; Check for filename in file table
@@ -521,7 +495,7 @@ save_file:
 	je new_file					; Found existing file TODO: Change to je found_file
 
 	;; Otherwise check for free space in file table and write file at that entry
-	mov si, free_space
+	mov esi, free_space
 	mov word [file_name_length], 10
 	call check_filename
 
@@ -543,18 +517,18 @@ save_file:
 		;; Grab previous file table entry's starting sector + file size
 		;;  for new starting sector
 		sub di, 16
-		mov al, [ES:DI+14]	; Starting sector
-		add al, [ES:DI+15]	; File size	
+		mov al, [DI+14]	; Starting sector
+		add al, [DI+15]	; File size	
 		mov byte [last_saved_sector], al
 		add di, 16
 
 		;; Create new file table entry at end of current entries
 		mov cx, 10
-		mov si, file_name
+		mov esi, file_name
 		rep movsb			; Move 10 bytes of file name in si to file table in di
 
 		mov cx, 3
-		mov si, file_type
+		mov esi, file_type
 		rep movsb						; Move 3 bytes of file type in si to file table
 
 		xor al, al
@@ -578,7 +552,7 @@ save_file:
         out dx, al
 
         mov dx, 1F3h        ; Sector # port
-        mov al, 0Dh         ; Sector to start writing at (sectors are 0-based!)
+        mov al, 10h         ; Sector to start writing at (sectors are 1-based)
         out dx, al
 
         mov dx, 1F4h        ; Cylinder low port
@@ -598,9 +572,6 @@ save_file:
         test al, 8          ; Sector buffer requires servicing
         je .loop            ; Keep trying until sector buffer is ready
 
-        push ds             ; Save DS
-        xor ax, ax
-        mov ds, ax
         mov si, 1000h       ; Memory address to write sector from (0000h:1000h)
 
         mov cx, 256         ; # of words to write for 1 sector
@@ -616,12 +587,10 @@ save_file:
         mov dx, 1F7h
         out dx, al
 
-        pop ds              ; Restore DS
-
 		;; TODO: Handle disk write error for file table here...
 
 	write_file_data:
-		mov word [bp-2], 0					; Init error code to 'success'
+		mov dword [ebp-4], 0					; Init error code to 'success'
 
 		.after:
         ;; Write file data to disk
@@ -656,9 +625,7 @@ save_file:
         test al, 8              ; Sector buffer requires servicing
         je .loop                ; Keep trying until sector buffer is ready
 
-        push ds                 ; Save DS
-        mov ds, [bp+6]          ; Memory segment to save data from 
-        mov si, [bp+4]          ; Memory offset to save data from
+        mov esi, [ebp+8]          ; Memory offset to save data from
 
         xor bh, bh
         mov bl, [file_size]
@@ -675,19 +642,16 @@ save_file:
         mov dx, 1F7h
         out dx, al
 
-        pop ds              ; Restore DS
-
     jmp save_function_epilogue
 
 		;; TODO: Handle disk write error for file data here...
-		mov word [bp-2], 1	; Signifies error occurred
+		mov dword [ebp-4], 1	; Signifies error occurred
 
 	save_function_epilogue:
 		;; Restore callers stack values & registers
-		pop si			; Restore changed registers
-		pop cx
-		pop fs
-		pop bx
+		pop esi			; Restore changed registers
+		pop ecx
+		pop ebx
 
 		jmp return_to_caller
 
@@ -698,48 +662,47 @@ save_file:
 		;; Init error code
 		mov word [error_code], 0
 
-		xor ax, ax
-		mov es, ax		
-		mov di, 1000h	; 0000h:1000h = location of fileTable in memory
+		mov edi, 1000h	; 1000h = location of fileTable in memory
 
 		;; Assume filename is in SI register
 		check_next_name:
-			mov al, [ES:DI]
-			cmp al, [si]
+			mov al, [EDI]
+			cmp al, [ESI]
 			je compare_filenames
 
 			cmp al, 0
 			jne .next_name	
 			mov word [error_code], 1	; Reached end of filetable, name not found
-			push di						; Maybe hacky edit, add push di to fix bugs
+			push edi					; Maybe hacky edit, add push di to fix bugs
 			jmp check_filename_return
 
 			.next_name:
-				add di, 16
+				add edi, 16
 				jmp check_next_name
 
 		compare_filenames:
-			push di		; save start of file name in entry
+			push edi		; save start of file name in entry
 			mov cx, word [file_name_length]
 
 			rep cmpsb
 			je check_filename_return	; File name found, return
 			
-			mov	si, file_name
-			pop di
-			add di, 16			; go to next file table entry
+			mov	esi, file_name
+			pop edi
+			add edi, 16			; go to next file table entry
 			jmp check_next_name
 
 		check_filename_return:
-			pop di				; restore di pos from stack
+			pop edi				; restore di pos from stack
 			ret
 
 	;;; Global return to caller
 	;;;-------------------------------------
 	return_to_caller:
-		mov ax, [bp-2]	; Error/return code
-		mov sp, bp		; Reset stack pointer
-		pop bp			; Reset caller's base pointer
+		mov eax, [ebp-4]	; Error/return code
+
+		mov esp, ebp		; Reset stack pointer
+		pop ebp			; Reset caller's base pointer
 		ret
 
 ;; "Global" variables

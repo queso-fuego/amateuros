@@ -2,6 +2,7 @@
 ;;; editor.asm/bin: text editor with "modes", from hexidecimal monitor to ascii editing
 ;;;
 use32
+org 8000h
 	;; CONSTANTS
 	;; --------------------------
 ENDPGM   equ '?'
@@ -36,19 +37,18 @@ reset_editor:
 	mov word [cursor_y], 0
 	mov word [cursor_x], 0
 
-	mov si, new_or_current_string
 	;; Print string
-	push si
-	push word cursor_y
-	push word cursor_x
+	push dword new_or_current_string
+	push dword cursor_y
+	push dword cursor_x
 	call print_string_text_mode
-	add sp, 6
+	add esp, 12
 
 	;; Move cursor
-	push word [cursor_y]
-	push word [cursor_x]
+	push dword [cursor_y]
+	push dword [cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
     .keyloop:
     call get_key        ; Get keystroke, char returned in AL
@@ -66,19 +66,18 @@ create_new_file:
 	mov word [cursor_y], 0
 	mov word [cursor_x], 0
 
-	mov si, choose_filetype_string
 	;; Print string
-	push si
-	push word cursor_y
-	push word cursor_x
+	push dword choose_filetype_string
+	push dword cursor_y
+	push dword cursor_x
 	call print_string_text_mode
-	add sp, 6
+	add esp, 12
 
 	;; Move cursor
-	push word [cursor_y]
-	push word [cursor_x]
+	push dword [cursor_y]
+	push dword [cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
     call get_key
 
@@ -90,52 +89,42 @@ create_new_file:
 
 load_existing_file:
     mov dl, [editor_drive_num]
-	push word cursor_y
-	push word cursor_x
+	push dword cursor_y
+	push dword cursor_x
 	call print_fileTable
-	add sp, 4
+	add esp, 8
 
 	;; Print string
-	mov si, choose_file_msg
-	push si
-	push word cursor_y
-	push word cursor_x
+	push dword choose_file_msg
+	push dword cursor_y
+	push dword cursor_x
 	call print_string_text_mode
-	add sp, 6
+	add esp, 12
 
 	;; Move cursor
-	push word [cursor_y]
-	push word [cursor_x]
+	push dword [cursor_y]
+	push dword [cursor_x]
 	call move_cursor
-	add sp, 4
-
-	;; Restore extra segment
-	mov ax, 800h
-	mov es, ax
+	add esp, 8
 
 	;; Have user input desired file name to load
 	call input_file_name
 
 	;; Load file from input file name
 	;; Set up parms to pass
-	push word editor_filename	;; 1st parm - file name
-    push word 10                ;; 2nd parm - file name length
-	push word 1000h				;; 3rd parm - segment to load to (address 10000h)
-	push word 0000h				;; 4th parm - offset to load to
-		
 	mov dl, [editor_drive_num]
+	push dword editor_filename	;; 1st parm - file name
+    push dword 10               ;; 2nd parm - file name length
+	push dword 10000h			;; 3rd parm - offset to load to
 	call load_file
-
-	;; Reset stack
-	add sp, 6
+	add esp, 12
 
 	;; Check return value/error code in AX
 	cmp ax, 0
-	jne load_file_error			; Error occcurred, ax return code not 0
-	jmp load_file_success		; No error, return to normal
+	je load_file_success		; No error, return to normal
 
 load_file_error:
-	mov si, load_file_error_msg
+	mov esi, load_file_error_msg
 	mov cx, 24
 	call write_bottom_screen_message
 
@@ -150,22 +139,18 @@ load_file_error:
 	jmp load_existing_file
 
 load_file_success:
-	;; Restore extra segment
-	mov ax, 800h
-	mov es, ax
-
 	;; Get file type from BX
-	mov di, editor_filetype
-	mov al, [bx]	
+	mov edi, editor_filetype
+	mov al, [ebx]	
 	stosb
-	mov al, [bx+1]	
+	mov al, [ebx+1]	
 	stosb
-	mov al, [bx+2]	
+	mov al, [ebx+2]	
 	stosb
 
 	;; Go to editor depending on file type
-	mov si, bx
-	mov di, extBin
+	mov esi, ebx
+	mov edi, extBin
 	mov cx, 3
 	rep cmpsb			; Check if file extension = 'bin'
 	je load_file_hex	; If so, load file bytes to screen, and go to hex editor
@@ -179,16 +164,14 @@ new_file_hex:
 	mov word [cursor_x], 0
 
 	;; Fill out filetype (.bin)
-	mov ax, 800h					; reset es to program location (8000h)
-	mov es, ax
-	mov di, editor_filetype
+	mov edi, editor_filetype
 	mov al, 'b'
 	stosb
 	mov al, 'i'
 	stosb
 	mov al, 'n'
 	stosb
-	mov si, keybinds_hex_editor
+	mov esi, keybinds_hex_editor
 	mov cx, 56			; # of bytes to move
 	call fill_out_bottom_editor_message	; Write keybinds & filetype at bottom of screen
 
@@ -202,67 +185,63 @@ load_file_hex:
 	mov word [cursor_y], 0
  
 	;; Load file bytes to screen
-	mov ax, 1000h
-	mov es, ax
-	xor di, di			; ES:DI <- 1000h:0000h = 10,000h - file location
+	mov edi, 10000h       ; 10,000h - file location
 	mov cx, 512			; TODO: Change to actual file size
 
-	mov ah, 0Eh
 	load_file_hex_loop:
 		mov word [save_cx], cx
 
-		mov al, [ES:DI]		; Read hex byte from file location - 2 nibbles!
+		mov al, [EDI]		; Read hex byte from file location - 2 nibbles!
 		ror al, 4			; Get 1st nibble into al
 		and al, 00001111b
 		call hex_to_ascii
+
 		;; Print char
-		xor ah, ah
-		push ax
-		push word cursor_y
-		push word cursor_x
+		push eax
+		push dword cursor_y
+		push dword cursor_x
 		call print_char_text_mode
-		add sp, 6
+		add esp, 12
 
 		;; Move cursor
-		push word [cursor_y]
-		push word [cursor_x]
+		push dword [cursor_y]
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4
+		add esp, 8
 
-		mov al, [ES:DI]
+		mov al, [EDI]
 		and al, 00001111b	; Get 2nd nibble into al
 		call hex_to_ascii
+
 		;; Print char in AL
-		xor ah, ah
-		push ax
-		push word cursor_y
-		push word cursor_x
+		push eax
+		push dword cursor_y
+		push dword cursor_x
 		call print_char_text_mode
-		add sp, 6
+		add esp, 12
 
 		;; Move cursor
-		push word [cursor_y]
-		push word [cursor_x]
+		push dword [cursor_y]
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4
+		add esp, 8
 
 		;; Print char in AL
 		cmp word [cursor_x], 0	; At start of line?
 		je iterate_loop			; if so, don't print a space
 
 		mov al, ' '				; else print space between bytes
-		xor ah, ah
-		push ax
-		push word cursor_y
-		push word cursor_x
+		push eax
+		push dword cursor_y
+		push dword cursor_x
 		call print_char_text_mode
-		add sp, 6
+		add esp, 12
 
 		;; Move cursor
-		push word [cursor_y]
-		push word [cursor_x]
+		push dword [cursor_y]
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4
+		add esp, 8
 
 		iterate_loop:
 		inc di
@@ -275,13 +254,12 @@ load_file_hex:
 	mov word [save_di], di	; Save off di first
 
 	; Write keybinds at bottom of screen
-	mov si, keybinds_hex_editor
+	mov esi, keybinds_hex_editor
 	mov cx, 56			; # of bytes to move
 	call fill_out_bottom_editor_message	
 
-	mov ax, 1000h
-	mov es, ax			; Reset es to file location (10000h)
 	mov di, [save_di]	; Restore di value for file location
+    add edi, 10000h      ; Reset es to file location (10000h)
 	
 	jmp get_next_hex_char
 
@@ -293,22 +271,18 @@ new_file_text:
 	mov word [cursor_x], 0
 
 	;; Fill out filetype (.txt)
-	mov ax, 800h					; reset es to program location (8000h)
-	mov es, ax
-	mov di, editor_filetype
+	mov edi, editor_filetype
 	mov al, 't'
 	stosb
 	mov al, 'x'
 	stosb
 	mov al, 't'
 	stosb
-	mov si, keybinds_text_editor
+	mov esi, keybinds_text_editor
 	mov cx, 53			; # of bytes to move
 	call fill_out_bottom_editor_message	; Write keybinds & filetype at bottom of screen
 
-	mov ax, 1000h
-	mov es, ax
-	xor di, di			; New file starts at 1000h:0000h (10000h)
+	mov edi, 10000h			; New file starts at 1000h:0000h (10000h)
 
 	;; Fill out 1 blank sector for new file
 	xor ax, ax
@@ -341,15 +315,13 @@ load_file_text:
 	mov word [file_length_bytes], ax
 
 	;; Load file bytes to screen
-	mov ax, 1000h
-	mov es, ax
-	xor di, di			; ES:DI <- 1000h:0000h = 10,000h - file location
+	mov edi, 10000h      ;DI <- 10,000h - file location
 	mov cx, 512			; TODO: Change to actual file size
 
 	.loop:
 		mov word [save_cx], cx
 
-		mov al, [ES:DI]		; Read ascii byte from file location
+		mov al, [EDI]		; Read ascii byte from file location
 		mov [save_input_char], al
 		cmp al, 0Ah
 		jne .notNewline
@@ -367,11 +339,12 @@ load_file_text:
 		mov bx, ' '
 		cmp al, 0Ah
 		cmove ax, bx		; Newline = space visually
-		push ax				; Character to print in AL
-		push word cursor_y
-		push word cursor_x
+
+		push eax				; Character to print in AL
+		push dword cursor_y
+		push dword cursor_x
 		call print_char_text_mode
-		add sp, 6
+		add esp, 12
 
 		mov word [cursor_x], 0		; Go down 1 row
 		inc word [cursor_y]
@@ -383,17 +356,17 @@ load_file_text:
 		jmp .go_on
 
 		.print_char:
-		push ax				; Character to print in AL
-		push word cursor_y
-		push word cursor_x
+		push eax				; Character to print in AL
+		push dword cursor_y
+		push dword cursor_x
 		call print_char_text_mode
-		add sp, 6
+		add esp, 12
 
 		;; Move cursor
-		push word [cursor_y]
-		push word [cursor_x]
+		push dword [cursor_y]
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4
+		add esp, 8
 
 		.go_on:
 		mov al, [save_input_char]
@@ -407,18 +380,17 @@ load_file_text:
 	mov word [save_di], di	; Save off di first
 
 	; Write keybinds at bottom of screen
-	mov si, keybinds_text_editor
+	mov esi, keybinds_text_editor
 	mov cx, 53			; # of bytes to move
 	call fill_out_bottom_editor_message	
 
-	mov ax, 1000h
-	mov es, ax			; Reset es to file location (10000h)
 	mov di, [save_di]	; Restore di value for file location
-	
-	push word [cursor_y]	; Move cursor
-	push word [cursor_x]
+	add edi, 10000h      ; Reset di to file location (10000h)
+    	
+	push dword [cursor_y]	; Move cursor
+	push dword [cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
 text_editor:
 	input_char_loop:
@@ -438,60 +410,55 @@ text_editor:
 		jne check_nav_keys_text	
 
 		;; Save to disk
-		mov si, blank_line
+		mov esi, blank_line
 		mov cx, 80
 		call write_bottom_screen_message
-		mov si, filename_string				; Enter file name at bottom of screen
+		mov esi, filename_string				; Enter file name at bottom of screen
 		mov cx, 17
 		call write_bottom_screen_message
 		mov word [cursor_y], 24
 		mov word [cursor_x], 17
-		push word [cursor_y]
-		push word [cursor_x]
-		call move_cursor
-		add sp, 4
 
-		mov ax, 800h			; Set ES to program location
-		mov es, ax
+		push dword [cursor_y]
+		push dword [cursor_x]
+		call move_cursor
+		add esp, 8
+
 		call input_file_name
 
 		;; Call save file
-		push word editor_filename	; 1st parm, file name
-		push word editor_filetype	; 2nd parm, file type
-		push word 0001h				; 3rd parm, file size (in hex sectors)
-		push word 1000h				; 4th parm, segment memory address for file
-		push word 0000h				; 5th parm, offset memory address for file
-
 		mov dl, [editor_drive_num]
+		push dword editor_filename	; 1st parm, file name
+		push dword editor_filetype	; 2nd parm, file type
+		push dword 0001h			; 3rd parm, file size (in hex sectors)
+		push dword 10000h			; 4th parm, offset memory address for file
 		call save_file
+		add esp, 16					; Restore stack pointer after returning
 
-		add sp, 10					; Restore stack pointer after returning
 		cmp ax, 0
-		jne save_text_file_error		; Error occcurred, ax return code not 0
-		jmp save_text_file_success		; No error, return to normal
+		je save_text_file_success		; No error, return to normal
 
 		save_text_file_error:
-			mov si, save_file_error_msg
+			mov esi, save_file_error_msg
 			mov cx, 24
 			call write_bottom_screen_message
 
             call get_key
 
 		save_text_file_success:
-			mov ax, 1000h
-			mov es, ax						; Reset ES to file location
+            mov edi, 10000h                  ; Reset DI to file location
 
-			mov si, keybinds_text_editor	; Write keybinds at bottom
+			mov esi, keybinds_text_editor	; Write keybinds at bottom
 			mov cx, 53
 			call write_bottom_screen_message
 
 			mov word [cursor_x], 0			; Reset cursor to start of file
 			mov word [cursor_y], 0
-			push word [cursor_y]
-			push word [cursor_x]
 
+			push dword [cursor_y]
+			push dword [cursor_x]
 			call move_cursor
-			add sp, 4
+			add esp, 8
 
 			jmp input_char_loop
 			
@@ -522,10 +489,10 @@ text_editor:
 			je input_char_loop
 			dec word [cursor_x]
 	
-			push word [cursor_y]	
-			push word [cursor_x]
+			push dword [cursor_y]	
+			push dword [cursor_x]
 			call move_cursor
-			add sp, 4				; Restore stack after call
+			add esp, 8				; Restore stack after call
 
 			dec	di					; Move file data to previous byte
 			jmp input_char_loop
@@ -538,10 +505,10 @@ text_editor:
 			jge input_char_loop
 
 			inc word [cursor_x]
-			push word [cursor_y]	
-			push word [cursor_x]
+			push dword [cursor_y]	
+			push dword [cursor_x]
 			call move_cursor
-			add sp, 4				; Restore stack after call
+			add esp, 8				; Restore stack after call
 	
 			inc	di					; Move file data to next byte
 			jmp input_char_loop 
@@ -561,7 +528,7 @@ text_editor:
 			;; Search for end of previous line above current line (newline 0Ah)
 			search_backward_loop:
 				dec di
-				cmp [ES:DI], byte 0Ah
+				cmp [EDI], byte 0Ah
 				je newline_backward_loop
 			jmp search_backward_loop
 
@@ -572,7 +539,7 @@ text_editor:
 				inc word [prev_line_length]		; line length
 				cmp di, 0
 				je stop_backward_start_of_file
-				cmp [ES:DI], byte 0Ah
+				cmp [EDI], byte 0Ah
 				je stop_backward_newline
 			jmp newline_backward_loop
 
@@ -600,10 +567,10 @@ text_editor:
 				mov word [cursor_x], ax
 
 				.move:
-				push word [cursor_y]
-				push word [cursor_x]
+				push dword [cursor_y]
+				push dword [cursor_x]
 				call move_cursor
-				add sp, 4
+				add esp, 8
 
 				mov word [prev_line_length], 0	; Reset previous line
 	
@@ -624,7 +591,7 @@ text_editor:
 
 			;; Search file data forwards for a newline (0Ah)
 			search_forward_loop:
-				cmp [ES:DI], byte 0Ah		; Are we starting at end of current line?
+				cmp [EDI], byte 0Ah		; Are we starting at end of current line?
 				je newline_forward_loop
 				inc di
 			jmp search_forward_loop
@@ -635,7 +602,7 @@ text_editor:
 				inc word [next_line_length]		; line length
 				cmp di, [file_length_bytes]
 				je stop_forward
-				cmp [ES:DI], byte 0Ah
+				cmp [EDI], byte 0Ah
 				je stop_forward
 			jmp newline_forward_loop
 				
@@ -657,10 +624,10 @@ text_editor:
 			add di, [cursor_x]				; Move to cursor position
 
 			.move:
-			push word [cursor_y]
-			push word [cursor_x]
+			push dword [cursor_y]
+			push dword [cursor_x]
 			call move_cursor
-			add sp, 4
+			add esp, 8
 
 			mov word [next_line_length], 0	; Reset next line
 
@@ -671,10 +638,10 @@ text_editor:
 			sub di, [cursor_x]			; Move file data to start of line
 			mov word [cursor_x], 0		; Move cursor to start of line
 			
-			push word [cursor_y]
-			push word [cursor_x]
+			push dword [cursor_y]
+			push dword [cursor_x]
 			call move_cursor
-			add sp, 4
+			add esp, 8
 
 			jmp input_char_loop
 
@@ -689,11 +656,12 @@ text_editor:
 			add [cursor_x], ax
 			add di, ax
 	
+            ;; TODO: MAKE A MOVE CURSOR SUBROUTINE TO REPLACE THE 20 MILLION CALLS TO IT !!1! >:(
 			;; Move cursor on screen
-			push word [cursor_y]
-			push word [cursor_x]
+			push dword [cursor_y]
+			push dword [cursor_x]
 			call move_cursor
-			add sp, 4
+			add esp, 8
 	
 			jmp input_char_loop
 	
@@ -702,12 +670,11 @@ text_editor:
 			cmp al, 0Dh						; Newline, enter key pressed
 			jne .print
 
-			xor ah, ah
-			push ax
-			push word cursor_y
-			push word cursor_x
+			push eax
+			push dword cursor_y
+			push dword cursor_x
 			call print_char_text_mode
-			add sp, 6
+			add esp, 12
 
 			inc word [cursor_y]				; go down 1 line (line feed)
 
@@ -716,11 +683,10 @@ text_editor:
 			inc word [file_length_lines]	; Update file length
 			inc word [file_length_bytes]	; Update file length
 
-			push word [cursor_y]			; Move cursor
-			push word [cursor_x]
+			push dword [cursor_y]			; Move cursor
+			push dword [cursor_x]
 			call move_cursor
-
-			add sp, 4
+			add esp, 8
 
 			inc word [current_line_length]
 			mov ax, [current_line_length]	; Previous line = current line
@@ -736,9 +702,9 @@ text_editor:
 			.print:
 			xor ax, ax
 			mov al, [save_input_char]
-			cmp [ES:DI], byte 0		; Is there previous data here?
+			cmp [EDI], byte 0		; Is there previous data here?
 			je .insert				; No, insert new char
-			mov [ES:DI], al			; Yes, overwrite current char, do not inc di
+			mov [EDI], al			; Yes, overwrite current char, do not inc di
 			jmp .print_to_screen
 
 			.insert:
@@ -747,29 +713,26 @@ text_editor:
 			inc word [file_length_bytes]	; Update file length
 			
 			.print_to_screen:
-			push ax					; char to print in AL
-			push word cursor_y
-			push word cursor_x
+			push eax					; char to print in AL
+			push dword cursor_y
+			push dword cursor_x
 			call print_char_text_mode
-			add sp, 6
+			add esp, 12
 
 			;; Move cursor 1 character forward
 			;; TODO: Assuming insert mode, not overwrite! Move rest of file data 
 			;;   forward after this character if inserting before end of file
-			push word [cursor_y]
-			push word [cursor_x]
+			push dword [cursor_y]
+			push dword [cursor_x]
 			call move_cursor
-
-			add sp, 4
+			add esp, 8
 
 	jmp input_char_loop
 
 hex_editor:
 	;; Take in user input & print to screen
 	xor cx, cx			; reset byte counter
-	mov ax, 1000h
-	mov es, ax
-	xor di, di			; ES:DI <- 1000h:0000h = 10,000h
+    mov edi, 10000h      ; 10000h = file location
 	
 	;; Reset cursor x/y
 	mov word [cursor_x], 0
@@ -794,28 +757,28 @@ get_next_hex_char:
 	jl get_next_hex_char
 
 	;; Blank out 1st nibble of hex byte
-	push word 0020h			; space ' ' in ascii
-	push word cursor_y 
-	push word cursor_x
+	push dword 0020h			; space ' ' in ascii
+	push dword cursor_y 
+	push dword cursor_x
 	call print_char_text_mode
-	add sp, 6				; restore stack
+	add esp, 12	
 
 	;; Blank out 2nd nibble of hex byte
-	push word 0020h			; space ' ' in ascii
-	push word cursor_y	 
+	push dword 0020h			; space ' ' in ascii
+	push dword cursor_y	 
 	inc word [cursor_x]		; 2nd nibble of hex byte
-	push word cursor_x
+	push dword cursor_x
 	call print_char_text_mode
-	add sp, 6				; restore stack
+	add esp, 12
 
 	;; Move cursor 1 full hex byte left
 	sub word [cursor_x], 4	; cursor_x was on 2nd nibble, so go 1 extra
-	push word [cursor_y]	
-	push word [cursor_x]
+	push dword [cursor_y]	
+	push dword [cursor_x]
 	call move_cursor
-	add sp, 4				; Restore stack after call
+	add esp, 8	
 
-	mov [ES:DI], byte 00h	; Make current byte 0 in file
+	mov [EDI], byte 00h	; Make current byte 0 in file
 	dec	di					; Move file data to previous byte
 	jmp get_next_hex_char
 
@@ -824,21 +787,21 @@ get_next_hex_char:
 		jne check_nav_keys_hex
 
 		;; Blank out 1st nibble of hex byte
-		push word 0020h			; space ' ' in ascii
-		push word cursor_y	 
-		push word cursor_x
+		push dword 0020h			; space ' ' in ascii
+		push dword cursor_y	 
+		push dword cursor_x
 		call print_char_text_mode
-		add sp, 6				; restore stack
+		add esp, 12	
 
 		;; Blank out 2nd nibble of hex byte
-		push word 0020h			; space ' ' in ascii
-		push word cursor_y	 
+		push dword 0020h			; space ' ' in ascii
+		push dword cursor_y	 
 		inc word [cursor_x]		; 2nd nibble of hex byte
-		push word cursor_x
+		push dword cursor_x
 		call print_char_text_mode
-		add sp, 6				; restore stack
+		add esp, 12				; restore stack
 
-		mov [ES:DI], byte 00h	; Make current byte 0 in file
+		mov [EDI], byte 0h	; Make current byte 0 in file
 
 		dec word [cursor_x]		; move back to 1st nibble of hex byte
 
@@ -867,10 +830,10 @@ get_next_hex_char:
 		jl get_next_hex_char
 		sub word [cursor_x], 3
 	
-		push word [cursor_y]	
-		push word [cursor_x]
+		push dword [cursor_y]	
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4				; Restore stack after call
+		add esp, 8				; Restore stack after call
 
 		dec	di					; Move file data to previous byte
 		jmp get_next_hex_char
@@ -881,10 +844,10 @@ get_next_hex_char:
 		jg get_next_hex_char
 		add word [cursor_x], 3
 
-		push word [cursor_y]	
-		push word [cursor_x]
+		push dword [cursor_y]	
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4				; Restore stack after call
+		add esp, 8				; Restore stack after call
 
 		inc	di					; Move file data to next byte
 		jmp get_next_hex_char
@@ -896,10 +859,10 @@ get_next_hex_char:
 		dec word [cursor_y]
 		sub di, 27
 
-		push word [cursor_y]
-		push word [cursor_x]
+		push dword [cursor_y]
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4
+		add esp, 8
 
 		jmp get_next_hex_char
 
@@ -910,10 +873,10 @@ get_next_hex_char:
 		inc word [cursor_y]
 		add di, 27					; # of hex bytes in a screen row
 
-		push word [cursor_y]
-		push word [cursor_x]
+		push dword [cursor_y]
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4
+		add esp, 8
 
 		jmp get_next_hex_char
 
@@ -926,10 +889,10 @@ get_next_hex_char:
 		sub di, ax
 		mov word [cursor_x], 0
 		
-		push word [cursor_y]
-		push word [cursor_x]
+		push dword [cursor_y]
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4
+		add esp, 8
 
 		jmp get_next_hex_char
 
@@ -943,10 +906,10 @@ get_next_hex_char:
 		add di, ax
 		mov word [cursor_x], 78	
 
-		push word [cursor_y]
-		push word [cursor_x]
+		push dword [cursor_y]
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4
+		add esp, 8
 
 		jmp get_next_hex_char
 
@@ -974,17 +937,17 @@ get_next_hex_char:
 
 	convert_input:
 		;; Print character
-		push ax
-		push word cursor_y
-		push word cursor_x
+		push eax
+		push dword cursor_y
+		push dword cursor_x
 		call print_char_text_mode
-		add sp, 6
+		add esp, 12
 
 		;; Move cursor
-		push word [cursor_y]
-		push word [cursor_x]
+		push dword [cursor_y]
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4
+		add esp, 8
 		
 		call ascii_to_hex  	; else convert al to hexidecimal first
 		inc cx				; increment byte counter
@@ -997,9 +960,9 @@ return_from_hex: jmp get_next_hex_char
 	;; When done with input, convert to valid machine code (hex) & run	
 execute_input:
 	mov di, word [editor_filesize]	; Put current end of file into di
-	mov byte [ES:DI], 0CBh ; CB hex = far return x86 instruction, to get back to prompt after running code
-	xor di, di			; Reset di/hex memory location 10,000h
-	call 1000h:0000h	; jump to hex code memory location to run
+	mov byte [EDI], 0CBh ; CB hex = far return x86 instruction, to get back to prompt after running code
+	mov edi, 10000h  	; Reset di/hex memory location 10,000h
+	call 10000h	        ; Jump to hex code memory location to run
 
 	jmp hex_editor		; reset for next hex input
 	
@@ -1015,17 +978,17 @@ put_hex_byte:
 	mov al, ' '					; print space to screen if not at start of line
 
 	;; Print character
-	push ax
-	push word cursor_y
-	push word cursor_x
+	push eax
+	push dword cursor_y
+	push dword cursor_x
 	call print_char_text_mode
-	add sp, 6
+	add esp, 12
 
 	;; Move cursor
-	push word [cursor_y]
-	push word [cursor_x]
+	push dword [cursor_y]
+	push dword [cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
 	jmp return_from_hex
 
@@ -1077,20 +1040,21 @@ enter_file_name:
 	mov word [cursor_y], 0
 	mov word [cursor_x], 0
 
-	mov si, filename_string
 	;; Print string
-	push si
-	push word cursor_y
-	push word cursor_x
+	push dword filename_string
+	push dword cursor_y
+	push dword cursor_x
 	call print_string_text_mode
-	add sp, 6
+	add esp, 12
 
-	;; Restore extra segment
-	mov ax, 800h
-	mov es, ax
+    ;; Move cursor
+    push dword [cursor_y]
+    push dword [cursor_x]
+    call move_cursor
+    add esp, 8
 
 	;; Save file type
-	mov di, editor_filetype
+	mov edi, editor_filetype
 	mov al, 'b'
 	stosb
 	mov al, 'i'
@@ -1102,22 +1066,19 @@ enter_file_name:
 	call input_file_name
 
 	;; Call save_file function
-	push word editor_filename	; 1st parm, file name
-	push word editor_filetype	; 2nd parm, file type
-	push word 0001h				; 3rd parm, file size (in hex sectors)
-	push word 1000h				; 4th parm, segment memory address for file
-	push word 0000h				; 5th parm, offset memory address for file
-	
 	mov dl, [editor_drive_num]
+	push dword editor_filename	; 1st parm, file name
+	push dword editor_filetype	; 2nd parm, file type
+	push dword 0001h				; 3rd parm, file size (in hex sectors)
+	push dword 10000h			; 5th parm, offset memory address for file
 	call save_file
+	add esp, 16					; Restore stack pointer after returning
 
-	add sp, 10					; Restore stack pointer after returning
 	cmp ax, 0
-	jne save_file_error			; Error occcurred, ax return code not 0
-	jmp save_file_success		; No error, return to normal
+	je save_file_success		; No error, return to normal
 
 save_file_error:
-	mov si, save_file_error_msg
+	mov esi, save_file_error_msg
 	mov cx, 24
 	call write_bottom_screen_message
 
@@ -1130,7 +1091,7 @@ save_file_success:
 	mov word [cursor_y], 0
 	mov word [cursor_x], 0
 
-	mov si, keybinds_hex_editor			; Write normal keybinds string
+	mov esi, keybinds_hex_editor			; Write normal keybinds string
 	mov cx, 56
 	call write_bottom_screen_message
 	jmp get_next_hex_char				; Return to normal hex editing
@@ -1138,51 +1099,53 @@ save_file_success:
 ;; Subroutine: write message at bottom of screen
 write_bottom_screen_message:
 	;; Message to write in SI, length of message in CX
-	mov ax, VIDMEM
-	mov es, ax			
-	mov word di, 0F00h	; ES:DI <- 0B8000h:80*2*24
-	
+    push edi
+    mov edi, 0B8F00h    ; DI <- 0B8000h + 80*2*24
+    
 	mov al, byte [text_color]
 	.loop:
 		movsb			; mov [di], [si] and increment both; store character
 		stosb			; Store character attribute byte (text colors)
 	loop .loop
+
+    pop edi
 	ret
 
 ;; Subroutine: have user input a file name
 input_file_name:
 	;; Save file name
-	mov di, editor_filename
+	mov edi, editor_filename
+    xor ecx, ecx
 	mov cx, 10
 	.input_filename_loop:
-		mov word [save_cx], cx
+        push ecx
+;;		mov word [save_cx], cx
 
         call get_key
 		stosb			; Store character to filename variable
 
 		;; Print character
-		push ax
-		push word cursor_y
-		push word cursor_x
+		push eax
+		push dword cursor_y
+		push dword cursor_x
 		call print_char_text_mode
-		add sp, 6
+		add esp, 12
 
 		;; Move cursor
-		push word [cursor_y]
-		push word [cursor_x]
+		push dword [cursor_y]
+		push dword [cursor_x]
 		call move_cursor
-		add sp, 4
+		add esp, 8
 
-		mov cx, word [save_cx]
+;;		mov cx, word [save_cx]
+        pop ecx
 	loop .input_filename_loop
 	ret
 
 ;; Subroutine: fill out message at bottom of editor
 fill_out_bottom_editor_message:
 	; Fill string variable with message to write
-	mov ax, 800h
-	mov es, ax
-	mov di, bottom_editor_msg
+	mov edi, bottom_editor_msg
 	rep movsb
 	mov al, ' '			; append filetype (extension) to string
 	stosb
@@ -1197,7 +1160,7 @@ fill_out_bottom_editor_message:
 	mov al, ']'
 	stosb
 	
-	mov si, bottom_editor_msg
+	mov esi, bottom_editor_msg
 	mov cx, 80
 	call write_bottom_screen_message
 	ret					; return to caller
@@ -1205,17 +1168,7 @@ fill_out_bottom_editor_message:
 ;; End program
 end_editor:	
 		mov dl, [editor_drive_num]		; Store drive # in DX for kernel
-
-        mov ax, 200h
-        mov es, ax
-        xor bx, bx              ; ES:BX <- 2000h:0000h
-
-        mov ds, ax
-        mov es, ax
-        mov fs, ax
-        mov gs, ax
-
-        jmp 200h:0000h			; far jump back to kernel
+        jmp 2000h			; Jump back to kernel
 
 	;; include files
 	include "../include/screen/clear_screen_text_mode.inc"
@@ -1233,16 +1186,22 @@ end_editor:
 bottom_editor_msg:	times 80 db 0 
 blank_line: times 80 db ' '
 keybinds_hex_editor: db  ' $ = Run code ? = Return to kernel S = Save file to disk'
+.len: db ($ - keybinds_hex_editor)  ; TODO: Use ".len" variables instead of hardcoding magic numbers
 ;; 56 length
 keybinds_text_editor: db  ' Ctrl-R = Return to kernel Ctrl-S = Save file to disk'
+.len: db ($ - keybinds_text_editor)
 ;; 53 length
 new_or_current_string: db '(C)reate new file or (L)oad existing file?', 0
+.len: db ($ - new_or_current_string)
 ;; 41 length
 choose_filetype_string: db '(B)inary/hex file or (O)ther file type (.txt, etc)?', 0
+.len: db ($ - choose_filetype_string)
 ;; 51 length
 filename_string: db 'Enter file name: ', 0
+.len: db ($ - filename_string)
 ;; 17 length
 save_file_error_msg: db 'Save file error occurred'	; length of string = 24
+.len: db ($ - save_file_error_msg)
 choose_file_msg: db 'File to load: ', 0
 editor_filename: times 10 db 0
 editor_filetype: times 3 db 0
@@ -1250,6 +1209,7 @@ editor_filesize: dw 0
 editor_drive_num: db 0
 extBin: db 'bin'
 load_file_error_msg: db 'Load file error occurred' ; length of string = 24
+.len: db ($ - load_file_error_msg)
 hex_byte:	db 00h		; 1 byte/2 hex digits
 text_color: db 17h
 save_di: dw 0

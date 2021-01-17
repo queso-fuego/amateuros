@@ -13,19 +13,21 @@ print_char_text_mode:
 	sub esp, 4		; error/return code
 
 	push edi
+    push esi
 	push ebx
 	push edx
 
     ;; Set up DI row/col to print to
-	mov bx, [ebp+12]	    ; Cursor Y address
-	imul di, [bx], 160		; Row to print to, in bytes
-	mov bx, [ebp+8]			; Cursor X address
-	imul ax, [bx], 2		; Col to print to, in bytes
-	add di, ax				; DI = row*sizeof(row) + col*sizeof(col)
+    mov edi, 0B8000h        ; Start of vga color text mode memory
+	mov ebx, [ebp+12]	    ; Cursor Y address
+	imul si, [ebx], 160		; Row to print to, in bytes
+	mov ebx, [ebp+8]		; Cursor X address
+	imul ax, [ebx], 2		; Col to print to, in bytes
+	add si, ax				; DI = row*sizeof(row) + col*sizeof(col)
 
-    add edi, 0B8000h
+    add di, si
 
-	mov al, [ebp+8]			; Char to print (in AL)
+	mov al, [ebp+16]		; Char to print (in AL)
 
 	mov ah,	17h				; Colors to print
 
@@ -33,31 +35,32 @@ print_char_text_mode:
 	je .LF
 	cmp al, 0Dh			; Carriage return?
 	je .CR
-	stosw				; Print character to string by storing AL in [ES:DI]
-	inc word [bx]		; Update cursor position
-	cmp word [bx], 80	; at end of line?
+	stosw				; Print character to screen by storing AL in [ES:DI]
+
+	inc word [ebx]		; Update cursor position
+	cmp word [ebx], 80	; at end of line?
 	jne .end_print						; No, go on
 
-	mov dx, word [bx]	; Yes, do a CR 1st, then LF
+	mov dx, word [ebx]	; Yes, do a CR 1st, then LF
 	shl dx, 1
 	sub di, dx	
-	mov word [bx], 0
+	mov word [ebx], 0
 	
 	.LF:
-		mov bx, [ebp+12]						; Cursor Y address
-		inc word [bx]		; Go down 1 row
-		cmp word [bx], 25	; At bottom of screen?
+		mov ebx, [ebp+12]						; Cursor Y address
+		inc word [ebx]		; Go down 1 row
+		cmp word [ebx], 25	; At bottom of screen?
 		jge .scroll_down
 
 		add di, 160							; Go down "1 row" in video memory
-		mov bx, [ebp+8]						; Cursor X address
+		mov ebx, [ebp+8]						; Cursor X address
 		jmp .end_print
 
 	.CR:
-		mov dx, word [bx]
+		mov dx, word [ebx]
 		shl dx, 1
 		sub di, dx					; Move to "beginning of line" in video memory
-		mov word [bx], 0			; Move to beginning of line
+		mov word [ebx], 0			; Move to beginning of line
 		jmp .end_print
 
 	.scroll_down:
@@ -68,7 +71,8 @@ print_char_text_mode:
 		push esi
 		
         mov edi, 0B8000h
-		mov si, 160		; Byte location of screen line 1
+        mov esi, edi
+		add esi, 160		; Byte location of screen line 1
 		mov cx, 80*24
 		rep movsw		; Copy lines 1-24 into lines 0-23
 		
@@ -79,15 +83,16 @@ print_char_text_mode:
 		pop esi
 		pop edi
 
-		dec word [bx]	; set Y = line 24
-		mov bx, [ebp+8]	; Cursor X address
+		dec word [ebx]	; set Y = line 24
+		mov ebx, [ebp+8]	; Cursor X address
 
 	.end_print:
 	mov dword [ebp-4], 0		; Return code 0 = success
-	mov ax, [ebp-4]
+	mov eax, [ebp-4]
 
 	pop edx
 	pop ebx
+    pop esi
 	pop edi
 
 	mov esp, ebp

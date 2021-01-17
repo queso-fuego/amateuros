@@ -47,10 +47,11 @@ next_scancode:
 	jne next_scancode		; Yes, skip
 
     cmp al, 39h             ; Current end of scancode lookup table
-    jg return               ; Beyond lookup table, just return here
+    jg next_scancode        ; Beyond lookup table, keep going
 
-	mov bx, scancode_to_ascii	
-	xlatb						; DS:BX = lookup table, AL = DS:BX + AL, or table[AL]
+	mov ebx, scancode_to_ascii	
+    xlatb                       ; AL = data at DS:EBX + AL
+
 	cmp byte [left_shift], 1	; Is shift pressed?
 	jne return  				; No, return
 
@@ -59,7 +60,7 @@ next_scancode:
 	cmp al, '9'
 	jg check_alpha
 	sub al, 30h					; key is a number, convert ascii to integer value
-	mov bx, num_row_shifts		; and get the shifted key code value
+	mov ebx, num_row_shifts		; and get the shifted key code value
 	xlatb						; AL = DS:BX + AL
 	jmp return
 

@@ -18,7 +18,7 @@ use16
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 0Fh         ; Sector to start reading at (sectors are 0-based!)
+    mov al, 10h         ; Sector # to start reading at (1-based)
     out dx, al
 
     mov dx, 1F4h        ; Cylinder low port
@@ -53,7 +53,7 @@ use16
     in al, dx
 
     ;; READ KERNEL INTO MEMORY SECOND
-    mov bl, 0Dh         ; Will be reading 14 sectors NEW
+    mov bl, 0Dh         ; Will be reading 14 sectors 
     mov di, 2000h       ; Memory address to read sectors into (0000h:2000h)
 
     mov dx, 1F6h        ; Head & drive # port
@@ -67,7 +67,7 @@ use16
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 2           ; Sector to start reading at (sectors are 0-based!!)
+    mov al, 2           ; Sector to start reading at (sectors are 1-based)
     out dx, al
 
     mov dx, 1F4h        ; Cylinder low port
@@ -156,7 +156,6 @@ use32                    ; We are officially in 32 bit mode now
     mov ss, ax
     mov esp, 090000h	    ; Set up stack pointer
 
-    sti                 ; Enable interrupts
     jmp 08h:2000h              ; Jump to kernel
 
 ;; VARIABLES

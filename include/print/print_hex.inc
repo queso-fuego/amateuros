@@ -10,12 +10,12 @@
 ;;;
 use32
 print_hex:
-        push bp
-		mov bp, sp
+        push ebp
+		mov ebp, esp
 
-		push si
+		push esi
 
-        xor cx, cx      ; initialize loop counter 
+        xor ecx, ecx      ; initialize loop counter 
 
 hex_loop:
         cmp cx, 4       ; are we at end of loop?
@@ -31,9 +31,9 @@ hex_loop:
 
 ;; Move ascii char into bx string
 move_intoBX:
-        mov bx, hexString + 5   ; base address of hexString + length of string
-        sub bx, cx      ; subtract loop counter
-        mov [bx], al
+        mov ebx, hexString + 5   ; base address of hexString + length of string
+        sub ebx, ecx      ; subtract loop counter
+        mov [ebx], al
         ror dx, 4       ; rotate right by 4 bits,
                         ; 12ABh -> 0B12Ah -> 0AB12h -> 2AB1h -> 12ABh
         add cx, 1       ; increment counter   
@@ -41,29 +41,27 @@ move_intoBX:
         
 end_hexloop:
 		;; Print hex string
-        mov si, hexString
-		push si
-		mov bx, [bp+6]
-		push bx				; Cursor Y address
-		mov bx, [bp+4]
-		push bx				; Cursor X address
+        mov esi, hexString
+		push esi
+		mov ebx, [ebp+12]
+		push ebx				; Cursor Y address
+		mov ebx, [ebp+8]
+		push ebx				; Cursor X address
         call print_string_text_mode
-		add sp, 6
+		add esp, 12
 
 		; Move cursor
-		mov bx, [bp+6]	
-		push word [bx]		; Cursor Y value
-		mov bx, [bp+4]
-		push word [bx]		; Cursor X value
+		mov ebx, [ebp+12]	
+		push dword [ebx]		; Cursor Y value
+		mov ebx, [ebp+8]
+		push dword [ebx]		; Cursor X value
 		call move_cursor
-		add sp, 4
+		add esp, 8
 
-		;; Reminder: New cursor X/Y is in BX/CX!
+		pop esi
 
-		pop si
-
-		mov sp, bp
-		pop bp
+		mov esp, ebp
+		pop ebp
 
         ret             ; return to caller
 

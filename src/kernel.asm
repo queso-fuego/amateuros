@@ -8,6 +8,7 @@ org 2000h
         ;; --------------------------------------------------------------------
 main_menu:
     ;; Get passed drive number
+    xor dh, dh 
     mov [kernel_drive_num], dx
 
     ;; Reset screen state
@@ -20,54 +21,45 @@ main_menu:
     call print_string_text_mode
     add esp, 12
 
-    ;; DEBUGGING
-    cli
-    hlt
-
         ;; --------------------------------------------------------------------
         ;; Get user input, print to screen & choose menu option/run command
         ;; --------------------------------------------------------------------
 get_input:
-	mov ax, 200h		; reset ES & DS segments to kernel area
-	mov es, ax
-	mov ds, ax
-
 	; Reset tokens data, arrays, and variables for next input line
-	mov di, tokens
+	mov edi, tokens
 	xor ax, ax
 	mov cx, 50
 	rep stosb
 
-	mov di, tokens_length
+	mov edi, tokens_length
 	mov cx, 5
 	rep stosw
 
 	mov byte [token_count], 0	
 
 	xor al, al
-	mov di, token_file_name1
+	mov edi, token_file_name1
 	mov cx, 10
 	rep stosb
-	mov di, token_file_name2
+	mov edi, token_file_name2
 	mov cx, 10
 	rep stosb
 
 	; Print prompt
-	mov si, prompt
-	push si						; Address of string to print - input 1
-	push word kernel_cursor_y	; Row to print to - input 2
-	push word kernel_cursor_x	; Col to print to - input 3
+	push dword prompt			; Address of string to print - input 1
+	push dword kernel_cursor_y	; Row to print to - input 2
+	push dword kernel_cursor_x	; Col to print to - input 3
 	call print_string_text_mode
-	add sp, 6
+	add esp, 12
 
 	; Move cursor after prompt
 	push dword [kernel_cursor_y]
 	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 	
 	xor cx, cx			; reset byte counter of input
-    mov si, cmdString   ; si now pointing to command string
+    mov esi, cmdString   ; si now pointing to command string
 	
 keyloop:
     call get_key            ; Get ascii char from scancode from port 60h into AL
@@ -78,67 +70,67 @@ keyloop:
 	cmp al, 08h				; backspace?
 	jne .not_backspace
 
-	dec si					; yes, go back one char in cmdString
 	jcxz .there
+	dec si					; yes, go back one char in cmdString
 	dec cx					; byte counter - 1
 	
 	.there:
-	cmp word [kernel_cursor_x], 0	; At start of line?
+	cmp word [kernel_cursor_x], 2	; At start of line?
 	je keyloop						; Yes, skip
 
 	; Move cursor back 1 space
 	dec word [kernel_cursor_x]		; Otherwise move back
 
 	;; Print a space at cursor
-	push word 0020h
-	push word kernel_cursor_y
-	push word kernel_cursor_x
+	push dword 0020h
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
 	call print_char_text_mode
-	add sp, 6
+	add esp, 12
 
 	; Move cursor back 1 space again because print_char moves it forward
 	dec word [kernel_cursor_x]
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
 	jmp keyloop
 
 .not_backspace:
-    mov [si], al            ; store input char to string
+    mov [esi], al            ; store input char to string
 	inc cx					; increment byte counter of input
 	mov word [save_cx], cx
-    inc si                  ; go to next byte at si/cmdString
+    inc esi                  ; go to next byte at si/cmdString
 
 	; Print input character to screen
-	xor ah, ah
-	push ax						; Character to print - input 1
-	push word kernel_cursor_y	; Row to print to - input 2
-	push word kernel_cursor_x	; Column to print to - input 3
+	push eax					; Character to print - input 1
+	push dword kernel_cursor_y	; Row to print to - input 2
+	push dword kernel_cursor_x	; Column to print to - input 3
 	call print_char_text_mode
-	add sp, 6					; Clean up stack
+	add esp, 12					; Clean up stack 
 
 	; Move cursor 
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
 	mov cx, word [save_cx]
+
     jmp keyloop             ; loop for next character from user
 
 	;; Prompt/"Shell" commands
 tokenize_input_line:
-	cmp cx, 0
+    cmp cx, 0
 	je input_not_found  	; handle empty input
 	
-    mov byte [si], 0        ; else null terminate cmdString from si
-	mov si, cmdString		; reset si to point to start of user input
+    mov byte [esi], 0       ; else null terminate cmdString from si
+	mov esi, cmdString		; reset si to point to start of user input
 
 	;; Tokenize input string "cmdString" into separate tokens
-	mov di, tokens			; DI <- tokens array		[5][10]
-	mov bx, tokens_length	; BX <- tokens_length array [5][2]
+	mov edi, tokens			; DI <- tokens array		[5][10]
+	mov ebx, tokens_length	; BX <- tokens_length array [5][2]
 	.get_token_loop:
 		lodsb				; mov al, [ds:si] & inc si
 		cmp al, 0h			; At end of input?
@@ -159,7 +151,7 @@ tokenize_input_line:
 			cmp al, '9'
 			jg .check_uppercase
 			stosb
-			inc word [bx]		; increment length of current token
+			inc word [ebx]		; increment length of current token
 			lodsb
 			jmp .alphanum_loop
 			
@@ -169,7 +161,7 @@ tokenize_input_line:
 				cmp al, 'Z'
 				jg .check_underscore
 				stosb
-				inc word [bx]
+				inc word [ebx]
 				lodsb
 				jmp .alphanum_loop
 
@@ -178,7 +170,7 @@ tokenize_input_line:
 				jl .next_token
 				jg .check_lowercase
 				stosb
-				inc word [bx]
+				inc word [ebx]
 				lodsb
 				jmp .alphanum_loop
 
@@ -188,7 +180,7 @@ tokenize_input_line:
 				cmp al, 'z'
 				jg .next_token
 				stosb
-				inc word [bx]			
+				inc word [ebx]			
 				lodsb
 				jmp .alphanum_loop
 
@@ -196,15 +188,15 @@ tokenize_input_line:
 				inc byte [token_count]		; next token
 
 				; Move di to next token position in tokens array
-				mov word [kernel_save_bx], bx
+                push ebx    ; save ebx value
 
 				xor bx, bx
 				mov bl, byte [token_count]
 				imul bx, 10
-				lea di, [tokens+bx]
+				lea edi, [tokens+bx]
 
 				; Move to next position in tokens_length array
-				mov bx, word [kernel_save_bx]
+                pop ebx                 ; restore ebx
 				add bx, 2				; each length is 1 word long 
 				
 				dec si					; get token loop does lodsb again, prevent error here
@@ -215,65 +207,65 @@ check_commands:
 	xor ch, ch
 	mov cx, word [tokens_length]
 
-	mov si, tokens
+	mov esi, tokens
 	push cx
-	mov di, cmdDir
+	mov edi, cmdDir
 	repe cmpsb
 	je fileTable_print
 
 	pop cx
 	push cx
-	mov di, cmdReboot
-	mov si, cmdString
+	mov edi, cmdReboot
+	mov esi, cmdString
 	repe cmpsb
 	je reboot
 
 	pop cx
 	push cx
-    mov di, cmdPrtreg
-	mov si, cmdString
+    mov edi, cmdPrtreg
+	mov esi, cmdString
 	repe cmpsb
 	je registers_print
 
 	pop cx
 	push cx
-	mov di, cmdGfxtst
-	mov si, cmdString
+	mov edi, cmdGfxtst
+	mov esi, cmdString
 	repe cmpsb
 	je graphics_test
 
 	pop cx
 	push cx
-	mov di, cmdHlt
-	mov si, cmdString
+	mov edi, cmdHlt
+	mov esi, cmdString
 	repe cmpsb
 	je end_program
 
 	pop cx
 	push cx
-	mov di, cmdCls
-	mov si, cmdString
+	mov edi, cmdCls
+	mov esi, cmdString
 	repe cmpsb
 	je clear_screen
 
 	pop cx
 	push cx
-	mov di, cmdShutdown
-	mov si, cmdString
+	mov edi, cmdShutdown
+	mov esi, cmdString
 	repe cmpsb
 	je shutdown
 
 	pop cx
 	push cx
-	mov di, cmdDelFile
-	mov si, cmdString
+	mov edi, cmdDelFile
+	mov esi, cmdString
 	repe cmpsb
 	je del_file
 
 	pop cx			
 	push cx
-	mov di, cmdRenFile
-	mov si, cmdString
+	mov edi, cmdRenFile
+	mov esi, cmdString
 	repe cmpsb
 	je ren_file
 
@@ -286,54 +278,46 @@ check_commands:
     ;;   BX - File type/extension (.bin/.txt, etc)
     mov dl, [kernel_drive_num]	; drive #
 
-    push word cmdString         ; Input 1: file name (address)
-    push word [tokens_length]   ; Input 2: file name length
-    push word 0000h             ; Input 2: memory segment to load to
-    push word 8000h             ; Input 3: memory offset to load to
+    push dword cmdString         ; Input 1: file name (address)
+    push dword [tokens_length]   ; Input 2: file name length
+    push dword 8000h             ; Input 3: memory offset to load to
     call load_file
-    add sp, 6
+    add esp, 12
 
     cmp ax, 0               ; Return code, 0 if successful
     je run_program	        
 
-    mov si, pgmNotLoaded    ; Error, program did not load correctly
+    ; Error, program did not load correctly
 	;; Print string
-	push si
-	push word kernel_cursor_y
-	push word kernel_cursor_x
+	push dword pgmNotLoaded
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
     call print_string_text_mode
-	add sp, 6
+	add esp, 12
 
 	;; Move cursor
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
     jmp get_input		    ; go back to prompt for input
 
 run_program:
 	;; Check file extension in file table entry, if 'bin'/binary, then far jump & run
 	;;   Else if 'txt', then print content to screen
-    ;; Move ES & DS back to kernel space
-    mov ax, 200h
-    mov ds, ax
-    mov es, ax
-
     ;; File extension/type is returned in BX from call to load_file
-    mov di, fileExt
-    mov al, [bx]
+    mov edi, fileExt
+    mov al, [ebx]
     stosb
-    mov al, [bx+1]
+    mov al, [ebx+1]
     stosb
-    mov al, [bx+2]
+    mov al, [ebx+2]
     stosb
     
 	mov cx, 3
-	mov si, fileExt
-	mov ax, 200h  		; Reset es to kernel space for comparison (ES = DS)
-	mov es, ax	    	; ES <- 2000h
-	mov di, fileBin
+	mov esi, fileExt
+	mov edi, fileBin
 	repe cmpsb
 	jne print_txt_file
 
@@ -343,18 +327,13 @@ run_program:
 
 	mov dl, [kernel_drive_num]	; Store drive # to use
 
-    mov ax, 800h       ; program loaded, set segment registers to location
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-
-    jmp 800h:0000h     ; far jump to program to execute
+    jmp 8000h     ; far jump to program to execute
 	
 print_txt_file:
-	mov ax, 800h 		; Set ES back to file memory location
-	mov es, ax	    	; ES <- 8000h
-    xor bx, bx          ; Using BX as offset for memory location below
+;;	mov ax, 800h 		; Set ES back to file memory location
+;;	mov es, ax	    	; ES <- 8000h
+ ;;   xor bx, bx          ; Using BX as offset for memory location below
+    mov bx, 8000h
 	
 	;; Get size of filesize in bytes (512 byte per sector)
 add_cx_size:		
@@ -363,7 +342,7 @@ add_cx_size:
     mov cx, 512
 
 print_file_char:
-	mov al, [ES:BX]
+	mov al, [BX]
 	cmp al, 0Fh
 	jle call_h_to_a
 	
@@ -371,46 +350,46 @@ return_file_char:
 	;; Print file character to screen
 	mov word [kernel_save_bx], bx
 	xor ah, ah
-	push ax
-	push word kernel_cursor_y
-	push word kernel_cursor_x
+	push eax
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
 	call print_char_text_mode
-	add sp, 6
+	add esp, 12
 
 	;; Move cursor
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
 	mov bx, word [kernel_save_bx]
 	inc bx
 	loop print_file_char	; Keep printing characters and decrement CX till 0
 
 	;; Print newline after done printing file contents
-	push word 000Ah
-	push word kernel_cursor_y
-	push word kernel_cursor_x
+	push dword 000Ah
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
 	call print_char_text_mode
-	add sp, 6
+	add esp, 12
 
 	;; Move cursor
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 	
-	push 000Dh
-	push word kernel_cursor_y
-	push word kernel_cursor_x
+	push dword 000Dh
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
 	call print_char_text_mode
-	add sp, 6
+	add esp, 12
 
 	;; Move cursor
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
 	jmp get_input   		; after all printed, go back to prompt
 
@@ -420,19 +399,20 @@ call_h_to_a:
 	
 input_not_found:
 	pop cx					; In case program was not found
-    mov si, failure         ; command not found! boo D:
+
+    ; command not found! boo D:
 	;; Print string
-	push si
-	push word kernel_cursor_y
-	push word kernel_cursor_x
+	push dword failure
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
 	call print_string_text_mode
-	add sp, 6
+	add esp, 12
 
 	;; Move cursor
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
     jmp get_input 
 
@@ -441,10 +421,10 @@ input_not_found:
         ;; --------------------------------------------------------------------
 fileTable_print: 
 	mov dl, [kernel_drive_num]			; pass drive #
-	push word kernel_cursor_y
-	push word kernel_cursor_x
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
 	call print_fileTable
-	add sp, 4
+	add esp, 8
 
 	jmp get_input
 
@@ -458,10 +438,10 @@ reboot:
         ;; Print Register Values
         ;; --------------------------------------------------------------------
 registers_print:
-	push word kernel_cursor_y
-	push word kernel_cursor_x
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
     call print_registers
-	add sp, 4
+	add esp, 8
 
 	jmp get_input		; return to prompt '>:'
 	
@@ -492,50 +472,47 @@ clear_screen:
 del_file:
 	;; 1 - File name to delete
 	;; 2 - Length of file name
-	mov si, tokens	; File name is 2nd token in array, each token is 10 char max
+	mov esi, tokens	; File name is 2nd token in array, each token is 10 char max
 	add si, 10
-	mov di, token_file_name1
+	mov edi, token_file_name1
 	xor ch, ch
 	mov cx, word [tokens_length+2]
 	rep movsb
 	mov cx, word [tokens_length+2]
 
-	push word token_file_name1	; File name
-	push cx						; Length of file name
-
 	mov dl, [kernel_drive_num]
+	push dword token_file_name1	; File name
+	push ecx						; Length of file name
 	call delete_file
-
-	;; Clean up stack after call
-	add sp, 4
+	add esp, 8
 
 	;; TODO: Check return code for errors
 	cmp ax, 0	; 0 = Success/Normal return
 
 	; Print newline when done
-	push 000Ah
-	push kernel_cursor_y
-	push kernel_cursor_x
+	push dword 000Ah
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
 	call print_char_text_mode
-	add sp, 6
+	add esp, 12
 
 	; Move cursor 
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
-	push 000Dh
-	push kernel_cursor_y
-	push kernel_cursor_x
+	push dword 000Dh
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
 	call print_char_text_mode
-	add sp, 6
+	add esp, 12
 
 	; Move cursor 
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
 	jmp get_input
 
@@ -547,55 +524,53 @@ ren_file:
 	;; 2 - Length of name to rename
 	;; 3 - New file name
 	;; 4 - New file name length
-	mov si, tokens	; File name is 2nd token in array, each token is 10 char max
+	mov esi, tokens	; File name is 2nd token in array, each token is 10 char max
 	add si, 10
-	mov di, token_file_name1
+	mov edi, token_file_name1
 	mov cx, word [tokens_length+2]
 	rep movsb
-	push word token_file_name1	; File name			- input 1
-	push word [tokens_length+2]	; File name length  - input 2
+	push dword token_file_name1	    ; File name			- input 1
+	push dword [tokens_length+2]	; File name length  - input 2
 
-	mov si, tokens	; New file name is 3rd token in array, each token is 10 char max
+	mov esi, tokens	; New file name is 3rd token in array, each token is 10 char max
 	add si, 20
-	mov di, token_file_name2
+	mov edi, token_file_name2
 	mov cx, word [tokens_length+4]
 	rep movsb
-	push word token_file_name2	; New file name		   - input 3
-	push word [tokens_length+4] ; New file name length - input 4
 
 	mov dl, [kernel_drive_num]
+	push dword token_file_name2	; New file name		   - input 3
+	push dword [tokens_length+4] ; New file name length - input 4
 	call rename_file
-
-	;; Clean up stack after call
-	add sp, 8
+	add esp, 8
 
 	;; TODO: Check return code for errors
 	cmp ax, 0	; 0 = Success/Normal return
 
 	; Print newline when done
-	push 000Ah
-	push kernel_cursor_y
-	push kernel_cursor_x
+	push dword 000Ah
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
 	call print_char_text_mode
-	add sp, 6
+	add esp, 12
 
 	; Move cursor 
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
-	push 000Dh
-	push kernel_cursor_y
-	push kernel_cursor_x
+	push dword 000Dh
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
 	call print_char_text_mode
-	add sp, 6
+	add esp, 12
 
 	; Move cursor 
-	push word [kernel_cursor_y]
-	push word [kernel_cursor_x]
+	push dword [kernel_cursor_y]
+	push dword [kernel_cursor_x]
 	call move_cursor
-	add sp, 4
+	add esp, 8
 
 	jmp get_input
 
@@ -611,7 +586,7 @@ shutdown:
         ;; End Program  
         ;; --------------------------------------------------------------------
 end_program:
-    cli                     ; clear interrupts
+;;    cli                     ; clear interrupts
     hlt                     ; halt cpu
 
         ;; ====================================================================
