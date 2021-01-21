@@ -46,7 +46,7 @@ next_scancode:
 	test al, 80h			; is it a break code? Bit 7 set
 	jne next_scancode		; Yes, skip
 
-    cmp al, 39h             ; Current end of scancode lookup table
+    cmp al, 53h             ; Current end of scancode lookup table NEW - Delete key is new endpoint for (text) editor keys
     jg next_scancode        ; Beyond lookup table, keep going
 
 	mov ebx, scancode_to_ascii	
