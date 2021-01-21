@@ -290,7 +290,7 @@ new_file_text:
 	rep stosw
 
 	;; Initialize cursor and file variables for new file
-	xor di, di
+	mov edi, 10000h    ; 10000h = file location
 	xor ax, ax
 	mov word [cursor_x], ax
 	mov word [cursor_y], ax
@@ -435,6 +435,8 @@ text_editor:
 		call save_file
 		add esp, 16					; Restore stack pointer after returning
 
+        mov edi, 10000h                  ; Reset DI to file location
+
 		cmp ax, 0
 		je save_text_file_success		; No error, return to normal
 
@@ -443,11 +445,9 @@ text_editor:
 			mov cx, 24
 			call write_bottom_screen_message
 
-            call get_key
+			jmp input_char_loop
 
 		save_text_file_success:
-            mov edi, 10000h                  ; Reset DI to file location
-
 			mov esi, keybinds_text_editor	; Write keybinds at bottom
 			mov cx, 53
 			call write_bottom_screen_message
@@ -1082,7 +1082,7 @@ save_file_error:
 	mov cx, 24
 	call write_bottom_screen_message
 
-    call get_key
+	jmp get_next_hex_char				; Return to normal hex editing
 
 save_file_success:
 	call clear_screen_text_mode			; Clear screen on success
@@ -1115,11 +1115,9 @@ write_bottom_screen_message:
 input_file_name:
 	;; Save file name
 	mov edi, editor_filename
-    xor ecx, ecx
-	mov cx, 10
+    mov ecx, 10 
 	.input_filename_loop:
         push ecx
-;;		mov word [save_cx], cx
 
         call get_key
 		stosb			; Store character to filename variable
@@ -1137,7 +1135,6 @@ input_file_name:
 		call move_cursor
 		add esp, 8
 
-;;		mov cx, word [save_cx]
         pop ecx
 	loop .input_filename_loop
 	ret

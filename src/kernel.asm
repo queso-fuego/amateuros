@@ -330,10 +330,7 @@ run_program:
     jmp 8000h     ; far jump to program to execute
 	
 print_txt_file:
-;;	mov ax, 800h 		; Set ES back to file memory location
-;;	mov es, ax	    	; ES <- 8000h
- ;;   xor bx, bx          ; Using BX as offset for memory location below
-    mov bx, 8000h
+    mov ebx, 8000h      ; 8000h = file location to print from
 	
 	;; Get size of filesize in bytes (512 byte per sector)
 add_cx_size:		
@@ -348,8 +345,6 @@ print_file_char:
 	
 return_file_char:	
 	;; Print file character to screen
-	mov word [kernel_save_bx], bx
-	xor ah, ah
 	push eax
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
@@ -362,7 +357,6 @@ return_file_char:
 	call move_cursor
 	add esp, 8
 
-	mov bx, word [kernel_save_bx]
 	inc bx
 	loop print_file_char	; Keep printing characters and decrement CX till 0
 
@@ -615,9 +609,9 @@ nl equ 0Ah,0Dh	; Carriage return/linefeed; "newline"
 SPACE equ 20h	; ASCII space character	
 
 ;; REGULAR VARIABLES
-menuString: db '---------------------------------',nl,\
-        'Kernel Booted, Welcome to QuesOS!',nl,\
-        '---------------------------------',nl,nl,0
+menuString: db '--------------------------------------------------',nl,\
+        'Kernel Booted, Welcome to QuesOS - 32 Bit Edition!',nl,\
+        '--------------------------------------------------',nl,nl,0
 prompt:	db '>:',0
 	
 success:        db nl,'Program Found!',nl,0

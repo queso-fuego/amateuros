@@ -466,8 +466,7 @@ save_file:
 	mov byte [file_drive_num], dl
 
 	;; Get parms off stack - reverse order
-	mov ebx, [ebp+8]     ; Memory offset to save from
-	mov cx, [ebp+12]	; File size
+	mov ecx, [ebp+12]	; File size
 	mov edx, [ebp+16]	; File type
 	mov esi, [ebp+20]	; File name
 	
@@ -516,11 +515,11 @@ save_file:
 	new_file:
 		;; Grab previous file table entry's starting sector + file size
 		;;  for new starting sector
-		sub di, 16
-		mov al, [DI+14]	; Starting sector
-		add al, [DI+15]	; File size	
+		sub edi, 16        
+		mov al, [EDI+14]	; Starting sector
+		add al, [EDI+15]	; File size	
 		mov byte [last_saved_sector], al
-		add di, 16
+		add edi, 16
 
 		;; Create new file table entry at end of current entries
 		mov cx, 10
@@ -572,7 +571,7 @@ save_file:
         test al, 8          ; Sector buffer requires servicing
         je .loop            ; Keep trying until sector buffer is ready
 
-        mov si, 1000h       ; Memory address to write sector from (0000h:1000h)
+        mov esi, 1000h      ; Memory address to write sector from  
 
         mov cx, 256         ; # of words to write for 1 sector
         mov dx, 1F0h        ; Data port, writing 
@@ -586,6 +585,12 @@ save_file:
         mov al, 0E7h
         mov dx, 1F7h
         out dx, al
+
+        ;; Wait until BSY bit is clear after cache flush
+        .bsy_loop:
+            in al, dx
+            bt ax, 7
+        jc .bsy_loop
 
 		;; TODO: Handle disk write error for file table here...
 
@@ -641,6 +646,12 @@ save_file:
         mov al, 0E7h
         mov dx, 1F7h
         out dx, al
+
+        ;; Wait until BSY bit is clear after cache flush
+        .bsy_loop:
+            in al, dx
+            bt ax, 7
+        jc .bsy_loop
 
     jmp save_function_epilogue
 

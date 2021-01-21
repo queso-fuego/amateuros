@@ -16,6 +16,7 @@ print_char_text_mode:
     push esi
 	push ebx
 	push edx
+    push ecx        
 
     ;; Set up DI row/col to print to
     mov edi, 0B8000h        ; Start of vga color text mode memory
@@ -90,6 +91,7 @@ print_char_text_mode:
 	mov dword [ebp-4], 0		; Return code 0 = success
 	mov eax, [ebp-4]
 
+    pop ecx    
 	pop edx
 	pop ebx
     pop esi
