@@ -11,6 +11,8 @@ main_menu:
     xor dh, dh 
     mov [kernel_drive_num], dx
 
+    ;; TODO: Refactoring for printing a bitmap font, currently here
+
     ;; Reset screen state
     call clear_screen_text_mode
 

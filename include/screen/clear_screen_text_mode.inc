@@ -1,19 +1,20 @@
 ;;; 
 ;;; clear_screen_text_mode.inc: clears screen by writing to video memory 
-;;; assuming VGA txt mode 03 - 80x25 characters, 16 colors
-;;;
+;;; TODO: Change from clear_screen_text_mode to just 'clear_screen'
 use32
 clear_screen_text_mode:
 	push eax
 	push ecx
 	push edi
 
-	mov edi, 0B8000h
+    ;; TODO: Change all the magic numbers dude, you ain't a magician
+	mov edi, [5028h]        ; Framebuffer location in VBE mode info block
+    mov ecx, 1920*1080      ; # of pixels to write 
+    mov eax, 000000FFh      ; ARGB pixel color value - blue
+	rep	stosd
 
-    mov ax, 1720h   ; blue bg, light gray fg, space
-	mov cx, 80*25	; Number of characters to write
-	
-	rep	stosw
+    ;; TODO: change to not halt here and change move_cursor file
+    hlt
 
 	;; Move hardware cursor after
 	push dword 0
