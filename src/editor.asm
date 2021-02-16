@@ -31,7 +31,7 @@ reset_editor:
 	mov byte [editor_drive_num], dl		; Save passed in drive #
 
 	;; Clear the screen
-	call clear_screen_text_mode
+	call clear_screen
 
 	;; Initialize cursor values
 	mov word [cursor_y], 0
@@ -41,7 +41,7 @@ reset_editor:
 	push dword new_or_current_string
 	push dword cursor_y
 	push dword cursor_x
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
 	;; Move cursor
@@ -60,7 +60,7 @@ reset_editor:
     jmp .keyloop
 
 create_new_file:
-	call clear_screen_text_mode
+	call clear_screen
 
 	;; Initialize cursor values
 	mov word [cursor_y], 0
@@ -70,7 +70,7 @@ create_new_file:
 	push dword choose_filetype_string
 	push dword cursor_y
 	push dword cursor_x
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
 	;; Move cursor
@@ -98,7 +98,7 @@ load_existing_file:
 	push dword choose_file_msg
 	push dword cursor_y
 	push dword cursor_x
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
 	;; Move cursor
@@ -125,12 +125,11 @@ load_existing_file:
 
 load_file_error:
 	mov esi, load_file_error_msg
-	mov cx, 24
 	call write_bottom_screen_message
 
     call get_key
 
-	call clear_screen_text_mode
+	call clear_screen
 
 	;; Initialize cursor pos
 	mov word [cursor_y], 0
@@ -157,7 +156,7 @@ load_file_success:
 	jmp load_file_text	; Otherwise, go to general text editor
 	
 new_file_hex:
-	call clear_screen_text_mode
+	call clear_screen
 
 	;; Initialize cursor pos
 	mov word [cursor_y], 0
@@ -178,7 +177,7 @@ new_file_hex:
 	jmp hex_editor
 	
 load_file_hex:
-	call clear_screen_text_mode
+	call clear_screen
 
 	;; Reset cursor position
 	mov word [cursor_x], 0
@@ -200,7 +199,7 @@ load_file_hex:
 		push eax
 		push dword cursor_y
 		push dword cursor_x
-		call print_char_text_mode
+		call print_char
 		add esp, 12
 
 		;; Move cursor
@@ -217,7 +216,7 @@ load_file_hex:
 		push eax
 		push dword cursor_y
 		push dword cursor_x
-		call print_char_text_mode
+		call print_char
 		add esp, 12
 
 		;; Move cursor
@@ -234,7 +233,7 @@ load_file_hex:
 		push eax
 		push dword cursor_y
 		push dword cursor_x
-		call print_char_text_mode
+		call print_char
 		add esp, 12
 
 		;; Move cursor
@@ -264,7 +263,7 @@ load_file_hex:
 	jmp get_next_hex_char
 
 new_file_text:
-	call clear_screen_text_mode
+	call clear_screen
 
 	;; Initialize cursor position
 	mov word [cursor_y], 0
@@ -303,7 +302,7 @@ new_file_text:
 	jmp text_editor
 
 load_file_text:
-	call clear_screen_text_mode
+	call clear_screen
 
 	xor ax, ax
 	mov word [cursor_x], ax	; Init cursor position
@@ -343,7 +342,7 @@ load_file_text:
 		push eax				; Character to print in AL
 		push dword cursor_y
 		push dword cursor_x
-		call print_char_text_mode
+		call print_char
 		add esp, 12
 
 		mov word [cursor_x], 0		; Go down 1 row
@@ -359,7 +358,7 @@ load_file_text:
 		push eax				; Character to print in AL
 		push dword cursor_y
 		push dword cursor_x
-		call print_char_text_mode
+		call print_char
 		add esp, 12
 
 		;; Move cursor
@@ -411,14 +410,12 @@ text_editor:
 
 		;; Save to disk
 		mov esi, blank_line
-		mov cx, 80
 		call write_bottom_screen_message
 		mov esi, filename_string				; Enter file name at bottom of screen
-		mov cx, 17
 		call write_bottom_screen_message
-		mov word [cursor_y], 24
-		mov word [cursor_x], 17
 
+		mov word [cursor_y], 66
+		mov word [cursor_x], 17
 		push dword [cursor_y]
 		push dword [cursor_x]
 		call move_cursor
@@ -442,14 +439,12 @@ text_editor:
 
 		save_text_file_error:
 			mov esi, save_file_error_msg
-			mov cx, 24
 			call write_bottom_screen_message
 
 			jmp input_char_loop
 
 		save_text_file_success:
 			mov esi, keybinds_text_editor	; Write keybinds at bottom
-			mov cx, 53
 			call write_bottom_screen_message
 
 			mov word [cursor_x], 0			; Reset cursor to start of file
@@ -481,7 +476,7 @@ text_editor:
 			cmp byte [save_scancode], ENDKEY	
 			je end_pressed_text
 
-			jmp print_char_text_editor
+			jmp text_edit_print_char
 	
 		;; Move 1 byte left (till beginning of line)
 		left_arrow_pressed_text:
@@ -666,14 +661,14 @@ text_editor:
 			jmp input_char_loop
 	
 		;; Print out user input character to screen
-		print_char_text_editor:
+		text_edit_print_char:
 			cmp al, 0Dh						; Newline, enter key pressed
 			jne .print
 
 			push eax
 			push dword cursor_y
 			push dword cursor_x
-			call print_char_text_mode
+			call print_char
 			add esp, 12
 
 			inc word [cursor_y]				; go down 1 line (line feed)
@@ -716,7 +711,7 @@ text_editor:
 			push eax					; char to print in AL
 			push dword cursor_y
 			push dword cursor_x
-			call print_char_text_mode
+			call print_char
 			add esp, 12
 
 			;; Move cursor 1 character forward
@@ -760,7 +755,7 @@ get_next_hex_char:
 	push dword 0020h			; space ' ' in ascii
 	push dword cursor_y 
 	push dword cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12	
 
 	;; Blank out 2nd nibble of hex byte
@@ -768,7 +763,7 @@ get_next_hex_char:
 	push dword cursor_y	 
 	inc word [cursor_x]		; 2nd nibble of hex byte
 	push dword cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
 
 	;; Move cursor 1 full hex byte left
@@ -790,7 +785,7 @@ get_next_hex_char:
 		push dword 0020h			; space ' ' in ascii
 		push dword cursor_y	 
 		push dword cursor_x
-		call print_char_text_mode
+		call print_char
 		add esp, 12	
 
 		;; Blank out 2nd nibble of hex byte
@@ -798,7 +793,7 @@ get_next_hex_char:
 		push dword cursor_y	 
 		inc word [cursor_x]		; 2nd nibble of hex byte
 		push dword cursor_x
-		call print_char_text_mode
+		call print_char
 		add esp, 12				; restore stack
 
 		mov [EDI], byte 0h	; Make current byte 0 in file
@@ -940,7 +935,7 @@ get_next_hex_char:
 		push eax
 		push dword cursor_y
 		push dword cursor_x
-		call print_char_text_mode
+		call print_char
 		add esp, 12
 
 		;; Move cursor
@@ -981,7 +976,7 @@ put_hex_byte:
 	push eax
 	push dword cursor_y
 	push dword cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
 
 	;; Move cursor
@@ -1034,7 +1029,7 @@ save_program:
 
 	;; Have user enter file name for new file
 enter_file_name:
-	call clear_screen_text_mode	
+	call clear_screen
 
 	;; Init cursor pos
 	mov word [cursor_y], 0
@@ -1044,7 +1039,7 @@ enter_file_name:
 	push dword filename_string
 	push dword cursor_y
 	push dword cursor_x
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     ;; Move cursor
@@ -1079,36 +1074,33 @@ enter_file_name:
 
 save_file_error:
 	mov esi, save_file_error_msg
-	mov cx, 24
 	call write_bottom_screen_message
 
 	jmp get_next_hex_char				; Return to normal hex editing
 
 save_file_success:
-	call clear_screen_text_mode			; Clear screen on success
+	call clear_screen
 
 	;; Init cursor pos
 	mov word [cursor_y], 0
 	mov word [cursor_x], 0
 
 	mov esi, keybinds_hex_editor			; Write normal keybinds string
-	mov cx, 56
 	call write_bottom_screen_message
 	jmp get_next_hex_char				; Return to normal hex editing
 
 ;; Subroutine: write message at bottom of screen
 write_bottom_screen_message:
-	;; Message to write in SI, length of message in CX
-    push edi
-    mov edi, 0B8F00h    ; DI <- 0B8000h + 80*2*24
-    
-	mov al, byte [text_color]
-	.loop:
-		movsb			; mov [di], [si] and increment both; store character
-		stosb			; Store character attribute byte (text colors)
-	loop .loop
+    mov word [cursor_y], 66
+    mov word [cursor_x], 0
 
-    pop edi
+	;; Message to write in ESI
+    push dword esi
+    push dword cursor_y
+    push dword cursor_x
+    call print_string
+    add esp, 12
+
 	ret
 
 ;; Subroutine: have user input a file name
@@ -1126,7 +1118,7 @@ input_file_name:
 		push eax
 		push dword cursor_y
 		push dword cursor_x
-		call print_char_text_mode
+		call print_char
 		add esp, 12
 
 		;; Move cursor
@@ -1158,7 +1150,6 @@ fill_out_bottom_editor_message:
 	stosb
 	
 	mov esi, bottom_editor_msg
-	mov cx, 80
 	call write_bottom_screen_message
 	ret					; return to caller
 
@@ -1168,11 +1159,11 @@ end_editor:
         jmp 2000h			; Jump back to kernel
 
 	;; include files
-	include "../include/screen/clear_screen_text_mode.inc"
+	include "../include/screen/clear_screen.inc"
 	include "../include/screen/move_cursor.inc"
 	include "../include/print/print_fileTable.inc"
-	include "../include/print/print_char_text_mode.inc"
-	include "../include/print/print_string_text_mode.inc"
+	include "../include/print/print_char.inc"
+	include "../include/print/print_string.inc"
 	include "../include/print/print_hex.inc"				; print_fileTable uses this
 	include "../include/disk/file_ops.inc"
 	include "../include/type_conversions/hex_to_ascii.inc"
@@ -1182,24 +1173,26 @@ end_editor:
 	;; --------------------------
 bottom_editor_msg:	times 80 db 0 
 blank_line: times 80 db ' '
-keybinds_hex_editor: db  ' $ = Run code ? = Return to kernel S = Save file to disk'
+db 0
+
+keybinds_hex_editor: db  ' $ = Run code ? = Return to kernel S = Save file to disk',0
 .len: db ($ - keybinds_hex_editor)  ; TODO: Use ".len" variables instead of hardcoding magic numbers
 ;; 56 length
-keybinds_text_editor: db  ' Ctrl-R = Return to kernel Ctrl-S = Save file to disk'
+keybinds_text_editor: db  ' Ctrl-R = Return to kernel Ctrl-S = Save file to disk',0
 .len: db ($ - keybinds_text_editor)
 ;; 53 length
-new_or_current_string: db '(C)reate new file or (L)oad existing file?', 0
+new_or_current_string: db '(C)reate new file or (L)oad existing file?',0
 .len: db ($ - new_or_current_string)
 ;; 41 length
-choose_filetype_string: db '(B)inary/hex file or (O)ther file type (.txt, etc)?', 0
+choose_filetype_string: db '(B)inary/hex file or (O)ther file type (.txt, etc)?',0
 .len: db ($ - choose_filetype_string)
 ;; 51 length
-filename_string: db 'Enter file name: ', 0
+filename_string: db 'Enter file name: ',0
 .len: db ($ - filename_string)
 ;; 17 length
 save_file_error_msg: db 'Save file error occurred'	; length of string = 24
 .len: db ($ - save_file_error_msg)
-choose_file_msg: db 'File to load: ', 0
+choose_file_msg: db 'File to load: ',0
 editor_filename: times 10 db 0
 editor_filetype: times 3 db 0
 editor_filesize: dw 0

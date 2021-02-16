@@ -18,7 +18,7 @@ print_registers:
 	push dword printRegHeading
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -29,7 +29,7 @@ print_registers:
 	push dword regString
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -45,7 +45,7 @@ print_registers:
 	push esi
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -62,7 +62,7 @@ print_registers:
 	push esi
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -79,7 +79,7 @@ print_registers:
 	push esi
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -96,7 +96,7 @@ print_registers:
 	push esi
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -116,7 +116,7 @@ print_registers:
 	push esi
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -133,7 +133,7 @@ print_registers:
 	push esi
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -150,7 +150,7 @@ print_registers:
 	push esi
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -167,7 +167,7 @@ print_registers:
 	push esi
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -184,7 +184,7 @@ print_registers:
 	push esi
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -200,7 +200,7 @@ print_registers:
 	push dword 000Ah 
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_char_text_mode
+	call print_char
 	add esp, 12
 
     call .move_cursor   ; Move cursor
@@ -209,7 +209,7 @@ print_registers:
 	push dword 000Dh 
 	push dword [csr_y_addr]
 	push dword [csr_x_addr]
-	call print_char_text_mode
+	call print_char
 	add esp, 12
 
     call .move_cursor   ; Move cursor

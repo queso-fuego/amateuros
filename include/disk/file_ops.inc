@@ -77,7 +77,7 @@ delete_file:
         out dx, al
 
         mov dx, 1F3h        ; Sector # port
-        mov al, 10h         ; Sector to start writing at (sectors are 0-based!)
+        mov al, 17h         ; Sector to start writing at (sectors are 0-based!)
         out dx, al
 
         mov dx, 1F4h        ; Cylinder low port
@@ -397,7 +397,7 @@ rename_file:
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 10h         ; Sector to start writing at (sectors are 0-based!)
+    mov al, 17h         ; Sector to start writing at (sectors are 0-based!)
     out dx, al
 
     mov dx, 1F4h        ; Cylinder low port
@@ -551,7 +551,7 @@ save_file:
         out dx, al
 
         mov dx, 1F3h        ; Sector # port
-        mov al, 10h         ; Sector to start writing at (sectors are 1-based)
+        mov al, 17h         ; Sector to start writing at (sectors are 1-based)
         out dx, al
 
         mov dx, 1F4h        ; Cylinder low port

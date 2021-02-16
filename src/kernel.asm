@@ -11,16 +11,14 @@ main_menu:
     xor dh, dh 
     mov [kernel_drive_num], dx
 
-    ;; TODO: Refactoring for printing a bitmap font, currently here
-
-    ;; Reset screen state
-    call clear_screen_text_mode
+    ;; Clear the screen
+    call clear_screen
 
     ; Print OS boot message
     push dword menuString
     push dword kernel_cursor_y		
     push dword kernel_cursor_x
-    call print_string_text_mode
+    call print_string
     add esp, 12
 
         ;; --------------------------------------------------------------------
@@ -47,11 +45,15 @@ get_input:
 	mov cx, 10
 	rep stosb
 
+    mov edi, cmdString
+    mov cx, 255
+    rep stosb
+
 	; Print prompt
 	push dword prompt			; Address of string to print - input 1
 	push dword kernel_cursor_y	; Row to print to - input 2
 	push dword kernel_cursor_x	; Col to print to - input 3
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
 	; Move cursor after prompt
@@ -73,7 +75,8 @@ keyloop:
 	jne .not_backspace
 
 	jcxz .there
-	dec si					; yes, go back one char in cmdString
+	dec esi					; yes, go back one char in cmdString
+    mov byte [esi], 0       ; blank out character
 	dec cx					; byte counter - 1
 	
 	.there:
@@ -83,15 +86,21 @@ keyloop:
 	; Move cursor back 1 space
 	dec word [kernel_cursor_x]		; Otherwise move back
 
-	;; Print a space at cursor
+	;; Print 2 spaces at cursor
 	push dword 0020h
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
 
-	; Move cursor back 1 space again because print_char moves it forward
-	dec word [kernel_cursor_x]
+	push dword 0020h
+	push dword kernel_cursor_y
+	push dword kernel_cursor_x
+	call print_char
+	add esp, 12
+
+	; Move cursor back 2 spaces
+	sub word [kernel_cursor_x], 2
 	push dword [kernel_cursor_y]
 	push dword [kernel_cursor_x]
 	call move_cursor
@@ -109,7 +118,7 @@ keyloop:
 	push eax					; Character to print - input 1
 	push dword kernel_cursor_y	; Row to print to - input 2
 	push dword kernel_cursor_x	; Column to print to - input 3
-	call print_char_text_mode
+	call print_char
 	add esp, 12					; Clean up stack 
 
 	; Move cursor 
@@ -192,16 +201,17 @@ tokenize_input_line:
 				; Move di to next token position in tokens array
                 push ebx    ; save ebx value
 
-				xor bx, bx
+				xor ebx, ebx
 				mov bl, byte [token_count]
 				imul bx, 10
 				lea edi, [tokens+bx]
 
 				; Move to next position in tokens_length array
                 pop ebx                 ; restore ebx
-				add bx, 2				; each length is 1 word long 
+                inc ebx
+                inc ebx
 				
-				dec si					; get token loop does lodsb again, prevent error here
+				dec esi					; get token loop does lodsb again, prevent error here
 	jmp .get_token_loop
 
 check_commands:	
@@ -248,7 +258,7 @@ check_commands:
 	mov edi, cmdCls
 	mov esi, cmdString
 	repe cmpsb
-	je clear_screen
+	je kernel_clear_screen
 
 	pop cx
 	push cx
@@ -294,7 +304,7 @@ check_commands:
 	push dword pgmNotLoaded
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
-    call print_string_text_mode
+    call print_string
 	add esp, 12
 
 	;; Move cursor
@@ -350,7 +360,7 @@ return_file_char:
 	push eax
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
 
 	;; Move cursor
@@ -366,7 +376,7 @@ return_file_char:
 	push dword 000Ah
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
 
 	;; Move cursor
@@ -378,7 +388,7 @@ return_file_char:
 	push dword 000Dh
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
 
 	;; Move cursor
@@ -401,7 +411,7 @@ input_not_found:
 	push dword failure
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
 	;; Move cursor
@@ -453,8 +463,8 @@ graphics_test:
         ;; --------------------------------------------------------------------
         ;; Clear Screen
         ;; --------------------------------------------------------------------
-clear_screen:
-	call clear_screen_text_mode
+kernel_clear_screen:
+	call clear_screen
 
 	; Update cursor values for new position
 	mov word [kernel_cursor_y], 0
@@ -489,26 +499,14 @@ del_file:
 	push dword 000Ah
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-
-	; Move cursor 
-	push dword [kernel_cursor_y]
-	push dword [kernel_cursor_x]
-	call move_cursor
-	add esp, 8
 
 	push dword 000Dh
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-
-	; Move cursor 
-	push dword [kernel_cursor_y]
-	push dword [kernel_cursor_x]
-	call move_cursor
-	add esp, 8
 
 	jmp get_input
 
@@ -547,26 +545,14 @@ ren_file:
 	push dword 000Ah
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-
-	; Move cursor 
-	push dword [kernel_cursor_y]
-	push dword [kernel_cursor_x]
-	call move_cursor
-	add esp, 8
 
 	push dword 000Dh
 	push dword kernel_cursor_y
 	push dword kernel_cursor_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-
-	; Move cursor 
-	push dword [kernel_cursor_y]
-	push dword [kernel_cursor_x]
-	call move_cursor
-	add esp, 8
 
 	jmp get_input
 
@@ -582,7 +568,7 @@ shutdown:
         ;; End Program  
         ;; --------------------------------------------------------------------
 end_program:
-;;    cli                     ; clear interrupts
+;;    cli                   ; clear interrupts
     hlt                     ; halt cpu
 
         ;; ====================================================================
@@ -592,12 +578,12 @@ end_program:
         ;; --------------------------------------------------------------------
         ;; Include Files
         ;; --------------------------------------------------------------------
-		include "../include/print/print_char_text_mode.inc"
-		include "../include/print/print_string_text_mode.inc"
+		include "../include/print/print_char.inc"
+		include "../include/print/print_string.inc"
         include "../include/print/print_hex.inc"
         include "../include/print/print_registers.inc"
 		include "../include/print/print_fileTable.inc"
-		include "../include/screen/clear_screen_text_mode.inc"
+		include "../include/screen/clear_screen.inc"
 		include "../include/screen/move_cursor.inc"
 		include "../include/type_conversions/hex_to_ascii.inc"
 		include "../include/disk/file_ops.inc"

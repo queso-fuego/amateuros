@@ -20,16 +20,8 @@ print_fileTable:
 	push fileTableHeading
 	push dword [fileTable_csr_y]
 	push dword [fileTable_csr_x]
-	call print_string_text_mode
+	call print_string
 	add esp, 12
-
-	;; Move cursor
-	mov bx, [fileTable_csr_y]
-	push dword [bx]				; Cursor Y value
-	mov bx, [fileTable_csr_x]
-	push dword [bx]				; Cursor X value
-	call move_cursor
-	add esp, 8
 
     ;; Load file table string from its memory location (1000h), print file
     ;;   and program names & sector numbers to screen
@@ -60,16 +52,8 @@ filename_loop:
 	push eax
 	push dword [fileTable_csr_y]
 	push dword [fileTable_csr_x]
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-
-	;; Move cursor
-	mov bx, [fileTable_csr_y]
-	push dword [bx]				; Cursor Y value
-	mov bx, [fileTable_csr_x]
-	push dword [bx]				; Cursor X value
-	call move_cursor
-	add esp, 8
 
 	mov bx, word [save_bx]	; restore values
 	mov cx, word [save_cx]	
@@ -95,16 +79,8 @@ file_ext:
 	push eax
 	push dword [fileTable_csr_y]
 	push dword [fileTable_csr_x]
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-
-	;; Move cursor
-	mov bx, [fileTable_csr_y]
-	push dword [bx]				; Cursor Y value
-	mov bx, [fileTable_csr_x]
-	push dword [bx]				; Cursor X value
-	call move_cursor
-	add esp, 8
 
 	;; File ext byte 2
 	mov bx, word [save_bx]
@@ -117,16 +93,8 @@ file_ext:
 	push eax
 	push dword [fileTable_csr_y]
 	push dword [fileTable_csr_x]
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-
-	;; Move cursor
-	mov bx, [fileTable_csr_y]
-	push dword [bx]				; Cursor Y value
-	mov bx, [fileTable_csr_x]
-	push dword [bx]				; Cursor X value
-	call move_cursor
-	add esp, 8
 
 	;; File ext byte 3
 	mov bx, word [save_bx]
@@ -139,16 +107,8 @@ file_ext:
 	push eax
 	push dword [fileTable_csr_y]
 	push dword [fileTable_csr_x]
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-
-	;; Move cursor
-	mov bx, [fileTable_csr_y]
-	push dword [bx]				; Cursor Y value
-	mov bx, [fileTable_csr_x]
-	push dword [bx]				; Cursor X value
-	call move_cursor
-	add esp, 8
 
 	;; Directory entry # section
 	;; 9 blanks before entry #
@@ -209,16 +169,8 @@ file_ext:
 	push eax
 	push dword [fileTable_csr_y]
 	push dword [fileTable_csr_x]
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-
-	;; Move cursor
-	mov bx, [fileTable_csr_y]
-	push dword [bx]				; Cursor Y value
-	mov bx, [fileTable_csr_x]
-	push dword [bx]				; Cursor X value
-	call move_cursor
-	add esp, 8
 
 	mov al, 0Dh		; carriage return
 
@@ -227,16 +179,8 @@ file_ext:
 	push eax
 	push dword [fileTable_csr_y]
 	push dword [fileTable_csr_x]
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-
-	;; Move cursor
-	mov bx, [fileTable_csr_y]
-	push dword [bx]				; Cursor Y value
-	mov bx, [fileTable_csr_x]
-	push dword [bx]				; Cursor X value
-	call move_cursor
-	add esp, 8
 
 	mov bx, word [save_bx]
 
@@ -262,16 +206,8 @@ print_blanks_loop:
 		push eax
 		push dword [fileTable_csr_y]
 		push dword [fileTable_csr_x]
-		call print_char_text_mode
+		call print_char
 		add esp, 12
-
-		;; Move cursor
-		mov bx, [fileTable_csr_y]
-		push dword [bx]				; Cursor Y value
-		mov bx, [fileTable_csr_x]
-		push dword [bx]				; Cursor X value
-		call move_cursor
-		add esp, 8
 
 		mov cx, word [blanks_num]	; restore values
 		mov bx, word [save_bx]

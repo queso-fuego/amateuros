@@ -7,17 +7,17 @@ calc_setup:
 	mov byte [calc_drive_number], dl	; Store passed in drive number
 
 	;; Clear screen first
-	call clear_screen_text_mode
+	call clear_screen
 
     mov edi, buffer 
 	jmp keyloop
 
 ;; DATA AREA ----------------------------------------
 ;; Include files
-include "../include/screen/clear_screen_text_mode.inc"
+include "../include/screen/clear_screen.inc"
 include "../include/screen/move_cursor.inc"
-include "../include/print/print_char_text_mode.inc"
-include "../include/print/print_string_text_mode.inc"
+include "../include/print/print_char.inc"
+include "../include/print/print_string.inc"
 include "../include/print/print_hex.inc"
 include "../include/keyboard/get_key.inc"
 
@@ -60,7 +60,7 @@ keyloop:
 	push eax		; Otherwise print char to screen
 	push dword calc_csr_y	
 	push dword calc_csr_x	
-	call print_char_text_mode
+	call print_char
 	add esp, 12
 
 	push dword [calc_csr_y]	; And move cursor forward
@@ -87,7 +87,7 @@ start_parse:
 	push dword error_msg			; print error msg
 	push dword calc_csr_y
 	push dword calc_csr_x
-	call print_string_text_mode
+	call print_string
 	add esp, 12
 
 	jmp .clear_buffer
@@ -396,25 +396,20 @@ print_newline:
 	push dword 000Ah
 	push dword calc_csr_y
 	push dword calc_csr_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
 	
-	push dword [calc_csr_y]
-	push dword [calc_csr_x]
-	call move_cursor
-	add esp, 8
-
 	push dword 000Dh
 	push dword calc_csr_y
 	push dword calc_csr_x
-	call print_char_text_mode
+	call print_char
 	add esp, 12
-	
-	push dword [calc_csr_y]
-	push dword [calc_csr_x]
-	call move_cursor
-	add esp, 8
 
+    push dword [calc_csr_y]
+    push dword [calc_csr_x]
+    call move_cursor
+    add esp, 8
+	
 	ret
 
 ;; Sector padding

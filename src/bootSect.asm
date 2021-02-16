@@ -73,7 +73,7 @@ load_filetable:
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 13h         ; Sector # to start reading at (1-based)
+    mov al, 17h         ; Sector # to start reading at (1-based)
     out dx, al
 
     mov dx, 1F4h        ; Cylinder low port
@@ -122,7 +122,7 @@ load_filetable:
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 5h          ; Sector to start reading at (sectors are 1-based)
+    mov al, 9h          ; Sector to start reading at (sectors are 1-based)
     out dx, al
 
     mov dx, 1F4h        ; Cylinder low port
@@ -155,11 +155,66 @@ kernel_loop:
     in al, dx
 
     cmp bl, 0
-    je load_2ndstage
+    je load_font
 
     dec bl
     mov dx, 1F7h
     jmp kernel_loop
+
+    ;; LOAD FONT INTO MEMORY FOURTH
+load_font:
+    mov bl, 03h         ; Will be reading 4 sectors 
+    mov di, 6000h       ; Memory address to read sectors into 
+
+    mov dx, 1F6h        ; Head & drive # port
+    mov al, [drive_num] ; Drive # - hard disk 1
+    and al, 0Fh         ; Head # (low nibble)
+    or al, 0A0h         ; default high nibble to 'primary' drive (drive 1), 'secondary' drive (drive 2) would be hex B or 1011b
+    out dx, al          ; Send head/drive #
+
+    mov dx, 1F2h        ; Sector count port
+    mov al, 04h         ; # of sectors to read
+    out dx, al
+
+    mov dx, 1F3h        ; Sector # port
+    mov al, 5h          ; Sector to start reading at (sectors are 1-based)
+    out dx, al
+
+    mov dx, 1F4h        ; Cylinder low port
+    xor al, al          ; Cylinder low #
+    out dx, al
+
+    mov dx, 1F5h        ; Cylinder high port
+    xor al, al          ; Cylinder high #
+    out dx, al
+
+    mov dx, 1F7h        ; Command port (writing port 1F7h)
+    mov al, 20h         ; Read with retry
+    out dx, al
+
+;; Poll status port after reading 1 sector
+font_loop:
+    in al, dx           ; Status register (reading port 1F7h)
+    test al, 8          ; Sector buffer requires servicing
+    je font_loop        ; Keep trying until sector buffer is ready
+
+    mov cx, 256         ; # of words to read for 1 sector
+    mov dx, 1F0h        ; Data port, reading 
+    rep insw            ; Read bytes from DX port # into DI, CX # of times
+    
+    ;; 400ns delay - Read alternate status register
+    mov dx, 3F6h
+    in al, dx
+    in al, dx
+    in al, dx
+    in al, dx
+
+    cmp bl, 0
+    je load_2ndstage
+
+    dec bl
+    mov dx, 1F7h
+    jmp font_loop
 
     ; Jump to 2nd stage bootloader here
     load_2ndstage:

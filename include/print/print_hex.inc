@@ -47,16 +47,8 @@ end_hexloop:
 		push ebx				; Cursor Y address
 		mov ebx, [ebp+8]
 		push ebx				; Cursor X address
-        call print_string_text_mode
+        call print_string
 		add esp, 12
-
-		; Move cursor
-		mov ebx, [ebp+12]	
-		push dword [ebx]		; Cursor Y value
-		mov ebx, [ebp+8]
-		push dword [ebx]		; Cursor X value
-		call move_cursor
-		add esp, 8
 
 		pop esi
 

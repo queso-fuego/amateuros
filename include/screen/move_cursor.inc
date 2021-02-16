@@ -11,43 +11,59 @@ move_cursor:
 	mov ebp, esp	
 	sub esp, 4		; Local stack variable - error/return code
 
-	push edx			; save modified register
+	push edx			; save modified registers
 	push ebx
+    push edi
+    push ecx
 
 	;; Get parm off stack
+    xor edx, edx
 	mov dx, [ebp+8]	     ; DX = column value
+    shl edx, 5           ; multiply by 32 - 8px char width * 4 bytes
+
+    xor eax, eax
+    xor ebx, ebx
+
 	mov ax, [ebp+12]     ; AX = row value
+    shl eax, 4           ; multiply by 16 - # of lines per char
+    mov bx, [5010h]      ; VBE mode info block bytes per scanline
+    imul eax, ebx        ; byte value for row
+    add eax, edx         ; add byte value for column = byte value for cursor
 
-	;; Calculate cursor bytes
-	;; Y pos * size of row + X pos
-	imul bx, ax, 80 
-	add bx, dx
+    mov edi, [5028h]     ; VBE mode info block framebuffer address
+    add edi, eax         ; offset cursor from framebuffer
 
-	;; Move cursor using CRT Microcontroller ports!!
-	;; Write the cursor low byte (BL)	
-	mov ax, 0Fh		; CRT index register, cursor low byte
-	mov dx, 03D4h
-	out dx, ax
+    ;; Draw cursor
+    mov eax, 127*16     ; cursor character stored at ascii 127
+    dec eax             ; cursor only stored in last line
+    add eax, 6000h      ; Bitmap font memory address - offset by 'ascii' char value
 
-	mov dx, 03D5h	; CRT data register
-    xor ah, ah
-	mov al, bl
-	out dx, ax
+    imul ebx, 15         ; Go to last row of current character
+    add edi, ebx
 
-	;; Write the cursor high byte (BH)	
-    xor ah, ah
-	mov al, 0Eh		; CRT index register, cursor high byte
-	mov dx, 03D4h
-	out dx, ax
+    mov ecx, 8      ; # of bits to check
+    mov bl, [eax]   ; Get next byte of character
+    .bit_loop:
+        mov edx, ecx
+        dec edx
+        bt bx, dx
+        jc .write_text_color
+        mov [edi], dword 000000FFh    ; ARGB text bg color value - blue
+        jmp .next_bit
 
-	mov dx, 03D5h	; CRT data register
-    xor ah, ah
-	mov al, bh
-	out dx, ax
+        .write_text_color:
+        mov [edi], dword 00EEEEEEh    ; ARGB text fg color value - white
+
+        .next_bit:
+        add edi, 4              ; Next pixel position
+        dec ecx
+    jnz .bit_loop
 
 	mov dword [ebp-4], 0	; return code 0 = success!
 	mov eax, [ebp-4]
 
+    pop ecx
+    pop edi
 	pop ebx
 	pop edx
 
