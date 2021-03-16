@@ -4,8 +4,6 @@
 use16
     org 7E00h       ; 512 bytes after the bootsector in memory
 
-    mov [loader_drivenum], dl
-
     ;; Set up vbe info structure
     xor ax, ax
     mov es, ax
@@ -44,23 +42,23 @@ use16
         jne error
 
         ;; Print out mode values...
-        mov dx, [mode_info_block.x_resolution]	
-        call print_hex	; Print width
-        mov ax, 0E20h	; Print a space
-        int 10h
+        ;mov dx, [mode_info_block.x_resolution]	
+        ;call print_hex	; Print width
+        ;mov ax, 0E20h	; Print a space
+        ;int 10h
 
-        mov dx, [mode_info_block.y_resolution]
-        call print_hex	; Print height
-        mov ax, 0E20h   ; Print a space
-        int 10h
+        ;mov dx, [mode_info_block.y_resolution]
+        ;call print_hex	; Print height
+        ;mov ax, 0E20h   ; Print a space
+        ;int 10h
 
-        xor dh, dh
-        mov dl, [mode_info_block.bits_per_pixel]
-        call print_hex	; Print bpp
-        mov ax, 0E0Ah	; Print a newline
-        int 10h
-        mov al, 0Dh
-        int 10h
+        ;xor dh, dh
+        ;mov dl, [mode_info_block.bits_per_pixel]
+        ;call print_hex	; Print bpp
+        ;mov ax, 0E0Ah	; Print a newline
+        ;int 10h
+        ;mov al, 0Dh
+        ;int 10h
 
         ;; Compare values with desired values
         mov ax, [width]
@@ -161,7 +159,6 @@ use16
     dd GDT_start
 
     load_GDT:
-    mov dl, [loader_drivenum]
     cli             ; Clear interrupts first
     lgdt [GDT_Desc] ; Load the GDT to the cpu
 
@@ -182,16 +179,14 @@ use32                    ; We are officially in 32 bit mode now
     mov esp, 090000h	    ; Set up stack pointer
 
     ;; Set up VBE mode info block in memory to be easier to work with
-    ;; 5000h memory location
     mov esi, mode_info_block
-    mov edi, 5000h
+    mov edi, 9000h
     mov ecx, 64                 ; Mode info block is 256 bytes / 4 = # of dbl words
     rep movsd
 
     jmp 08h:2000h              ; Jump to kernel
 
 ;; DATA AREA
-loader_drivenum: db 0
 hexString: db '0x0000'
 hex_to_ascii: db '0123456789ABCDEF'
 
