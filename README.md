@@ -21,10 +21,10 @@ in a video if used (and will credit you, unless you say otherwise). I might open
 
 Project Structure:
 ------------------
-/bin holds intermediate binary files during the build process, and the final OS.bin file to run. 
-/build holds linker scripts for C source files, and a makefile to build the project.
-/include holds subdirectories containing source files to be included in the main source files.
-/src holds the main source files used by the makefile to build the intermediate binary files and final OS.bin binary
+- /bin holds intermediate binary files during the build process, and the final OS.bin file to run. 
+- /build holds linker scripts for C source files, and a makefile to build the project.
+- /include holds subdirectories containing source files to be included in the main source files.
+- /src holds the main source files used by the makefile to build the intermediate binary files and final OS.bin binary
 
 Current Standing:
 -----------------
