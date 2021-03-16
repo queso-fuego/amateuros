@@ -9,7 +9,7 @@ The only assembly should be touches of inline asm as needed going forward. Howev
 probably using Netwide Assembler (NASM) as it seems to be more portable for my systems than flat assembler (FASM), at least for an eventual 64bit change and using an OpenBSD
 development environment. 
 
-- The other main reason was to learn OS development as a newbie with no prior knowledge, and no formal CS eduacation. I have a weird fascination with from-scratch tools and
+- The other main reason was to learn OS development as a newbie with no prior knowledge, and no formal CS education. I have a weird fascination with from-scratch tools and
 programming, and in an ideal world with enough time, I could have a full computer with self-made hardware/software stack, from transistors to internet browser and games, as 
 simple as possible, for 1 person to maintain.
   This is an attempt to start that, and could grow into the other areas over time. This is also the largest personal project and learning/research experience I've done
