@@ -19,6 +19,13 @@ amatuerish, and incomplete. Because it is! Keep that in mind [|:^)
 - Feel free to fork or make your own changes to your own repos, the license is effectively public domain. Suggestions or improvements are welcome, but they will be covered 
 in a video if used (and will credit you, unless you say otherwise). I might open up this repo to the public in the future, but currently lack sufficient time to manage that. 
 
+Project Structure:
+------------------
+/bin holds intermediate binary files during the build process, and the final OS.bin file to run. 
+/build holds linker scripts for C source files, and a makefile to build the project.
+/include holds subdirectories containing source files to be included in the main source files.
+/src holds the main source files used by the makefile to build the intermediate binary files and final OS.bin binary
+
 Current Standing:
 -----------------
 - ASM -> C conversion is complete (sans the bootsector/2ndstage bootloader). The OS from initial kernel boot onward is in C, and further development should continue to be so.

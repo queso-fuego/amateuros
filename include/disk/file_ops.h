@@ -7,7 +7,6 @@ uint8_t *check_filename(uint8_t *filename, uint16_t filename_length);
 
 // delete_file: Delete a file from the disk
 //
-// Assume drive number is in DL
 // Input 1 - File name to delete
 //	     2 - Length of file name
 // Output 1 - Return code

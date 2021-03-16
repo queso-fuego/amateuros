@@ -33,8 +33,6 @@ uint8_t get_key(void)
         // Get keyboard scancode from data port
         __asm__ __volatile__ ("inb $0x60, %%al" : "=a"(scancode) );
 
-        // TODO: Change to allow multiple same keys i.e. bootSect, allow 'oo'. 
-        //   But somehow prevent sending back a million Os or similar...
         if (scancode == oldKey) {    // Keep going until we get a new key
             continue;
         } else if (scancode == 0x2A) {          // Left Shift make code
