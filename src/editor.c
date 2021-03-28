@@ -61,7 +61,6 @@ uint8_t bottom_msg[80];
 
 __attribute__ ((section ("editor_entry"))) void editor_main(void)
 {
-    uint32_t VIDMEM = *(uint32_t *)0x9028;
     uint8_t *new_or_current_string = "(C)reate new file or (L)oad existing file?\0";
     uint8_t *choose_filetype_string = "(B)inary/hex file or (O)ther file type (.txt, etc)?\0";
     uint8_t *keybinds_hex_editor = " $ = Run code ? = Return to kernel S = Save file to disk\0";
@@ -339,7 +338,7 @@ void text_editor(void)
                 return; 
 
             if (input_char == 's') {    // CTRLS Save file to disk
-                print_char(&cursor_x, &cursor_y, *file_ptr);  // Print char again to erase cursor
+                remove_cursor(cursor_x, cursor_y);  // Erase cursor first
 
                 write_bottom_screen_message(blank_line);
                 write_bottom_screen_message(filename_string); // Enter file name at bottom of screen
@@ -356,6 +355,7 @@ void text_editor(void)
                 } else {
                     write_bottom_screen_message(keybinds_text_editor);  // Write keybinds at bottom
 
+                    // TODO: Save & restore user's file position instead of resetting to the start every time
                     file_ptr = (uint8_t *)0x20000;  // Reset file location
                     file_offset = 0;
 
@@ -393,10 +393,11 @@ void text_editor(void)
         if (scancode == RIGHTARROW) {    // Right arrow key
             // Move 1 byte right (till end of line)
             if (cursor_x+1 < current_line_length) { 
-                print_char(&cursor_x, &cursor_y, *file_ptr);  // Print char again to remove cursor
+                remove_cursor(cursor_x, cursor_y);
 
                 file_ptr++;
                 file_offset++;
+                cursor_x++;
                 move_cursor(cursor_x, cursor_y);  // Cursor will be 1 forward from print_char above
             }
             continue;
@@ -415,6 +416,7 @@ void text_editor(void)
             file_offset--;
 
 			// Search for end of previous line above current line (newline 0Ah)
+            // TODO: End of line could be char position 80, not always a line feed
 			while(*file_ptr != 0x0A) {
 				file_ptr--;
                 file_offset--;
@@ -426,6 +428,7 @@ void text_editor(void)
 
 			// Search for either start of file (if 1st line) or end of line above
 			//  previous line
+            // TODO: End of line could be char position 80, not always a line feed
             while (*file_ptr != 0x0A && file_offset != 0) {
 				file_ptr--;
                 file_offset--;
@@ -462,6 +465,7 @@ void text_editor(void)
             current_line_length = 0;
 
 			// Search file data forwards for a newline (0Ah)
+            // TODO: End of line could be char position 80, not always a line feed
 			while (*file_ptr != 0x0A) {
 				file_ptr++;
                 file_offset++;
@@ -473,6 +477,7 @@ void text_editor(void)
 
             // Now search for end of next line or end of file
             //   File length is 1-based, offset is 0-based
+            // TODO: End of line could be char position 80, not always a line feed
 			while ((*file_ptr != 0x0A) && (file_offset != file_length_bytes - 1)) {
                 file_ptr++;
                 file_offset++;
@@ -586,7 +591,7 @@ void hex_editor(void)
         if (input_char == RUNINPUT) {
             file_ptr = (uint8_t *)(0x20000 + editor_filesize);    // Get current end of file
             *file_ptr = 0xCB;                  // Hex CB = far return, to get back to prompt after running code
-            file_ptr = (uint8_t *)0x20000;     // Reset to hex memory location 10,000h
+            file_ptr = (uint8_t *)0x20000;     // Reset to start of hex file memory location
 
             void (*hex_pgm)(void) = (void (*)())0x20000;     
             hex_pgm();      // Jump to and execute input
@@ -606,13 +611,14 @@ void hex_editor(void)
             return;
 
         if (input_char == SAVEPGM) {   // Does user want to save?
-            print_char(&cursor_x, &cursor_y, 0x20);   // Remove cursor first
+            remove_cursor(cursor_x, cursor_y); 
 
             save_hex_program();
             continue;
         }
 
         // Check backspace
+        // TODO: Move all file data back 1 byte after blanking out current byte
         if (input_char == 0x08) {
             if (cursor_x >= 3) {
                 // Blank out 1st and 2nd nibbles of hex byte 
@@ -632,6 +638,7 @@ void hex_editor(void)
         }
 
         // Check delete key
+        // TODO: Move all file data back 1 byte after blanking out current byte
         if (scancode == DELKEY) {
             // Blank out 1st and 2nd nibbles of hex byte
             print_char(&cursor_x, &cursor_y, 0x20);     // space ' ' in ascii
@@ -752,8 +759,8 @@ void hex_editor(void)
         if (hex_count == 2) {   // 2 ascii bytes = 1 hex byte
             hex_byte <<= 4;             // Move digit 4 bits to the left, make room for 2nd digit
             hex_byte |= input_char;     // Move 2nd ascii byte/hex digit into memory
-            input_char = hex_byte;
-            *file_ptr++ = input_char;   // Put hex byte(2 hex digits) into 10000h memory area, and inc di/point to next byte
+            input_char = hex_byte; // TODO: Is this needed?
+            *file_ptr++ = hex_byte;   // Put hex byte(2 hex digits) into 10000h memory area, and inc di/point to next byte
             file_offset++;
             editor_filesize++;          // Increment file size byte counter
             hex_count = 0;              // Reset byte counter
@@ -814,6 +821,7 @@ void save_hex_program(void)
 
 	// Call save_file function
     // file name, file ext, file size (hex sectors), address to save from
+    // TODO: Allow file size >1
     if (save_file(editor_filename, editor_filetype, 0x0001, 0x20000) != 0) {
         write_bottom_screen_message(save_file_error_msg);   // Error on save_file()
 
@@ -821,6 +829,7 @@ void save_hex_program(void)
         write_bottom_screen_message(keybinds_hex_editor);   // Write keybinds at bottom
 
         // Init cursor pos
+        // TODO: Restore cursor to last user position, not start of file
         cursor_x = 0;
         cursor_y = 0;
         move_cursor(cursor_x, cursor_y);

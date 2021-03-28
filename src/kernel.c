@@ -24,7 +24,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t token_count;            // How many tokens did the user enter?
     uint8_t token_file_name1[10];   // Filename 1 for commands
     uint8_t token_file_name2[10];   // Filename 2 for commands
-    uint8_t cmdString[255];         // User input string
+    uint8_t cmdString[256];         // User input string
     uint8_t *cmdString_ptr = cmdString;
     uint8_t input_char   = 0;       // User input character
     uint8_t input_length;           // Length of user input
@@ -47,7 +47,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *windowsMsg     = "\x0A\x0D" "Oops! Something went wrong :(" "\x0A\x0D\0";
     uint8_t *notFoundString = "\x0A\x0D" "Program/file not found!, Try again? (Y)" "\x0A\x0D\0";
     uint8_t *sectNotFound   = "\x0A\x0D" "Sector not found!, Try again? (Y)" "\x0A\x0D\0";
-    uint8_t *goBackMsg      = "\x0A\x0D\x0A\x0D" "Press any key to go back...\0";
     uint8_t *menuString     = "------------------------------------------------------\x0A\x0D"
                               "Kernel Booted, Welcome to QuesOS - 32 Bit 'C' Edition!\x0A\x0D"
                               "------------------------------------------------------\x0A\x0D\x0A\x0D\0";
@@ -100,6 +99,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 break;                  // go on to tokenize user input line
             }
 
+            // TODO: Move all input back 1 char/byte after backspace, if applicable
             if (input_char == 0x08) {       // backspace?
                 if (input_length > 0) {                // Did user input anything?
                     input_length--;                     // yes, go back one char in cmdString
@@ -107,6 +107,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 }
 
                 if (kernel_cursor_x > 2) {     // At start of line (at prompt)?
+                    // TODO: change to use remove_cursor, move back 1 space, print a space, move back 1 space
                     // Move cursor back 1 space
                     kernel_cursor_x--;
 
@@ -196,7 +197,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // --------------------------------------------------------------------
             print_registers(&kernel_cursor_x, &kernel_cursor_y); 
 
-            continue;   // return to prompt '>:'
+            continue;   
         }
 
         for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdGfxtst[idx]; idx++) ;
@@ -319,6 +320,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // Void function pointer to jump to and execute code at specific address in C
             ((void (*)(void))0x10000)();     // Execute program, this can return
 
+            // TODO: In the future, if using a backbuffer, restore screen data from that buffer here instead
+            //  of clearing
+            
             // Clear the screen before going back
             clear_screen();
 
@@ -330,6 +334,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         }
 
         // Else print text file to screen
+        // TODO: Put this behind a "shell" command like 'typ'/'type' or other
         txt_file_ptr = (uint8_t *)0x10000;   // File location to print from
 
         // Print newline first
@@ -342,6 +347,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         
         // print_file_char:
         for (idx = 0; idx < 512; idx++) {
+            // TODO: Handle newlines (byte 0x0A in txt file data)
             if (*txt_file_ptr <= 0x0F)          // Convert to hex
                 *txt_file_ptr = hex_to_ascii(*txt_file_ptr);
 

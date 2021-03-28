@@ -15,7 +15,7 @@
 #include "../include/screen/clear_screen.h"
 #include "../include/keyboard/get_key.h"
 
-void parse_buffer(void);
+void parse_buffer(void);    // Function declarations
 int32_t parse_sum(void);
 int32_t parse_product(void);
 int32_t parse_term(void);
@@ -60,6 +60,7 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
 
         // Enter key with some input or buffer is full
         if ((input_char == 0x0D && scan > 0) || scan == 80) {    
+            remove_cursor(calc_csr_x, calc_csr_y);  // Remove cursor befor evaluating
             parse_buffer();
             scan = 0;
 

@@ -26,6 +26,7 @@ void print_registers(uint16_t *cursor_x, uint16_t *cursor_y)
     print_string(cursor_x, cursor_y, printRegHeading); 
 
 	// Print string for DX
+    // TODO: Change to print out DX after CX, so all are in order
     print_string(cursor_x, cursor_y, regString);
 
 	// Print hex value for DX

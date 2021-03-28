@@ -14,7 +14,6 @@ uint16_t delete_file(uint8_t *filename, uint16_t filename_length)
 {
     uint8_t drive_num       = *(uint8_t *)0x1500;  // Get drive #
     uint16_t error_code     = 0;
-    uint16_t return_code    = 0;
     uint8_t file_size       = 0;
     uint8_t starting_sector = 0;
     uint8_t ft_size         = 0;
@@ -68,7 +67,7 @@ uint16_t delete_file(uint8_t *filename, uint16_t filename_length)
     }
 
     __asm__ __volatile__ ("1:\n"
-                          "outsw\n"               // Write bytes from (DS:)SI into DX port
+                          "outsw\n"               // Write words from (DS:)SI into DX port
                           "jmp .+2\n"             // Small delay after each word written to port
                           "loop 1b"               // Write words until CX = 0
                           // SI = address to write sector from, CX = # of words for 1 sector,

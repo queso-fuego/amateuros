@@ -7,7 +7,7 @@ use16
     mov byte [drive_num], dl	; DL contains initial drive # on boot
 
     xor ax, ax
-    mov es, ax
+    mov es, ax      ; ES = 0
 
     ;; READ 2ND STAGE BOOTLOADER INTO MEMORY FIRST
     mov bl, 02h         ; Will be reading 3 sectors 
