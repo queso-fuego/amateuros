@@ -9,11 +9,11 @@ The only assembly should be touches of inline asm as needed going forward. Howev
 probably using Netwide Assembler (NASM) as it seems to be more portable for my systems than flat assembler (FASM), at least for an eventual 64bit change and using an OpenBSD
 development environment. 
 
-- The other main reason was to learn OS development as a newbie with no prior knowledge, and no formal CS education. I have a weird fascination with from-scratch tools and
+- The other main reason was to learn OS development as a newbie with no prior knowledge, and no formal CS education. I have an interest in from-scratch tools and
 programming, and in an ideal world with enough time, I could have a full computer with self-made hardware/software stack, from transistors to internet browser and games, as 
 simple as possible, for 1 person to maintain.
   This is an attempt to start that, and could grow into the other areas over time. This is also the largest personal project and learning/research experience I've done
-so far in my life, and it's really an amateur trying to make something that will take years, for his own self-interest, and not for any others really. It might look simple,
+so far , and it's really an amateur trying to make something that will take a long time, for his own self-interest, and not for any others really. It might look simple,
 amatuerish, and incomplete. Because it is! Keep that in mind [|:^) 
 
 - Feel free to fork or make your own changes to your own repos, the license is effectively public domain. Suggestions or improvements are welcome, but they will be covered 
@@ -48,14 +48,13 @@ In no particular order:
 - Somehow convert the bootsector and bootloader to C. The bootsector is fine, if enough code is moved elsewhere so that it fits in 512 bytes with the AA55h signature, 
 but I have had no luck so far with structures and intermediate (to me) level C code working with inline asm and 16bit, to allow the bootloader to work effectively.
 - Other/better device drivers, USB, something for SATA or SSD storage, mouse, etc.
-- Graphics primitives - lines/polygons, circles, triangles, drawRect() routines and the like
 - A C standard library: string abstractions, type conversions, other stuff to help out with C code development.
 - Assembler and Compiler for x86 32bit code, with a C-like language. Possibly making a forth or other languages later on too.
-- Games, or other graphical things. Or text based games too
-- Read and use other fonts, font standards. Such as PC screen font or some types of regular bitmapped fonts
+- Games, or other graphical things. Or text based games 
+- Read and use other fonts and font standards, such as PC screen font or some types of regular bitmapped fonts
 - Font editor program, for homemade fonts at least
 - Implement options/flags for the kernel "shell", and other shell commands. Also a way for a user to add shell commands and aliases
-- Fix up/improve editor to allow arbitrary saving/updating of files, and backspace/delete functionality
+- Fix up/improve the editor to allow saving/updating of arbitrary length files, and backspace/delete functionality
 - A windowing system? If the task scheduling and process creation/management gets done
 - Get this thing to run on me old thinkpad, just to say that I can and that it can run on actual hardware
 

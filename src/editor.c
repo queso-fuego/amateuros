@@ -11,6 +11,7 @@
 #include "../include/screen/clear_screen.h"
 #include "../include/keyboard/get_key.h"
 #include "../include/type_conversions/hex_to_ascii.h"
+#include "../include/gfx/2d_gfx.h"
 
 #define ENDOFLINE  80
 #define LEFTARROW  0x4B	 // Keyboard scancodes...
@@ -73,7 +74,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
 
     blank_line[79] = '\0';
 
-	clear_screen(); // Initial screen clear
+	clear_screen(BLUE); // Initial screen clear
 
 	// Print options string
     print_string(&cursor_x, &cursor_y, new_or_current_string);
@@ -85,7 +86,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
         input_char = get_key();
 
     if (input_char == CREATENEW) {
-        clear_screen();
+        clear_screen(BLUE);
 
         // Initialize cursor values
         cursor_x = 0;
@@ -101,7 +102,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
         while (input_char != BINFILE && input_char != OTHERFILE)
             input_char = get_key();
 
-        clear_screen();
+        clear_screen(BLUE);
 
         // Reset cursor position
         cursor_x = 0;
@@ -175,7 +176,7 @@ void editor_load_file(void)
 
         input_char = get_key();
 
-        clear_screen();
+        clear_screen(BLUE);
 
         // Initialize cursor pos
         cursor_x = 0;
@@ -188,7 +189,7 @@ void editor_load_file(void)
 
     // Load hex file
     if (idx == 3) {
-        clear_screen();
+        clear_screen(BLUE);
 
         // Reset cursor position
         cursor_x = 0;
@@ -231,7 +232,7 @@ void editor_load_file(void)
 
     } else {
         // Load text file
-        clear_screen();
+        clear_screen(BLUE);
 
         cursor_x = 0;
         cursor_y = 0;

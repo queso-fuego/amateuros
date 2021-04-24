@@ -12,6 +12,7 @@
 #include "../include/disk/file_ops.h"
 #include "../include/print/print_fileTable.h"
 #include "../include/type_conversions/hex_to_ascii.h"
+#include "../include/gfx/2d_gfx.h"
 
 __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 {
@@ -58,7 +59,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // Initial setup
     // --------------------------------------------------------------------
     // Clear the screen
-    clear_screen();
+    clear_screen(BLUE);
 
     // Print OS boot message
     print_string(&kernel_cursor_x, &kernel_cursor_y, menuString);
@@ -209,7 +210,136 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // TODO: Fill this out later after moving to a VBE graphics mode,
             //   Put examples of graphics primitives here such as: Line drawing, triangles,
             //    squares, other polygons, circles, etc.
-            __asm ("jmpl $0xFFFF, $0x0000");    // Jump to reset vector, reset errything TODO: TEMP FIX
+            clear_screen(LIGHT_GRAY);
+
+            Point p0, p1, p2;
+            Point vertex_array[6];
+
+            // Draw pixel test
+            for (uint8_t i = 0; i < 100; i ++) {
+                for (uint8_t j = 0; j < 100; j++) {
+                    p0.X = 200 + j;
+                    p0.Y = 200 + i;
+                    draw_pixel(p0.X, p0.Y, RED);
+                }
+            } 
+
+            // Draw line tests
+            // Horizontal line
+            p0.X = 1920/2 - 100;
+            p0.Y = 1080/2 - 100;
+            p1.X = 1920/2;
+            p1.Y = 1080/2 - 100;
+            draw_line(p0, p1, BLACK);
+
+            // Vertical line
+            p0.X = 1920/2 + 100;
+            p0.Y = 1080/2 - 100;
+            p1.X = 1920/2 + 100;
+            p1.Y = 1080/2 + 100;
+            draw_line(p0, p1, PURPLE);
+            
+            // Diagonal line up-right
+            p0.X = 1920/2 + 150;
+            p0.Y = 1080/2;
+            p1.X = 1920/2 + 300;
+            p1.Y = 1080/2 - 100;
+            draw_line(p0, p1, DARK_GRAY);
+            
+            // Diagonal line down-right
+            p0.X = 1920/2 + 350;
+            p0.Y = 1080/2 - 100;
+            p1.X = 1920/2 + 500;
+            p1.Y = 1080/2 + 100;
+            draw_line(p0, p1, BLUE);
+
+            // Draw triangle test - right angle
+            p0.X = 1920/2 - 600;
+            p0.Y = 1080/2 + 100;
+            p1.X = 1920/2 - 600;
+            p1.Y = 1080/2 + 200;
+            p2.X = 1920/2 - 450;
+            p2.Y = 1080/2 + 200;
+            draw_triangle(p0, p1, p2, 0x00FF7233);  // Sort of "burnt orange"
+
+            // Draw rectangle test
+            p0.X = 1920/2 - 400;
+            p0.Y = 1080/2 + 100;
+            p1.X = 1920/2 - 100;
+            p1.Y = 1080/2 + 200;
+            draw_rect(p0, p1, 0x0033CEFF);  // Kind of teal maybe
+
+            // Draw polygon test - hexagon
+            vertex_array[0].X = 1920/2;
+            vertex_array[0].Y = 1080/2 + 100;
+            vertex_array[1].X = 1920/2 + 100;
+            vertex_array[1].Y = 1080/2 + 100;
+            vertex_array[2].X = 1920/2 + 200;
+            vertex_array[2].Y = 1080/2 + 150;
+            vertex_array[3].X = 1920/2 + 100;
+            vertex_array[3].Y = 1080/2 + 200;
+            vertex_array[4].X = 1920/2;
+            vertex_array[4].Y = 1080/2 + 200;
+            vertex_array[5].X = 1920/2 - 100;
+            vertex_array[5].Y = 1080/2 + 150;
+            draw_polygon(vertex_array, 6, RED);
+
+            // Draw circle test
+            p0.X = 1920/2 + 350;
+            p0.Y = 1080/2 + 200;
+            draw_circle(p0, 50, BLUE);
+            
+            // Draw ellipse test
+            p0.X = 1920/2 - 600;
+            p0.Y = 1080/2 + 350;
+            draw_ellipse(p0, 100, 50, GREEN - 0x00005500);
+
+            // Fill triangle test
+            p0.X = 1920/2 - 400;
+            p0.Y = 1080/2 + 300;
+            p1.X = 1920/2 - 500;
+            p1.Y = 1080/2 + 350;
+            p2.X = 1920/2 - 420;
+            p2.Y = 1080/2 + 250;
+            fill_triangle_solid(p0, p1, p2, 0x006315FD);  // Some sort of dark purple
+
+            // Fill rectangle test
+            p0.X = 1920/2 - 350;
+            p0.Y = 1080/2 + 300;
+            p1.X = 1920/2 - 150;
+            p1.Y = 1080/2 + 350;
+            fill_rect_solid(p0, p1, 0x0015FDCD);  // Mintish greenish
+
+            // Fill polygon test - hexagon
+            vertex_array[0].X = 1920/2 - 50;
+            vertex_array[0].Y = 1080/2 + 250;
+            vertex_array[1].X = 1920/2 + 50;
+            vertex_array[1].Y = 1080/2 + 250;
+            vertex_array[2].X = 1920/2 + 100;
+            vertex_array[2].Y = 1080/2 + 300;
+            vertex_array[3].X = 1920/2 + 50;
+            vertex_array[3].Y = 1080/2 + 350;
+            vertex_array[4].X = 1920/2 - 50;
+            vertex_array[4].Y = 1080/2 + 350;
+            vertex_array[5].X = 1920/2 - 100;
+            vertex_array[5].Y = 1080/2 + 300;
+            fill_polygon_solid(vertex_array, 6, 0x00FD9B15);  // Light orangey
+
+            // Fill circle test
+            p0.X = 1920/2 + 200;
+            p0.Y = 1080/2 + 270;
+            fill_circle_solid(p0, 50, 0x00FF0FE6);  // Magentish fuschish
+
+            // Fill ellipse test
+            p0.X = 1920/2 + 400;
+            p0.Y = 1080/2 + 350;
+            fill_ellipse_solid(p0, 100, 50, 0x00FFEE0F);  // I Love GOOOOOOoooolllddd
+
+            input_char = get_key(); 
+            clear_screen(BLUE);
+            kernel_cursor_x = 0;
+            kernel_cursor_y = 0;
+            continue;
         }
 
         for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdHlt[idx]; idx++) ;
@@ -228,7 +358,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // --------------------------------------------------------------------
             // Clear Screen
             // --------------------------------------------------------------------
-            clear_screen();
+            clear_screen(BLUE);
 
             // Update cursor values for new position
             kernel_cursor_x = 0;
@@ -324,7 +454,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             //  of clearing
             
             // Clear the screen before going back
-            clear_screen();
+            clear_screen(BLUE);
 
             // Reset cursor position
             kernel_cursor_x = 0;

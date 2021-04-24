@@ -14,6 +14,7 @@
 #include "../include/screen/cursor.h"
 #include "../include/screen/clear_screen.h"
 #include "../include/keyboard/get_key.h"
+#include "../include/gfx/2d_gfx.h"
 
 void parse_buffer(void);    // Function declarations
 int32_t parse_sum(void);
@@ -42,7 +43,7 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
     uint8_t *valid_input = "0123456789+-*/()" "\x20\x0D\x1B";
     uint8_t idx;
 
-	clear_screen();
+	clear_screen(BLUE);
 
     calc_csr_x = 0;
     calc_csr_y = 0;

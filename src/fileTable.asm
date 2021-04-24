@@ -18,7 +18,7 @@ use32
        '2ndstage  ','bin',00h,02h,03h,\
        'testfont  ','fnt',00h,05h,04h,\
        'fileTable ','txt',00h,09h,01h,\
-       'kernel    ','bin',00h,0Ah,0Dh,\
+       'kernel    ','bin',00h,0Ah,15h,\
        'calculator','bin',00h,17h,06h,\
        'editor    ','bin',00h,1Dh,13h
 
