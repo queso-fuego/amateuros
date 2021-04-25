@@ -19,8 +19,8 @@ use32
        'testfont  ','fnt',00h,05h,04h,\
        'fileTable ','txt',00h,09h,01h,\
        'kernel    ','bin',00h,0Ah,15h,\
-       'calculator','bin',00h,17h,06h,\
-       'editor    ','bin',00h,1Dh,13h
+       'calculator','bin',00h,1Fh,0Ch,\
+       'editor    ','bin',00h,2Bh,19h
 
         ;; Sector padding magic!
         times 512-($-$$) db 0       ; pad rest of sector out with 0s
