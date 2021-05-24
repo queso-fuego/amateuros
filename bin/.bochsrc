@@ -1,4 +1,4 @@
-floppya: 1_44=OS.bin, status=inserted
+ata0-master: type=disk, mode=flat, path=../bin/OS.bin, translation=none
 display_library: sdl
 megs: 1
-boot: a
+boot: disk

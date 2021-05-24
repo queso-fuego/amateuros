@@ -2,6 +2,7 @@
 // Kernel.c: basic 'kernel' loaded from 2nd stage bootloader
 // ===========================================================================
 #include "../include/C/stdint.h"
+#include "../include/C/string.h"
 #include "../include/screen/clear_screen.h"
 #include "../include/print/print_string.h"
 #include "../include/print/print_char.h"
@@ -69,21 +70,12 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // --------------------------------------------------------------------
     while (1) {
         // Reset tokens data, arrays, and variables for next input line
-        for (uint8_t i = 0; i < 50; i++)
-            tokens[i] = 0;
-
-        for (uint8_t i = 0; i < 5; i++)
-            tokens_length[i] = 0;
-
+        memset(tokens, 0, 50);
+        memset(tokens_length, 0, 10);
         token_count = 0;
-
-        for (uint8_t i = 0; i < 10; i++) {
-            token_file_name1[i] = 0;
-            token_file_name2[i] = 0;
-        }
-
-        for (uint8_t i = 0; i < 255; i++)
-            cmdString[i] = 0;
+        memset(token_file_name1, 0 , 10);
+        memset(token_file_name2, 0 , 10);
+        memset(cmdString, 0 , 255);
 
         // Print prompt
         print_string(&kernel_cursor_x, &kernel_cursor_y, prompt);
@@ -171,9 +163,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
         // Check commands 
         // Get first token (command to run) & second token (if applicable e.g. file name)
-        for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdDir[idx]; idx++) ;
-
-        if (idx == tokens_length[0]) {
+        if (strncmp(tokens, cmdDir, strlen(cmdDir)) == 0) {
             // --------------------------------------------------------------------
             // File/Program browser & loader   
             // --------------------------------------------------------------------
@@ -181,18 +171,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdReboot[idx]; idx++) ;
-
-        if (idx == tokens_length[0]) {
+        if (strncmp(tokens, cmdReboot, strlen(cmdReboot)) == 0) {
             // --------------------------------------------------------------------
             // Reboot: far jump to reset vector
             // --------------------------------------------------------------------
             __asm ("jmpl $0xFFFF, $0x0000");
         }
 
-        for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdPrtreg[idx]; idx++) ;
-
-        if (idx == tokens_length[0]) {
+        if (strncmp(tokens, cmdPrtreg, strlen(cmdPrtreg)) == 0) {
             // --------------------------------------------------------------------
             // Print Register Values
             // --------------------------------------------------------------------
@@ -201,15 +187,10 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;   
         }
 
-        for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdGfxtst[idx]; idx++) ;
-
-        if (idx == tokens_length[0]) {
+        if (strncmp(tokens, cmdGfxtst, strlen(cmdGfxtst)) == 0) {
             // --------------------------------------------------------------------
             // Graphics Mode Test(s)
             // --------------------------------------------------------------------
-            // TODO: Fill this out later after moving to a VBE graphics mode,
-            //   Put examples of graphics primitives here such as: Line drawing, triangles,
-            //    squares, other polygons, circles, etc.
             clear_screen(LIGHT_GRAY);
 
             Point p0, p1, p2;
@@ -342,9 +323,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdHlt[idx]; idx++) ;
-
-        if (idx == tokens_length[0]) {
+        if (strncmp(tokens, cmdHlt, strlen(cmdHlt)) == 0) {
             // --------------------------------------------------------------------
             // End Program  
             // --------------------------------------------------------------------
@@ -352,9 +331,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             __asm ("hlt");   // Halt cpu
         }
 
-        for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdCls[idx]; idx++) ;
-
-        if (idx == tokens_length[0]) {
+        if (strncmp(tokens, cmdCls, strlen(cmdCls)) == 0) {
             // --------------------------------------------------------------------
             // Clear Screen
             // --------------------------------------------------------------------
@@ -367,18 +344,16 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdShutdown[idx]; idx++) ;
-
-        if (idx == tokens_length[0]) {
+        if (strncmp(tokens, cmdShutdown, strlen(cmdShutdown)) == 0) {
             // --------------------------------------------------------------------
             // Shutdown (QEMU)
             // --------------------------------------------------------------------
             __asm ("outw %%ax, %%dx" : : "a"(0x2000), "d"(0x604) );
+
+            // TODO: Get shutdown command for bochs, user can uncomment which one they want to use
         }
 
-        for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdDelFile[idx]; idx++) ;
-
-        if (idx == tokens_length[0]) {
+        if (strncmp(tokens, cmdDelFile, strlen(cmdDelFile)) == 0) {
             // --------------------------------------------------------------------
             // Delete a file from the disk
             // --------------------------------------------------------------------
@@ -400,9 +375,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        for (idx = 0; idx < tokens_length[0] && tokens[idx] == cmdRenFile[idx]; idx++) ;
-
-        if (idx == tokens_length[0]) {
+        if (strncmp(tokens, cmdRenFile, strlen(cmdRenFile)) == 0) {
             // --------------------------------------------------------------------
             // Rename a file in the file table
             // --------------------------------------------------------------------
@@ -444,9 +417,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         }
 
         // Check file extension in file table entry, if 'bin'/binary, far jump & run
-        for (idx = 0; idx < 3 && fileExt[idx] == fileBin[idx]; idx++) ;
-
-        if (idx == 3) {
+        if (strncmp(fileExt, fileBin, 3) == 0) {
             // Void function pointer to jump to and execute code at specific address in C
             ((void (*)(void))0x10000)();     // Execute program, this can return
 
