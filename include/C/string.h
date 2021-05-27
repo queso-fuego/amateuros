@@ -84,11 +84,11 @@ uint8_t *strncpy(uint8_t *dst, const uint8_t *src, const uint8_t len)
 //
 // Returns:
 //   buffer
-void *memset(void *buffer, const uint8_t byte, const uint8_t len)
+void *memset(void *buffer, const uint8_t byte, const uint16_t len)
 {
     uint8_t *ptr = (uint8_t *)buffer;
 
-    for (uint8_t i = 0; i < len; i++)
+    for (uint16_t i = 0; i < len; i++)
         ptr[i] = byte;
 
     return buffer;

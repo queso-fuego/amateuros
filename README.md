@@ -33,8 +33,7 @@ Current Standing:
 - No interrupts (yet). This is really a basic almost functioning shell of a start of an OS, for now.
 - Vesa Bios Extensions used, for 1920x1080 32bpp mode. This is set up in 2ndstage.asm, and can be changed as needed, if a desired resolution/bpp is found on your qemu setup.
 All text printing is done assuming 1080p 32bpp however, so until that's made generic, you'd need to change some hardcoded values in places.
-- Barely functioning text/hex editor for 512 byte files, and a calculator. It's mainly write once, editing previous files isn't guranteed to work at all for text files, yet. 
-More programs to come in the future.
+- Barely functioning text/hex editor for 512 byte files, and a calculator. More programs to come in the future
 - Ability to save and load text or binary (hex) files. Bin files can be run from the hex editor or main kernel command line, assuming they're valid x86 32bit code, and fit
 within 512 bytes. Bin files are auto-ended with a '0xCB', or far return. That isn't guaranteed to work, and will be changed when a 'more proper' memory manager and program loader
 is developed.
@@ -48,13 +47,13 @@ In no particular order:
 - Somehow convert the bootsector and bootloader to C. The bootsector is fine, if enough code is moved elsewhere so that it fits in 512 bytes with the AA55h signature, 
 but I have had no luck so far with structures and intermediate (to me) level C code working with inline asm and 16bit, to allow the bootloader to work effectively.
 - Other/better device drivers, USB, something for SATA or SSD storage, mouse, etc.
-- A C standard library: string abstractions, type conversions, other stuff to help out with C code development.
+- More C standard library functions/header files: string abstractions, type conversions, other stuff to help out with C code development.
 - Assembler and Compiler for x86 32bit code, with a C-like language. Possibly making a forth or other languages later on too.
 - Games, or other graphical things. Or text based games 
 - Read and use other fonts and font standards, such as PC screen font or some types of regular bitmapped fonts
 - Font editor program, for homemade fonts at least
 - Implement options/flags for the kernel "shell", and other shell commands. Also a way for a user to add shell commands and aliases
-- Fix up/improve the editor to allow saving/updating of arbitrary length files, and backspace/delete functionality
+- Text/bin editor general fixes/improvements
 - A windowing system? If the task scheduling and process creation/management gets done
 - Get this thing to run on me old thinkpad, just to say that I can and that it can run on actual hardware
 
@@ -83,9 +82,9 @@ Tools used for these videos:
 - audio separating/light edits as needed: Audacity
 - OS: Windows 10 Enterprise
 - microphone: Audio Technica AT2005USB
-- webcam/camera: Sony ZV-1
+- webcam/camera: Sony ZV-1 with an Elgato Camlink 4k
 - mouse: Logitech G502
-- keyboard: previously a Leopold FC900R w/cherry black switches. Currently, an HHKB professional hybrid type S. It is not worth the price, but it is quite nice.
+- keyboard: Currently, an HHKB professional hybrid type S. It's not worth the price, but it is quite nice.
 
 Development:
 ------------
@@ -114,11 +113,9 @@ How to Build:
 - Download & install fasm/flat assembler https://flatassembler.net/download.php (nasm should work as well, though you will need minor changes to any pure .asm files)
 - clone and cd to this repo's /build folder
 - Ensure you have the .bochsrc file (if using bochs) in /bin, and the makefile in /build
-- Run 'make OS' or 'make' from command line to build the OS.bin binary file in /bin
-- For bochs: In the /bin folder, run 'bochs' or 'bochs -q', or some other way of starting bochs that you prefer (the .bochsrc file needs updating, use qemu if possible)
-- For qemu: In the /build folder run 'make run', or in the /bin folder run 'qemu-system-i386 -drive format=raw,file=OS.bin,if=ide,index=0,media=disk'.
+- Run 'make OS' or 'make' from the command line to build the OS.bin binary file in /bin
+- For bochs: In the /build folder, run 'make bochs'; or in the /bin folder, run 'bochs' or 'bochs -q', or some other way of starting bochs that you prefer. 
+- For qemu: In the /build folder, run 'make run'; or in the /bin folder run 'qemu-system-i386 -drive format=raw,file=OS.bin,if=ide,index=0,media=disk'.
  
-Note: Qemu seems to run and act better than bochs, so I have switched to using it full time. If anything is broken on bochs and not
-  on qemu, let me know. The .bochsrc file does need to updated for an IDE or regular harddrive instead of a floppy, probably using ata0-master or something like that, so
-  using qemu is recommended at this time.
+Note: Qemu seems to run and act better than bochs, so I have switched to using it full time. If anything is broken on bochs and not on qemu let me know.
 

@@ -2,6 +2,7 @@
 // editor.c: text editor with "modes", from hexidecimal monitor to ascii editing
 //
 #include "../include/C/stdint.h"
+#include "../include/C/string.h"
 #include "../include/print/print_char.h"
 #include "../include/print/print_string.h"
 #include "../include/print/print_hex.h"
@@ -14,6 +15,7 @@
 #include "../include/gfx/2d_gfx.h"
 
 #define ENDOFLINE  80
+#define SPACE      0x20  // ASCII space
 #define LEFTARROW  0x4B	 // Keyboard scancodes...
 #define RIGHTARROW 0x4D
 #define UPARROW    0x48
@@ -29,6 +31,12 @@
 #define ENDPGM     '?'
 #define SAVEPGM    'S'
 
+// File modes
+enum file_modes {
+    NEW    = 1,     // New file
+    UPDATE = 2      // Updating an existing file
+};
+ 
 void editor_load_file(void);    // Function declarations
 void text_editor(void);
 void hex_editor(void);
@@ -59,6 +67,7 @@ uint8_t *load_file_error_msg = "Load file error occurred";
 uint8_t *save_file_error_msg = "Save file error occurred";
 uint8_t hex_byte = 0;   // 1 byte/2 hex digits
 uint8_t bottom_msg[80];
+uint8_t file_mode;     
 
 __attribute__ ((section ("editor_entry"))) void editor_main(void)
 {
@@ -68,10 +77,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
     uint8_t *keybinds_text_editor = " Ctrl-R = Return to kernel Ctrl-S = Save file to disk\0";
 
     // Fill out blank line variable
-    // TODO: Find better way than doing this
-    for (uint8_t i = 0; i < 79; i++)
-        blank_line[i] = ' ';
-
+    memset(blank_line, ' ', 79);
     blank_line[79] = '\0';
 
 	clear_screen(BLUE); // Initial screen clear
@@ -87,6 +93,8 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
 
     if (input_char == CREATENEW) {
         clear_screen(BLUE);
+
+        file_mode = NEW;    // Creating a new file
 
         // Initialize cursor values
         cursor_x = 0;
@@ -113,25 +121,18 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
 
         if (input_char == BINFILE) {
             // Fill out filetype (.bin)
-            editor_filetype[0] = 'b';
-            editor_filetype[1] = 'i';
-            editor_filetype[2] = 'n';
-
+            strncpy(editor_filetype, "bin", 3);
             fill_out_bottom_editor_message(keybinds_hex_editor);    // Write keybinds & filetype at bottom of screen
 
             hex_editor();
 
         } else {
             // Fill out filetype (.txt)
-            editor_filetype[0] = 't';
-            editor_filetype[1] = 'x';
-            editor_filetype[2] = 't';
-
+            strncpy(editor_filetype, "txt", 3);
             fill_out_bottom_editor_message(keybinds_text_editor);   // Write keybinds & filetype at bottom of screen
 
             // Fill out 1 blank sector for new file
-            for (uint16_t i = 0; i < 512; i++)
-                file_ptr[i] = 0;
+            memset(file_ptr, 0, 512);
 
             // Initialize cursor and file variables for new file
             cursor_x = 0;
@@ -145,6 +146,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
     
     } else {
         // Otherwise load file
+        file_mode = UPDATE;   // Updating an existing file
         editor_load_file();
     }
 }
@@ -185,10 +187,8 @@ void editor_load_file(void)
 
     // Load file success
 	// Go to editor depending on file type
-    for (idx = 0; idx < 3 && editor_filetype[idx] == extBin[idx]; idx++) ;
-
-    // Load hex file
-    if (idx == 3) {
+    if (strncmp(editor_filetype, extBin, 3) == 0) {
+        // Load hex file
         clear_screen(BLUE);
 
         // Reset cursor position
@@ -212,10 +212,8 @@ void editor_load_file(void)
             // Print char in AL
             print_char(&cursor_x, &cursor_y, input_char);
 
-            if (cursor_x != 0) {    // At start of line?
-                // No, print space between hex bytes
-                print_char(&cursor_x, &cursor_y, 0x20);
-            }
+            if (cursor_x)    // At start of line? Print space between hex bytes
+                print_char(&cursor_x, &cursor_y, SPACE);
 
             file_ptr++;
             editor_filesize++;
@@ -241,11 +239,11 @@ void editor_load_file(void)
         file_length_bytes = 0;
         file_ptr = (uint8_t *)0x20000;  // File location
 
-        // Load file bytes to screen
+        // Load file bytes to screen - stop at EOF if not 512 bytes
         // TODO: Change to actual file size, not just 1 sector
-        for (uint16_t i = 0; i < 512; i++) { 
+        for (uint16_t i = 0; i < 512 && *file_ptr != 0x00; i++) { 
             if (*file_ptr == 0x0A) {
-                print_char(&cursor_x, &cursor_y, 0x20);  // Newline = space visually
+                print_char(&cursor_x, &cursor_y, SPACE);  // Newline = space visually
 
                 // Go down 1 row
                 cursor_x = 0;
@@ -255,15 +253,6 @@ void editor_load_file(void)
             } else if (*file_ptr <= 0x0F) {
                 input_char = hex_to_ascii(*file_ptr);
                 print_char(&cursor_x, &cursor_y, input_char);
-
-            } else if (cursor_x == ENDOFLINE) {
-                    if (*file_ptr == 0x0A)
-                        print_char(&cursor_x, &cursor_y, 0x20);  // Newline = space visually
-
-                    // Go down 1 row
-                    cursor_x = 0;
-                    cursor_y++;
-                    file_length_lines++;
 
             } else {
                 print_char(&cursor_x, &cursor_y, *file_ptr);
@@ -308,6 +297,20 @@ void text_editor(void)
     uint8_t *x = "X:\0";
     uint8_t *y = "Y:\0";
     uint8_t *length = "LEN:\0";
+    uint8_t *filesize = "SIZE:\0";
+    uint8_t *file_ext_string = "Enter file extension: \0";  // User input file extension
+    uint8_t *save_file_ptr;
+    uint8_t save_file_offset;
+    uint8_t changed_filename[10];
+    uint8_t unsaved = 0;
+    uint8_t *new = "NEW \0";
+    uint8_t *upd = "UPD \0";
+
+    // Write keybinds at bottom of screen
+    fill_out_bottom_editor_message(keybinds_text_editor);
+    cursor_x = 0;
+    cursor_y = 0;
+    move_cursor(cursor_x, cursor_y);
 
     while (1) {
         // Draw cursor X/Y position and current line length
@@ -316,15 +319,43 @@ void text_editor(void)
         cursor_x = 1;
         cursor_y = 65;  // Above last line
         print_string(&cursor_x, &cursor_y, x); 
-        print_hex(&cursor_x, &cursor_y, save_x); 
+        print_hex(&cursor_x, &cursor_y, save_x);    // Cursor X
+
         cursor_x++;
         print_string(&cursor_x, &cursor_y, y); 
-        print_hex(&cursor_x, &cursor_y, save_y); 
+        print_hex(&cursor_x, &cursor_y, save_y);    // Cursor Y
+
         cursor_x++;
         print_string(&cursor_x, &cursor_y, length); 
-        print_hex(&cursor_x, &cursor_y, current_line_length); 
+        print_hex(&cursor_x, &cursor_y, current_line_length); // Current line length
 
-        cursor_x = save_x;
+        cursor_x++;
+        print_string(&cursor_x, &cursor_y, filesize);
+        print_hex(&cursor_x, &cursor_y, file_length_bytes); // Current file size
+
+        cursor_x++;
+        print_char(&cursor_x, &cursor_y, '[');
+        for (uint8_t i = 0; i < 10; i++)
+            print_char(&cursor_x, &cursor_y, editor_filename[i]);   // Filename
+
+        print_char(&cursor_x, &cursor_y, '.');
+        for (uint8_t i = 0; i < 3; i++)
+            print_char(&cursor_x, &cursor_y, editor_filetype[i]);   // File extension
+
+        print_char(&cursor_x, &cursor_y, ']');
+        print_char(&cursor_x, &cursor_y, ' ');
+        print_char(&cursor_x, &cursor_y, ' ');
+
+        // If unsaved changes, put asterisk
+        if (unsaved) print_char(&cursor_x, &cursor_y, '*');
+
+        // Print current file mode
+        if (file_mode == NEW)
+            print_string(&cursor_x, &cursor_y, new);
+        else if (file_mode == UPDATE)
+            print_string(&cursor_x, &cursor_y, upd);
+
+        cursor_x = save_x;  // Restore cursor position
         cursor_y = save_y;
         move_cursor(cursor_x, cursor_y);
 
@@ -339,14 +370,34 @@ void text_editor(void)
                 return; 
 
             if (input_char == 's') {    // CTRLS Save file to disk
-                remove_cursor(cursor_x, cursor_y);  // Erase cursor first
+                // Save cursor position
+                save_x = cursor_x;
+                save_y = cursor_y;
 
-                write_bottom_screen_message(blank_line);
-                write_bottom_screen_message(filename_string); // Enter file name at bottom of screen
+                // If new file, input file name and extension
+                if (file_mode == NEW) {
+                    remove_cursor(cursor_x, cursor_y);  // Erase cursor first
 
-                move_cursor(cursor_x, cursor_y);
+                    write_bottom_screen_message(blank_line);
+                    write_bottom_screen_message(filename_string); // Enter file name at bottom of screen
+                    move_cursor(cursor_x, cursor_y);
 
-                input_file_name();  // Enter file name
+                    input_file_name();  // Enter file name
+
+                    // Input file extension
+                    write_bottom_screen_message(blank_line);
+                    write_bottom_screen_message(file_ext_string);   // Enter file extension
+                    move_cursor(cursor_x, cursor_y);
+
+                    for (uint8_t i = 0; i < 3; i++) {
+                        editor_filetype[i] = get_key();
+                        print_char(&cursor_x, &cursor_y, editor_filetype[i]);
+                        move_cursor(cursor_x, cursor_y);
+                    }
+
+                    file_mode = UPDATE;
+                    fill_out_bottom_editor_message(keybinds_text_editor);
+                }
 
                 // Call save file
                 // file name, file type, file size, address to save from
@@ -356,15 +407,12 @@ void text_editor(void)
                 } else {
                     write_bottom_screen_message(keybinds_text_editor);  // Write keybinds at bottom
 
-                    // TODO: Save & restore user's file position instead of resetting to the start every time
-                    file_ptr = (uint8_t *)0x20000;  // Reset file location
-                    file_offset = 0;
-
-                    // Reset cursor to start of file
-                    cursor_x = 0;
-                    cursor_y = 0;
+                    cursor_x = save_x;
+                    cursor_y = save_y;
                     move_cursor(cursor_x, cursor_y);
                 }
+
+                unsaved = 0;    // User saved file, no more unsaved changes
 
                 continue;
             }
@@ -535,7 +583,7 @@ void text_editor(void)
 
 		// Else print out user input character to screen
         if (input_char == 0x0D) {  // Newline, enter key pressed
-            print_char(&cursor_x, &cursor_y, 0x20);  // Show newline as space at end of line
+            print_char(&cursor_x, &cursor_y, SPACE);  // Show newline as space at end of line
 
             // Print carriage return & line feed
             print_char(&cursor_x, &cursor_y, input_char);
@@ -590,15 +638,12 @@ void hex_editor(void)
 
         // Check for hex editor keybinds
         if (input_char == RUNINPUT) {
-            file_ptr = (uint8_t *)(0x20000 + editor_filesize);    // Get current end of file
-            *file_ptr = 0xCB;                  // Hex CB = far return, to get back to prompt after running code
-            file_ptr = (uint8_t *)0x20000;     // Reset to start of hex file memory location
+            *(uint8_t *)(0x20000 + editor_filesize) = 0xCB; // CB = far return
 
-            void (*hex_pgm)(void) = (void (*)())0x20000;     
-            hex_pgm();      // Jump to and execute input
+            ((void (*)(void))0x20000)();       // Jump to and execute input
 
-            hex_count = 0;      // Reset byte counter
-            file_ptr = (uint8_t *)0x20000;     // Reset to hex memory location 10,000h
+            hex_count = 0;                     // Reset byte counter
+            file_ptr = (uint8_t *)0x20000;     // Reset to hex memory location 20,000h
             file_offset = 0;
             
             // Reset cursor x/y
@@ -623,8 +668,8 @@ void hex_editor(void)
         if (input_char == 0x08) {
             if (cursor_x >= 3) {
                 // Blank out 1st and 2nd nibbles of hex byte 
-                print_char(&cursor_x, &cursor_y, 0x20);     // space ' ' in ascii
-                print_char(&cursor_x, &cursor_y, 0x20);     // space ' ' in ascii
+                print_char(&cursor_x, &cursor_y, SPACE);     // space ' ' in ascii
+                print_char(&cursor_x, &cursor_y, SPACE);     // space ' ' in ascii
 
                 // Move cursor 1 full hex byte left on screen
                 cursor_x -= 5;  // Cursor is after hex byte, go to start of previous hex byte
@@ -642,8 +687,8 @@ void hex_editor(void)
         // TODO: Move all file data back 1 byte after blanking out current byte
         if (scancode == DELKEY) {
             // Blank out 1st and 2nd nibbles of hex byte
-            print_char(&cursor_x, &cursor_y, 0x20);     // space ' ' in ascii
-            print_char(&cursor_x, &cursor_y, 0x20);     // space ' ' in ascii
+            print_char(&cursor_x, &cursor_y, SPACE);     // space ' ' in ascii
+            print_char(&cursor_x, &cursor_y, SPACE);     // space ' ' in ascii
 
             *file_ptr = 0;  // Make current byte 0 in file
             cursor_x -= 2;  // Cursor is after hex byte, move back to 1st nibble of hex byte
@@ -768,7 +813,7 @@ void hex_editor(void)
 
             // Print space to screen if not at start of line
             if (cursor_x != 0) { 
-                print_char(&cursor_x, &cursor_y, 0x20);
+                print_char(&cursor_x, &cursor_y, SPACE);
                 move_cursor(cursor_x, cursor_y);
             }
 
@@ -786,25 +831,16 @@ void save_hex_program(void)
 	// Divide file size by 512 to get # of sectors filled out and remainder of sector not filled out
     if (editor_filesize / 512 == 0) { // Less than 1 sector filled out?
         if (editor_filesize % 512 != 0) {
-            for (uint16_t i = 0; i < 512 - (editor_filesize % 512); i++) {
-                *file_ptr++ = 0;
-                file_offset++;
-            }
+            memset(file_ptr, 0, 512 - (editor_filesize % 512));
 
         } else {
             // Otherwise file is empty, fill out 1 whole sector	
-            for (uint16_t i = 0; i < 512; i++) {
-                *file_ptr++ = 0;
-                file_offset++;
-            }
+            memset(file_ptr, 0, 512);
         }
 
     } else if (editor_filesize % 512 != 0) {
         // Fill out rest of sector with 0s
-        for (uint16_t i = 0; i < 512 - (editor_filesize % 512); i++) {
-            *file_ptr++ = 0;
-            file_offset++;
-        }
+        memset(file_ptr, 0, 512 - (editor_filesize % 512));
     }
 
 	// Print filename string
@@ -813,9 +849,7 @@ void save_hex_program(void)
     move_cursor(cursor_x, cursor_y);
 
 	// Save file type - 'bin'
-    editor_filetype[0] = 'b'; 
-    editor_filetype[1] = 'i'; 
-    editor_filetype[2] = 'n'; 
+    strncpy(editor_filetype, "bin", 3);
 
 	// Input file name to save
 	input_file_name();
@@ -857,18 +891,10 @@ void fill_out_bottom_editor_message(uint8_t *msg)
     uint8_t i = 0;
 
 	// Fill string variable with message to write
+    // TODO: Change to this: strcpy(bottom_msg, msg);
     for (i = 0; msg[i] != '\0'; i++)
         bottom_msg[i] = msg[i];
 
-    // Append filetype (extension) to string
-    bottom_msg[i++] = ' ';
-    bottom_msg[i++] = ' ';
-    bottom_msg[i++] = '[';
-    bottom_msg[i++] = '.';
-    bottom_msg[i++] = editor_filetype[0];
-    bottom_msg[i++] = editor_filetype[1];
-    bottom_msg[i++] = editor_filetype[2];
-    bottom_msg[i++] = ']';
     bottom_msg[i] = '\0';
 	
 	write_bottom_screen_message(bottom_msg);
