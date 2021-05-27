@@ -73,7 +73,6 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
 {
     uint8_t *new_or_current_string = "(C)reate new file or (L)oad existing file?\0";
     uint8_t *choose_filetype_string = "(B)inary/hex file or (O)ther file type (.txt, etc)?\0";
-    uint8_t *keybinds_hex_editor = " $ = Run code ? = Return to kernel S = Save file to disk\0";
     uint8_t *keybinds_text_editor = " Ctrl-R = Return to kernel Ctrl-S = Save file to disk\0";
 
     // Fill out blank line variable
@@ -122,7 +121,6 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
         if (input_char == BINFILE) {
             // Fill out filetype (.bin)
             strncpy(editor_filetype, "bin", 3);
-            fill_out_bottom_editor_message(keybinds_hex_editor);    // Write keybinds & filetype at bottom of screen
 
             hex_editor();
 
@@ -154,7 +152,6 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
 void editor_load_file(void)
 {
     uint8_t idx;
-    uint8_t *keybinds_hex_editor = " $ = Run code ? = Return to kernel S = Save file to disk\0";
     uint8_t *keybinds_text_editor = " Ctrl-R = Return to kernel Ctrl-S = Save file to disk\0";
 
     // Choose file to load
@@ -218,9 +215,6 @@ void editor_load_file(void)
             file_ptr++;
             editor_filesize++;
         }
-
-        // Write keybinds at bottom of screen
-        fill_out_bottom_editor_message(keybinds_hex_editor);
 
         hex_count = 0;      // Reset byte counter
         file_ptr = (uint8_t *)0x20000;  // File location
@@ -292,7 +286,7 @@ void editor_load_file(void)
 
 void text_editor(void)
 {
-    uint8_t *keybinds_text_editor = " Ctrl-R: Return to caller | Ctrl-S: Save file | Ctrl-D: Del line\0";
+    uint8_t *keybinds_text_editor = " Ctrl-R: Return | Ctrl-S: Save | Ctrl-C: Chg name/ext | Ctrl-D: Del line\0";
     uint16_t save_x, save_y;
     uint8_t *x = "X:\0";
     uint8_t *y = "Y:\0";
@@ -413,6 +407,53 @@ void text_editor(void)
                 }
 
                 unsaved = 0;    // User saved file, no more unsaved changes
+
+                continue;
+            }
+
+            // Ctrl-C: Change file name & extension
+            if (input_char == 'c') {
+                save_x = cursor_x;
+                save_y = cursor_y;
+                remove_cursor(cursor_x, cursor_y);  // Erase cursor
+
+                write_bottom_screen_message(blank_line);
+                write_bottom_screen_message(filename_string);   // Enter file name 
+                move_cursor(cursor_x, cursor_y);
+
+                // Get old file name
+                strncpy(changed_filename, editor_filename, 10);
+
+                // Input new file name
+                input_file_name();
+
+                // Input new file extension
+                write_bottom_screen_message(blank_line);
+                write_bottom_screen_message(file_ext_string);
+                move_cursor(cursor_x, cursor_y);
+
+                for (uint8_t i = 0; i < 3; i++) {
+                    editor_filetype[i] = get_key();
+                    print_char(&cursor_x, &cursor_y, editor_filetype[i]);
+                    move_cursor(cursor_x, cursor_y);
+                }
+
+                // Call rename_file() with new file name/ext to overwrite filetable
+                rename_file(changed_filename, 10, editor_filename, 10);
+
+                // Call save_file() to update file ext and data on disk
+                if (save_file(editor_filename, editor_filetype, 1, 0x20000) == 0) {
+                    fill_out_bottom_editor_message(keybinds_text_editor);
+
+                    cursor_x = save_x;
+                    cursor_y = save_y;
+                    move_cursor(cursor_x, cursor_y);
+
+                } else {
+                    // TODO: handle save errors here
+                }
+
+                unsaved = 0;  // Saved file, no unsaved changes now
 
                 continue;
             }
@@ -699,51 +740,103 @@ void text_editor(void)
             continue;
         }
 
-		// Else print out user input character to screen
-        if (input_char == 0x0D) {  // Newline, enter key pressed
-            print_char(&cursor_x, &cursor_y, SPACE);  // Show newline as space at end of line
+		// Else print out user input character to screen (assuming "insert" mode)
+        current_line_length++;  // Update line length
+        file_length_bytes++;    // Update file length
+        if (input_char == 0x0D) file_length_lines++;  // Update file length
 
-            // Print carriage return & line feed
-            print_char(&cursor_x, &cursor_y, input_char);
-            print_char(&cursor_x, &cursor_y, 0x0A);
+        // Move all file data forward 1 byte then fill in current character
+        for (uint16_t i = (file_length_bytes - file_offset); i > 0; i--)
+            file_ptr[i] = file_ptr[i-1];
 
-            *file_ptr++ = 0x0A;   // Use line feed as end of line char in file data
-            file_offset++;
-            file_length_lines++;  // Update file length
-            file_length_bytes++;  // Update file length
+        if (input_char == 0x0D) input_char = 0x0A;  // Convert CR to LF
 
-            move_cursor(cursor_x, cursor_y);
+        *file_ptr = input_char;     // Overwrite current character at cursor
 
-            current_line_length = 0;  // TODO: Not true unless no data below
+        // Reprint file data, starting from cursor 
+        save_x = cursor_x;
+        save_y = cursor_y;
+        save_file_ptr    = file_ptr;
+        save_file_offset = file_offset;
 
-            // TODO: Put full blank line on screen, and move file data down here...
-            //
+        // Newline, reprint all lines until new end of file
+        if (input_char == 0x0A) {
+            // Blank out rest of current line
+            for (uint8_t i = cursor_x; i < 80; i++)
+                print_char(&cursor_x, &cursor_y, SPACE);
 
-            continue;
+            // Blank out rest of file
+            while (cursor_y <= file_length_lines) {
+                for (uint8_t i = 0; i < 80; i++) {
+                    cursor_x = i;
+                    print_char(&cursor_x, &cursor_y, SPACE);
+                }
+            }
+
+            // Reprint file data from current position
+            cursor_x = save_x;
+            cursor_y = save_y;
+            while (*file_ptr != 0x00) {
+                if (*file_ptr == 0x0A) {
+                    // Newline
+                    print_char(&cursor_x, &cursor_y, SPACE);
+                    cursor_x = 0;
+                    cursor_y++;
+
+                } else 
+                    print_char(&cursor_x, &cursor_y, *file_ptr);
+
+                file_ptr++;
+            }
+
+        } else {
+            // Not a newline, only print current line
+            while (*file_ptr != 0x0A && *file_ptr != 0x00) {
+                    print_char(&cursor_x, &cursor_y, *file_ptr);
+                    file_ptr++;
+            }
         }
 
-        // Otherwise print normal character to screen
-        // Is there previous data here?
-        if (*file_ptr == 0) {   
-            // No, this is a new char
-            current_line_length++;  // Update line length
-            file_length_bytes++;    // Update file length
-        }
-        
-        *file_ptr++ = input_char;   // Input character to file data
-        file_offset++;
+        cursor_x = save_x;
+        cursor_y = save_y;
+        file_ptr = save_file_ptr;
+        file_offset = save_file_offset;
 
-        print_char(&cursor_x, &cursor_y, input_char);   // Print it to screen
+        file_ptr++;
+        file_offset++;  // Inserted new character, move forward 1
 
-        // Move cursor 1 character forward
-        // TODO: Assuming insert mode, not overwrite! Move rest of file data 
-        //   forward after this character if inserting before end of file
-        move_cursor(cursor_x, cursor_y);
+        // If inserted newline, go to start of next line
+        if (input_char == 0x0A) {
+            cursor_x = 0;
+            cursor_y++;
+
+            // Get length of new current line
+            current_line_length = 0;
+            while ((*file_ptr != 0x0A && *file_ptr != 0x00)) {
+                file_ptr++;
+                file_offset++;
+                current_line_length++;
+            }
+
+            // Include end of line or end of file byte
+            current_line_length++;
+
+            // Move file data to start of line
+            file_ptr    -= current_line_length - 1;
+            file_offset -= current_line_length - 1;
+
+        } else
+            cursor_x++;
+
+        move_cursor(cursor_x, cursor_y);    // Move cursor on screen
+        unsaved = 1;        // Inserted new character, unsaved changes
     }
 }
 
 void hex_editor(void)
 {
+    uint8_t *keybinds_hex_editor = " $ = Run code ? = Return to kernel S = Save file to disk\0";
+    fill_out_bottom_editor_message(keybinds_hex_editor);  // Write keybinds to screen
     cursor_x = 0;   // Initialize cursor
     cursor_y = 0;
     move_cursor(cursor_x, cursor_y);    // Draw initial cursor

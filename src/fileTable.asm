@@ -20,7 +20,7 @@ use32
        'fileTable ','txt',00h,09h,01h,\
        'kernel    ','bin',00h,0Ah,15h,\
        'calculator','bin',00h,1Fh,0Ch,\
-       'editor    ','bin',00h,2Bh,1Ch
+       'editor    ','bin',00h,2Bh,1Eh
 
         ;; Sector padding magic!
         times 512-($-$$) db 0       ; pad rest of sector out with 0s
