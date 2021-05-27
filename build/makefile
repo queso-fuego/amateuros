@@ -44,7 +44,7 @@ run:
 
 # Launch OS through bochs
 bochs:
-	bochs -qf ../bin/.bochsrc
+	bochs -qf $(BINDIR).bochsrc
 
 clean:
 	rm -f $(BINDIR)*.bin

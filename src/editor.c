@@ -292,7 +292,7 @@ void editor_load_file(void)
 
 void text_editor(void)
 {
-    uint8_t *keybinds_text_editor = " Ctrl-R = Return to kernel Ctrl-S = Save file to disk\0";
+    uint8_t *keybinds_text_editor = " Ctrl-R: Return to caller | Ctrl-S: Save file | Ctrl-D: Del line\0";
     uint16_t save_x, save_y;
     uint8_t *x = "X:\0";
     uint8_t *y = "Y:\0";
@@ -416,15 +416,133 @@ void text_editor(void)
 
                 continue;
             }
+
+            // Ctrl-D: Delete current line
+            if (input_char == 'd') {
+                // If on last line of file, skip TODO: Put in deleting last line
+                if (cursor_y == file_length_lines) continue;
+
+                // Move all lines after this one up 1 line
+                file_ptr    -= cursor_x;
+                file_offset -= cursor_x;
+                save_file_ptr    = file_ptr;
+                save_file_offset = file_offset;
+                while (file_offset < file_length_bytes - current_line_length + 1) {
+                    *file_ptr = *(file_ptr + current_line_length);
+                    file_ptr++;
+                    file_offset++;
+                }
+                
+                // Blank out all lines from current line to end of file
+                save_y = cursor_y;
+                while (cursor_y <= file_length_lines) {
+                    cursor_x = 0;
+                    for (uint8_t j = 0; j < 79; j++)
+                        print_char(&cursor_x, &cursor_y, SPACE);
+
+                    cursor_y++;
+                }
+
+                file_length_lines--;    // 1 less line in the file now
+                file_length_bytes -= current_line_length;
+
+                // Redraw all characters from current line to end of file
+                // TODO: Look into refactoring all of this for better performance?
+                cursor_x = 0;
+                cursor_y = save_y;
+                file_ptr = save_file_ptr;
+
+                while (*file_ptr != 0x00) {
+                    if (*file_ptr == 0x0A) {
+                        // Go to next line
+                        print_char(&cursor_x, &cursor_y, SPACE); // Print space visually
+                        cursor_x = 0;
+                        cursor_y++;
+
+                    } else
+                        print_char(&cursor_x, &cursor_y, *file_ptr);
+
+                    file_ptr++;
+                }
+
+                // Restore cursor position to start of new line
+                cursor_x = 0;
+                cursor_y = save_y;
+                move_cursor(cursor_x, cursor_y);
+
+                file_ptr    = save_file_ptr;
+                file_offset = save_file_offset;
+
+                // Get new current line length
+                current_line_length = 0;
+                while (*file_ptr != 0x0A && *file_ptr != 0x00) {
+                    file_ptr++;
+                    current_line_length++;
+                }
+
+                file_ptr = save_file_ptr;   // Restore file data at cursor
+
+                continue;
+            }
         }
 			
-		// TODO: put backspace code here
-        // if (input_char == 0x08) {
-        //     // Draw space and put 0 in file data
-        //     // Move cursor back to previous character
-        // }	
-        
-		// TODO: put delete key code here
+        // Backspace or delete
+        // TODO: May not be consistent with multiple lines and deleting at different positions
+        if (input_char == 0x08 || scancode == DELKEY) {
+            if (input_char == 0x08 && cursor_x == 0) continue;  // Skip backspace at start of line
+
+            // TODO: Handle newline deletion
+            if (*file_ptr == 0x0A) continue;
+
+            // At end of file? Move cursor back
+            if (*file_ptr == 0x00 && file_offset != 0) {
+                remove_cursor(cursor_x, cursor_y);
+
+                // Go back 1 character
+                cursor_x--;
+                file_ptr--;
+                file_offset--;
+                current_line_length--;
+
+                continue;
+            }
+
+            // Backspace, move back 1 character/byte
+            if (input_char == 0x08) {
+                cursor_x--;
+                file_ptr--;
+                file_offset--;
+            }
+
+            // Move all file data ahead of cursor back 1 byte
+            for (uint16_t i = 0; i < (file_length_bytes - file_offset); i++)
+                file_ptr[i] = file_ptr[i+1];
+
+            file_length_bytes--;    // Deleted a char/byte from file data
+
+            // Rewrite this line
+            save_file_ptr = file_ptr;
+            save_x = cursor_x;
+
+            file_ptr -= cursor_x;   // Start of line
+            cursor_x = 0;
+            // Redraw line until end of line or end of file
+            while (*file_ptr != 0x0A && *file_ptr != 0x00) {
+                print_char(&cursor_x, &cursor_y, *file_ptr);
+                file_ptr++;
+            }
+            print_char(&cursor_x, &cursor_y, SPACE);    // Previous end of line now = space
+            current_line_length--;
+
+            // Restore cursor_file position
+            cursor_x = save_x;
+            file_ptr = save_file_ptr;
+            move_cursor(cursor_x, cursor_y);
+
+            unsaved = 1;    // File now has unsaved changes
+
+            continue;
+        }
 
         if (scancode == LEFTARROW) {    // Left arrow key
             // Move 1 byte left (till beginning of line)
@@ -527,7 +645,7 @@ void text_editor(void)
             // Now search for end of next line or end of file
             //   File length is 1-based, offset is 0-based
             // TODO: End of line could be char position 80, not always a line feed
-			while ((*file_ptr != 0x0A) && (file_offset != file_length_bytes - 1)) {
+			while ((*file_ptr != 0x0A && *file_ptr != 0x00) && (file_offset != file_length_bytes - 1)) {
                 file_ptr++;
                 file_offset++;
                 current_line_length++;
@@ -891,11 +1009,8 @@ void fill_out_bottom_editor_message(uint8_t *msg)
     uint8_t i = 0;
 
 	// Fill string variable with message to write
-    // TODO: Change to this: strcpy(bottom_msg, msg);
-    for (i = 0; msg[i] != '\0'; i++)
-        bottom_msg[i] = msg[i];
-
-    bottom_msg[i] = '\0';
+    strcpy(bottom_msg, msg);
+    bottom_msg[79] = '\0';
 	
 	write_bottom_screen_message(bottom_msg);
 }
