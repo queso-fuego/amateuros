@@ -18,9 +18,9 @@ use32
        '2ndstage  ','bin',00h,02h,03h,\
        'testfont  ','fnt',00h,05h,04h,\
        'fileTable ','txt',00h,09h,01h,\
-       'kernel    ','bin',00h,0Ah,15h,\
-       'calculator','bin',00h,1Fh,0Ch,\
-       'editor    ','bin',00h,2Bh,1Eh
+       'kernel    ','bin',00h,0Ah,16h,\
+       'calculator','bin',00h,20h,0Dh,\
+       'editor    ','bin',00h,2Dh,1Eh
 
         ;; Sector padding magic!
         times 512-($-$$) db 0       ; pad rest of sector out with 0s

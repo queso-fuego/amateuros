@@ -4,6 +4,7 @@
 #include "../include/C/stdint.h"
 #include "../include/C/string.h"
 #include "../include/screen/clear_screen.h"
+#include "../include/memory/physical_memory_manager.h"
 #include "../include/print/print_string.h"
 #include "../include/print/print_char.h"
 #include "../include/screen/cursor.h"
@@ -15,10 +16,21 @@
 #include "../include/type_conversions/hex_to_ascii.h"
 #include "../include/gfx/2d_gfx.h"
 
+void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
+
+// Physical memory map entry from Bios Int 15h EAX E820h
+typedef struct SMAP_entry {
+    uint64_t base_address;
+    uint64_t length;
+    uint32_t type;
+    uint32_t acpi;
+} __attribute__ ((packed)) SMAP_entry_t;
+
+uint16_t kernel_cursor_x = 0;   // Text cursor X position
+uint16_t kernel_cursor_y = 0;   // Text cursor Y position
+
 __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 {
-    uint16_t kernel_cursor_x = 0;   // Text cursor X position
-    uint16_t kernel_cursor_y = 0;   // Text cursor Y position
     uint8_t tokens[50];             // tokens array, equivalent-ish to tokens[5][10]
     uint8_t *tokens_ptr = tokens;
     uint16_t tokens_length[5];      // length of each token in tokens array (0-10)
@@ -64,6 +76,10 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
     // Print OS boot message
     print_string(&kernel_cursor_x, &kernel_cursor_y, menuString);
+
+    // Print memory map info
+    print_physical_memory_info();
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D\x0A\x0D");
 
     // --------------------------------------------------------------------
     // Get user input, print to screen & run command/program  
@@ -463,3 +479,56 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0D);
     }
 }
+
+// Print information from the physical memory map (SMAP)
+void print_physical_memory_info(void)  
+{
+    uint32_t num_entries = *(uint32_t *)0x8500;         // Number of SMAP entries
+    SMAP_entry_t *SMAP_entry = (SMAP_entry_t *)0x8504;  // Memory map entries start point
+
+    for (uint32_t i = 0; i < num_entries; i++) {
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "Region ");
+        print_hex(&kernel_cursor_x, &kernel_cursor_y, i);
+
+        print_string(&kernel_cursor_x, &kernel_cursor_y, ": base: ");
+        print_hex(&kernel_cursor_x, &kernel_cursor_y, SMAP_entry->base_address);
+
+        print_string(&kernel_cursor_x, &kernel_cursor_y, " length: ");
+        print_hex(&kernel_cursor_x, &kernel_cursor_y, SMAP_entry->length);
+
+        print_string(&kernel_cursor_x, &kernel_cursor_y, " type: ");
+        print_hex(&kernel_cursor_x, &kernel_cursor_y, SMAP_entry->type);
+
+        switch(SMAP_entry->type) {
+            case 1:
+                print_string(&kernel_cursor_x, &kernel_cursor_y, " (Available)");
+                break;
+            case 2: 
+                print_string(&kernel_cursor_x, &kernel_cursor_y, " (Reserved)");
+                break;
+            case 3: 
+                print_string(&kernel_cursor_x, &kernel_cursor_y, " (ACPI Reclaim)");
+                break;
+            case 4: 
+                print_string(&kernel_cursor_x, &kernel_cursor_y, " (ACPI NVS Memory)");
+                break;
+            default: 
+                print_string(&kernel_cursor_x, &kernel_cursor_y, " (Reserved)");
+                break;
+        }
+
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+        SMAP_entry++;   // Go to next entry
+    }
+
+    // TODO: Print total amount of memory
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "Total memory in bytes: ");
+
+    SMAP_entry--;   // Get last SMAP entry
+    print_hex(&kernel_cursor_x, &kernel_cursor_y, SMAP_entry->base_address + SMAP_entry->length - 1);
+  
+    // TODO: Print out memory manager block info
+}
+
+

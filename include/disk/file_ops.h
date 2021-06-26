@@ -361,7 +361,7 @@ uint16_t save_file(uint8_t *filename, uint8_t *file_ext, uint8_t in_file_size, u
 
     // Write file data to disk
     __asm__ __volatile__ ("outb %%al, %%dx" : : "a"((drive_num & 0x0F) | 0xA0), "d"(0x1F6) );   // Head/drive # port - head/drive #
-    __asm__ __volatile__ ("outb %%al, %%dx" : : "a"(in_file_size),      "d"(0x1F2) );  // Sector count port - # of sectors to read
+    __asm__ __volatile__ ("outb %%al, %%dx" : : "a"(in_file_size),      "d"(0x1F2) );  // Sector count port - # of sectors to write
     __asm__ __volatile__ ("outb %%al, %%dx" : : "a"(last_saved_sector), "d"(0x1F3) );  // Sector number port - sector to start writing at (1-based!)
     __asm__ __volatile__ ("outb %%al, %%dx" : : "a"(0),    "d"(0x1F4) );  // Cylinder low port - cylinder low #
     __asm__ __volatile__ ("outb %%al, %%dx" : : "a"(0),    "d"(0x1F5) );  // Cylinder high port - cylinder high #

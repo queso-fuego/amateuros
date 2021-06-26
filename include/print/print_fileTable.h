@@ -59,8 +59,8 @@ void print_fileTable(uint16_t *cursor_x, uint16_t *cursor_y)
         filetable_ptr++;
 
         // Starting sector section
-        // 4 blanks before starting sector
-        for (uint8_t i = 0; i < 4; i++)
+        // 6 blanks before starting sector
+        for (uint8_t i = 0; i < 6; i++)
             print_char(cursor_x, cursor_y, 0x20);
         
         // Print hex value
@@ -69,8 +69,8 @@ void print_fileTable(uint16_t *cursor_x, uint16_t *cursor_y)
         filetable_ptr++;
 
         // File size section
-        // 9 blanks before file size
-        for (uint8_t i = 0; i < 9; i++)
+        // 11 blanks before file size
+        for (uint8_t i = 0; i < 11; i++)
             print_char(cursor_x, cursor_y, 0x20);
         
         // Print hex value

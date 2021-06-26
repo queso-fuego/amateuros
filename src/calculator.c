@@ -8,6 +8,7 @@
 //	term	:= '-' term | '(' sum ')' | number ;
 //
 #include "../include/C/stdint.h"
+#include "../include/C/string.h"
 #include "../include/print/print_char.h"
 #include "../include/print/print_string.h"
 #include "../include/print/print_hex.h"
