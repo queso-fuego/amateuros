@@ -28,7 +28,6 @@ Project Structure:
 
 Current Standing:
 -----------------
-- ASM -> C conversion is complete (sans the bootsector/2ndstage bootloader). The OS from initial kernel boot onward is in C, and further development should continue to be so.
 - 32bit protected mode, all ring 0, no paging (yet). Will probably stick to ring 0 only when/if it's set up, and plan on paging and memory management in the nearish future.
 - No interrupts (yet). This is really a basic almost functioning shell of a start of an OS, for now.
 - Vesa Bios Extensions used, for 1920x1080 32bpp mode. This is set up in 2ndstage.asm, and can be changed as needed, if a desired resolution/bpp is found on your qemu setup.
@@ -41,18 +40,19 @@ is developed.
 TODO (There's ALWAYS more to do, this list may not get updated as much as I'd like):
 ------------------------------------------------------------------------------------
 In no particular order:
-- Physical memory manager, after this, paging for 32bit protected mode, then a virtual memory manager. Then change to 64bit long mode, maybe with PAE or other RAM extending stuff.
+- Paging for 32bit protected mode, then a virtual memory manager. Then change to 64bit long mode, maybe with PAE or other RAM extending stuff.
+- UEFI, as an alternative to the current bootsector and bootloader. It could be all in C but has it's own ways of handling device discovery and setting video modes and things.
 - Task scheduling? Not sure yet, may start with round-robin or another simple way to do processes. Would need reliable time tracking, millisecond level at least.
-- Interrupts, with an interrupt descriptor table / IDT, for the keyboard and disk reading/loading at minimum.
+- Interrupts, with an interrupt descriptor table / IDT and ISRs. Hardware interrupts for the keyboard and disk reading/loading at minimum, and software interrupts (int 80h).
 - Somehow convert the bootsector and bootloader to C. The bootsector is fine, if enough code is moved elsewhere so that it fits in 512 bytes with the AA55h signature, 
 but I have had no luck so far with structures and intermediate (to me) level C code working with inline asm and 16bit, to allow the bootloader to work effectively.
 - Other/better device drivers, USB, something for SATA or SSD storage, mouse, etc.
 - More C standard library functions/header files: string abstractions, type conversions, other stuff to help out with C code development.
-- Assembler and Compiler for x86 32bit code, with a C-like language. Possibly making a forth or other languages later on too.
-- Games, or other graphical things. Or text based games 
-- Read and use other fonts and font standards, such as PC screen font or some types of regular bitmapped fonts
-- Font editor program, for homemade fonts at least
-- Implement options/flags for the kernel "shell", and other shell commands. Also a way for a user to add shell commands and aliases
+- Assembler and Compiler for x86 (or x86_64?)code, with a C-like language. Possibly making a forth or other languages later on too.
+- Games, or other graphical things. Or text based games.
+- Read and use other fonts and font standards, such as PC screen font or some types of regular bitmapped fonts.
+- Font editor program, for homemade fonts at least.
+- Implement options/flags for the kernel "shell", and other shell commands. Also a way for a user to add shell commands and aliases.
 - Text/bin editor general fixes/improvements
 - A windowing system? If the task scheduling and process creation/management gets done
 - Get this thing to run on me old thinkpad, just to say that I can and that it can run on actual hardware
@@ -67,32 +67,32 @@ https://www.youtube.com/QuesoFuego
 Playlist link:
 https://www.youtube.com/playlist?list=PLT7NbkyNWaqajsw8Xh7SP9KJwjfpP8TNX
 
-- All development is currently done on "live" recordings, and would probably be arduous or boring for most people to watch unedited. Footage is edited down before uploading to cut out long pauses, gratuitous ums and ahs, redundant info, off-topic ramblings, etc.
+- All development is currently done on "live" recordings, and is probably be arduous or boring for most people to watch. Footage is edited down before uploading to cut out long pauses, gratuitous ums and ahs, redundant info, off-topic ramblings, etc.
 
 *Suggestions or comments regarding videos should be handled in either video comments, twitter @Queso_Fuego, or through email - fuegoqueso at gmail dot com*
 
 ** The rollout of these will most likely be slow (weeks to months). I have a full time job and lack time/energy/motivation most days to do too much 
-    outside of research. I can and will respond to messages made in either Youtube video comments, twitter, or by email however.**
+    outside of research. However, I will respond to messages sent by Youtube video comments, twitter, or email.**
    
-** Any updates to this repo will not necessarily occur at the same time as recording a video or uploading to youtube, it could be before or after**
+** Any updates to this repo will not necessarily occur at the same time as recording a video or uploading to youtube, it could be before or after.**
 
 Tools used for these videos:
 - recording: OBS Studio
 - video editor: Davinci Resolve
 - audio separating/light edits as needed: Audacity
 - OS: Windows 10 Enterprise
-- microphone: Audio Technica AT2005USB
-- webcam/camera: Sony ZV-1 with an Elgato Camlink 4k
+- microphone: Shure SM7B, Cloudlifter CL-1, Focusrite Scarlett Solo
+- camera: Sony ZV-1, Elgato Camlink 4k
 - mouse: Logitech G502
-- keyboard: Currently, an HHKB professional hybrid type S. It's not worth the price, but it is quite nice.
+- keyboard: Currently, HHKB professional hybrid type S. It's not worth the price, but it is quite nice.
 
 Development:
 ------------
 Right now, subject to change, this OS is developed with: 
 - openBSD vm using VMware Workstation Player (32bit, will move to a 64bit vm eventually)
-- vim (will move to neovim eventually)
+- vim (might move to neovim eventually)
 - qemu emulator (sometimes bochs)
-- fasm assembler (as needed, will switch to NASM for future asm development)
+- fasm assembler (as needed, will switch to NASM in the future)
 
 This may change later on if I more fully develop the OS within itself; that is, running the OS binary and editing the binary during runtime from within itself, using the OS's
 own editors, languages, and toolchains.
@@ -104,12 +104,12 @@ Screenshots:
 ![Showing 'dir' command inside bochs dev environment](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/OS_Dev_1_2020_03_08.PNG "Basic Screenshot showing 'dir' command inside dev environment")
 ![Showing 'editor' program in hex editor mode, loading its own bootsector](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/OS_Dev_2020_07-17.PNG "Basic Screenshot showing 'editor' program loading its own bootsector")
 
-These are out of date and more screenshots will be added in future
+These are wayyy out of date and more screenshots will be added in the future
 
-How to Build:
+How to Build/Run:
 -------------
 - Download & install bochs http://bochs.sourceforge.net/ or qemu https://www.qemu.org/download/ (or get either from your distro's package manager)
-- Download & install make or ensure you have 'make' installed (bsd and gnu make should both work I think, though this is mainly tested with bsdmake)
+- Download & install 'make' (bsd and gnu make should both work I think, though this is mainly tested with bsdmake)
 - Download & install fasm/flat assembler https://flatassembler.net/download.php (nasm should work as well, though you will need minor changes to any pure .asm files)
 - clone and cd to this repo's /build folder
 - Ensure you have the .bochsrc file (if using bochs) in /bin, and the makefile in /build
@@ -117,5 +117,5 @@ How to Build:
 - For bochs: In the /build folder, run 'make bochs'; or in the /bin folder, run 'bochs' or 'bochs -q', or some other way of starting bochs that you prefer. 
 - For qemu: In the /build folder, run 'make run'; or in the /bin folder run 'qemu-system-i386 -drive format=raw,file=OS.bin,if=ide,index=0,media=disk'.
  
-Note: Qemu seems to run and act better than bochs, so I have switched to using it full time. If anything is broken on bochs and not on qemu let me know.
+Note: Qemu seems to run and act better than bochs, so I have switched to using it full time. If anything is broken on bochs let me know.
 
