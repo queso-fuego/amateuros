@@ -4,13 +4,14 @@
 #include "../include/C/stdint.h"
 #include "../include/C/string.h"
 #include "../include/screen/clear_screen.h"
-#include "../include/memory/physical_memory_manager.h"
 #include "../include/print/print_string.h"
 #include "../include/print/print_char.h"
 #include "../include/screen/cursor.h"
 #include "../include/keyboard/get_key.h"
 #include "../include/print/print_hex.h"
+#include "../include/print/print_dec.h"
 #include "../include/print/print_registers.h"
+#include "../include/memory/physical_memory_manager.h"
 #include "../include/disk/file_ops.h"
 #include "../include/print/print_fileTable.h"
 #include "../include/type_conversions/hex_to_ascii.h"
@@ -53,11 +54,12 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdEditor   = "editor\0";	    // Launch editor program
     uint8_t *cmdDelFile  = "del\0";		    // Delete a file from disk
     uint8_t *cmdRenFile  = "ren\0";         // Rename a file in the file table
+    uint8_t *cmdPrtmemmap = "prtmemmap\0";  // Print physical memory map info
     uint8_t fileExt[3];
     uint8_t *fileBin = "bin\0";
     uint8_t *fileTxt = "txt\0";
     uint8_t fileSize = 0;
-    uint8_t *txt_file_ptr;
+    uint8_t *file_ptr;
     uint8_t *windowsMsg     = "\x0A\x0D" "Oops! Something went wrong :(" "\x0A\x0D\0";
     uint8_t *notFoundString = "\x0A\x0D" "Program/file not found!, Try again? (Y)" "\x0A\x0D\0";
     uint8_t *sectNotFound   = "\x0A\x0D" "Sector not found!, Try again? (Y)" "\x0A\x0D\0";
@@ -68,6 +70,16 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *prompt         = ">:\0";
     uint8_t *pgmNotLoaded   = "\x0A\x0D" "Program found but not loaded, Try Again" "\x0A\x0D\0";
 
+    uint32_t num_SMAP_entries; 
+    uint32_t total_memory; 
+    SMAP_entry_t *SMAP_entry;
+    uint32_t needed_blocks;
+    uint32_t *allocated_address;
+
+    // Constants
+    const uint32_t MEMMAP_AREA = 0x30000;
+    // TODO: Fill out more constants to replace magic numbers
+
     // --------------------------------------------------------------------
     // Initial setup
     // --------------------------------------------------------------------
@@ -77,9 +89,40 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // Print OS boot message
     print_string(&kernel_cursor_x, &kernel_cursor_y, menuString);
 
+    // Physical memory manager setup
+    num_SMAP_entries = *(uint32_t *)0x8500;
+    SMAP_entry       = (SMAP_entry_t *)0x8504;
+    SMAP_entry += num_SMAP_entries - 1;
+
+    total_memory = SMAP_entry->base_address + SMAP_entry->length - 1;
+
+    // Initialize physical memory manager to all available memory, put it at some location
+    // All memory will be set as used/reserved by default
+    initialize_memory_manager(MEMMAP_AREA, total_memory);
+
+    // TODO: First free location seems to be at 0x20000, find why, is this wrong? Should be at 0xA000
+
+    // Initialize memory regions for the available memory regions in the SMAP (type = 1)
+    SMAP_entry = (SMAP_entry_t *)0x8504;
+    //for (uint32_t i = 0; i < num_SMAP_entries; i++, SMAP_entry++) DEBUGGING
+    //    if (SMAP_entry->type == 1)
+    //        initialize_memory_region(SMAP_entry->base_address, SMAP_entry->length);
+    for (uint32_t i = 0; i < num_SMAP_entries; i++) {
+        if (SMAP_entry->type == 1)
+            initialize_memory_region(SMAP_entry->base_address, SMAP_entry->length);
+
+        SMAP_entry++;
+    }
+
+    // Set memory regions/blocks for the kernel and "OS" memory map areas as used/reserved
+    deinitialize_memory_region(0x1000, 0x9000);                            // Reserve all memory below A000h for the kernel/OS
+    deinitialize_memory_region(MEMMAP_AREA, max_blocks / BLOCKS_PER_BYTE); // Reserve physical memory map area 
+
+    // Successfully set up and initialized the physical memory manager
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "Physical Memory Manager initialized.\x0A\x0D\x0A\x0D");
+
     // Print memory map info
     print_physical_memory_info();
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D\x0A\x0D");
 
     // --------------------------------------------------------------------
     // Get user input, print to screen & run command/program  
@@ -417,14 +460,45 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
+        if (strncmp(tokens, cmdPrtmemmap, strlen(cmdPrtmemmap)) == 0) {
+            // Print out physical memory map info
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D-------------------\x0A\x0DPhysical Memory Map"
+                                                             "\x0A\x0D-------------------\x0A\x0D\x0A\x0D");
+            print_physical_memory_info();
+            continue;
+        }
+
         // If command not input, search file table entries for user input file
+        file_ptr = check_filename(cmdString, tokens_length[0]);
+        if (*file_ptr == 0) {  
+            print_string(&kernel_cursor_x, &kernel_cursor_y, failure);  // File not found in filetable, error
+            move_cursor(kernel_cursor_x, kernel_cursor_y);
+
+            continue;
+        }
+
+        // file_ptr is pointing to filetable entry, get number of blocks needed to load the file
+        //   num_blocks = (file size in sectors * # of bytes in a sector) / size of a block in bytes
+        needed_blocks = (file_ptr[15] * 512) / BLOCK_SIZE;  // Convert file size in bytes to blocks
+        if (needed_blocks == 0) needed_blocks = 1;          // If file size < 1 block, use 1 block default
+
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Allocating ");
+        print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_blocks);
+        print_string(&kernel_cursor_x, &kernel_cursor_y, " block(s)\x0A\x0D");
+        
+        allocated_address = allocate_blocks(needed_blocks); // Allocate 4KB blocks of memory, get address to memory
+
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Allocated to address ");
+        print_hex(&kernel_cursor_x, &kernel_cursor_y, (uint32_t)allocated_address);
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+        
         // Call load_file function to load program/file to memory address
         // Input 1: File name (address)
         //       2: File name length
         //       3: Memory offset to load file to
         //       4: File extension variable
         // Return value - 0 = Success, !0 = error
-        if (load_file(cmdString, tokens_length[0], 0x10000, fileExt) != 0) {
+        if (load_file(cmdString, tokens_length[0], (uint32_t)allocated_address, fileExt) != 0) {
             // Error, program did not load correctly
             print_string(&kernel_cursor_x, &kernel_cursor_y, pgmNotLoaded);
             move_cursor(kernel_cursor_x, kernel_cursor_y);
@@ -435,7 +509,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         // Check file extension in file table entry, if 'bin'/binary, far jump & run
         if (strncmp(fileExt, fileBin, 3) == 0) {
             // Void function pointer to jump to and execute code at specific address in C
-            ((void (*)(void))0x10000)();     // Execute program, this can return
+            ((void (*)(void))allocated_address)();     // Execute program, this can return
 
             // TODO: In the future, if using a backbuffer, restore screen data from that buffer here instead
             //  of clearing
@@ -447,12 +521,23 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             kernel_cursor_x = 0;
             kernel_cursor_y = 0;
 
+            // Free memory when done
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Freeing ");
+            print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_blocks);
+            print_string(&kernel_cursor_x, &kernel_cursor_y, " block(s)\x0A\x0D");
+            
+            free_blocks(allocated_address, needed_blocks); // Free previously allocated blocks
+
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Freed at address ");
+            print_hex(&kernel_cursor_x, &kernel_cursor_y, (uint32_t)allocated_address);
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+
             continue;   // Loop back to prompt for next input
         }
 
         // Else print text file to screen
         // TODO: Put this behind a "shell" command like 'typ'/'type' or other
-        txt_file_ptr = (uint8_t *)0x10000;   // File location to print from
+        file_ptr = (uint8_t *)allocated_address;   // File location to print from
 
         // Print newline first
         print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0A);
@@ -465,18 +550,29 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         // print_file_char:
         for (idx = 0; idx < 512; idx++) {
             // TODO: Handle newlines (byte 0x0A in txt file data)
-            if (*txt_file_ptr <= 0x0F)          // Convert to hex
-                *txt_file_ptr = hex_to_ascii(*txt_file_ptr);
+            if (*file_ptr <= 0x0F)          // Convert to hex
+                *file_ptr = hex_to_ascii(*file_ptr);
 
             // Print file character to screen
-            print_char(&kernel_cursor_x, &kernel_cursor_y, *txt_file_ptr);
+            print_char(&kernel_cursor_x, &kernel_cursor_y, *file_ptr);
 
-            txt_file_ptr++;
+            file_ptr++;
         }
 
         // Print newline after printing file contents
         print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0A);
         print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0D);
+
+        // Free memory when done
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Freeing ");
+        print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_blocks);
+        print_string(&kernel_cursor_x, &kernel_cursor_y, " block(s)\x0A\x0D");
+        
+        free_blocks(allocated_address, needed_blocks); // Free previously allocated blocks
+
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Freed at address ");
+        print_hex(&kernel_cursor_x, &kernel_cursor_y, (uint32_t)allocated_address);
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
     }
 }
 
@@ -521,14 +617,25 @@ void print_physical_memory_info(void)
         SMAP_entry++;   // Go to next entry
     }
 
-    // TODO: Print total amount of memory
+    // Print total amount of memory
     print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
     print_string(&kernel_cursor_x, &kernel_cursor_y, "Total memory in bytes: ");
 
     SMAP_entry--;   // Get last SMAP entry
     print_hex(&kernel_cursor_x, &kernel_cursor_y, SMAP_entry->base_address + SMAP_entry->length - 1);
   
-    // TODO: Print out memory manager block info
+    // TODO: Print out memory manager block info:
+    //   total memory in 4KB blocks, total # of used blocks, total # of free blocks
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0DTotal 4KB blocks: ");
+    print_dec(&kernel_cursor_x, &kernel_cursor_y, max_blocks);
+
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0DUsed or reserved blocks: ");
+    print_dec(&kernel_cursor_x, &kernel_cursor_y, used_blocks);
+
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Free or available blocks: ");
+    print_dec(&kernel_cursor_x, &kernel_cursor_y, max_blocks - used_blocks);
+
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D\x0A\x0D");
 }
 
 

@@ -38,11 +38,11 @@ use16
     call load_sectors
 
     ;; READ KERNEL INTO MEMORY THIRD
-    mov bl, 15h         ; Will be reading 16h sectors 
+    mov bl, 1Ah         ; Will be reading 1Bh sectors 
     mov di, 2000h       ; Memory address to read sectors into (0000h:2000h)
 
     mov dx, 1F2h        ; Sector count port
-    mov al, 16h         ; # of sectors to read
+    mov al, 1Bh         ; # of sectors to read
     out dx, al
 
     mov dx, 1F3h        ; Sector # port

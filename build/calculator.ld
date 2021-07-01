@@ -1,6 +1,6 @@
 SECTIONS
 {
-    .text 0x10000 :
+    .text :
     {
         *(calc_entry); 
         *(.text*);

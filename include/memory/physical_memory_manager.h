@@ -55,7 +55,7 @@ int32_t find_first_free_blocks(uint32_t num_blocks)
                 int32_t bit = 1 << j;
 
                 // If bit is unset/0, found start of a free region of memory
-                if (!(memory_map[i] & j)) {
+                if (!(memory_map[i] & bit)) {
                     int32_t start_bit = i*32 + bit;  // Get bit at index i within memory map
                     uint32_t free_blocks = 0;
 
@@ -137,7 +137,7 @@ uint32_t *allocate_blocks(uint32_t num_blocks)
 // Free blocks memory
 void free_blocks(uint32_t *address, uint32_t num_blocks)
 {
-    int32_t starting_blocks = (uint32_t)address / BLOCK_SIZE;   // Convert address to blocks
+    int32_t starting_block = (uint32_t)address / BLOCK_SIZE;   // Convert address to blocks 
 
     for (uint32_t i = 0; i < num_blocks; i++) 
         unset_block(starting_block + i);    // Unset bits/blocks in memory map, to free

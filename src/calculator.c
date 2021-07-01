@@ -12,6 +12,7 @@
 #include "../include/print/print_char.h"
 #include "../include/print/print_string.h"
 #include "../include/print/print_hex.h"
+#include "../include/print/print_dec.h"
 #include "../include/screen/cursor.h"
 #include "../include/screen/clear_screen.h"
 #include "../include/keyboard/get_key.h"
@@ -27,13 +28,15 @@ int8_t is_digit(int32_t *num);
 int8_t match_char(uint8_t in_char);
 void print_newline(void);
 
+// TODO: Change how ERRORs are handled and percolated back up through function calls
+//   because getting a -1 result will print Syntax Error regardless - BUG
 const int8_t  ERROR = -1;
 const uint8_t TRUE  = 1;
 const uint8_t FALSE = 0;
 
 uint8_t buffer[80];
 uint16_t scan;
-uint8_t *error_msg = "Syntax Error\0";
+static uint8_t *error_msg = "Syntax Error\0";
 uint16_t calc_csr_x;
 uint16_t calc_csr_y;
 int32_t parse_num = 0;
@@ -96,7 +99,7 @@ void parse_buffer(void)
 	if ((num = parse_sum()) == ERROR)
         print_string(&calc_csr_x, &calc_csr_y, error_msg);
     else
-        print_hex(&calc_csr_x, &calc_csr_y, num);
+        print_dec(&calc_csr_x, &calc_csr_y, num);
 
 	print_newline();
 }

@@ -42,8 +42,8 @@ void text_editor(void);
 void hex_editor(void);
 void save_hex_program(void);
 void input_file_name(void);
-void fill_out_bottom_editor_message(uint8_t *msg);
-void write_bottom_screen_message(uint8_t *msg);
+void fill_out_bottom_editor_message(const uint8_t *msg);
+void write_bottom_screen_message(const uint8_t *msg);
 
 uint8_t editor_filetype[3];     // Global variables
 uint8_t editor_filename[10];
@@ -56,15 +56,15 @@ uint16_t file_offset;
 uint16_t current_line_length;
 uint16_t file_length_lines;
 uint16_t file_length_bytes;
-uint8_t *filename_string = "Enter file name: \0";
+static const uint8_t *filename_string = "Enter file name: \0";
 uint8_t scancode;
 uint8_t ctrl_key;
 uint8_t hex_count = 0;
 uint8_t blank_line[80];
 uint8_t *extBin = "bin";
-uint8_t *choose_file_msg = "File to load: \0";
-uint8_t *load_file_error_msg = "Load file error occurred";
-uint8_t *save_file_error_msg = "Save file error occurred";
+static const uint8_t *choose_file_msg = "File to load: \0";
+static const uint8_t *load_file_error_msg = "Load file error occurred";
+static const uint8_t *save_file_error_msg = "Save file error occurred";
 uint8_t hex_byte = 0;   // 1 byte/2 hex digits
 uint8_t bottom_msg[80];
 uint8_t file_mode;     
@@ -167,7 +167,7 @@ void editor_load_file(void)
 
         // Load file from input file name
         // filename, filename length, memory to load file to, file extension
-        if (load_file(editor_filename, (uint16_t)10, 0x20000, editor_filetype) == 0)
+        if (load_file(editor_filename, 10, 0x20000, editor_filetype) == 0)
             break;  // Success
 
         // Loading file error
@@ -1097,10 +1097,8 @@ void input_file_name(void)
 }
 
 // Subroutine: fill out message at bottom of editor
-void fill_out_bottom_editor_message(uint8_t *msg)
+void fill_out_bottom_editor_message(const uint8_t *msg)
 {
-    uint8_t i = 0;
-
 	// Fill string variable with message to write
     strcpy(bottom_msg, msg);
     bottom_msg[79] = '\0';
@@ -1109,7 +1107,7 @@ void fill_out_bottom_editor_message(uint8_t *msg)
 }
 
 // Write message at bottom of screen
-void write_bottom_screen_message(uint8_t *msg)
+void write_bottom_screen_message(const uint8_t *msg)
 {
     cursor_x = 0;
     cursor_y = 66;

@@ -8,7 +8,7 @@
 //----------------------------------------------
 #pragma once
 
-uint16_t print_string(uint16_t *cursor_x, uint16_t *cursor_y, uint8_t *in_string)
+uint16_t print_string(uint16_t *cursor_x, uint16_t *cursor_y, const uint8_t *in_string)
 {
     const uint32_t text_bg_color = 0x000000FF;  // Blue
     const uint32_t text_fg_color = 0x00EEEEEE;  // Light gray / almost white
@@ -17,14 +17,13 @@ uint16_t print_string(uint16_t *cursor_x, uint16_t *cursor_y, uint8_t *in_string
     uint32_t row                = (*cursor_y * 16 * 1920);           // Row to print to in pixels
     uint32_t col                = (*cursor_x * 8);                   // Col to print to in pixels
     uint8_t *font_char;
-    uint8_t *string = in_string;
     uint32_t *scroll_start, *scroll_start2;
 
     // Text Cursor Position in screen in pixels to print to
     framebuffer += (row + col);
 
-    for (; *string != '\0'; string++) {
-        if (*string == 0x0A) {     // Line feed
+    for (; *in_string != '\0'; in_string++) {
+        if (*in_string == 0x0A) {     // Line feed
             (*cursor_y)++;    // Increment cursor Y, go down 1 row
             if (*cursor_y >= 66) {    // At bottom of screen? (66 * 16 = 1080) 
                 // Copy screen lines 1-<last line> into lines 0-<last line - 1>,
@@ -55,7 +54,7 @@ uint16_t print_string(uint16_t *cursor_x, uint16_t *cursor_y, uint8_t *in_string
             }
             continue;
 
-        } else if (*string == 0x0D) { // Carriage return
+        } else if (*in_string == 0x0D) { // Carriage return
             framebuffer -= (*cursor_x * 8);  // Go to start of line; Multiply cursor X by char pixel width
             *cursor_x = 0;                   // New cursor X position = 0 / start of line
             continue;
@@ -64,7 +63,7 @@ uint16_t print_string(uint16_t *cursor_x, uint16_t *cursor_y, uint8_t *in_string
         // Font memory address = 6000h, offset from start of font,
         // multiply char by 16 (length in bytes per char),
         // subtract 16 to get start of char
-        font_char = (uint8_t *)(0x6000 + ((*string * 16) - 16));
+        font_char = (uint8_t *)(0x6000 + ((*in_string * 16) - 16));
 
         // Print character
         // Char height is 16 lines
