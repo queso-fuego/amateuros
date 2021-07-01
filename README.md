@@ -67,7 +67,7 @@ https://www.youtube.com/QuesoFuego
 Playlist link:
 https://www.youtube.com/playlist?list=PLT7NbkyNWaqajsw8Xh7SP9KJwjfpP8TNX
 
-- All development is currently done on "live" recordings, and is probably be arduous or boring for most people to watch. Footage is edited down before uploading to cut out long pauses, gratuitous ums and ahs, redundant info, off-topic ramblings, etc.
+- All development is currently done on "live" recordings, and is probably arduous or boring for most people to watch. Footage is edited down before uploading to cut out long pauses, gratuitous ums and ahs, redundant info, off-topic ramblings, etc.
 
 *Suggestions or comments regarding videos should be handled in either video comments, twitter @Queso_Fuego, or through email - fuegoqueso at gmail dot com*
 
