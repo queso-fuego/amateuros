@@ -101,10 +101,11 @@ files. I'm assuming only the binary file would be changing at that point, so I m
 
 Screenshots:
 ------------
-![Showing 'dir' command inside bochs dev environment](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/OS_Dev_1_2020_03_08.PNG "Basic Screenshot showing 'dir' command inside dev environment")
-![Showing 'editor' program in hex editor mode, loading its own bootsector](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/OS_Dev_2020_07-17.PNG "Basic Screenshot showing 'editor' program loading its own bootsector")
+![Showing boot screen and example of reading a file to screen](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/boot_phys_mem_mgr.png "Showing boot screen and example of reading a file to screen")
+![Showing 'editor' program updating a text file](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/editor_test.png "Showing 'editor' program updating a text file")
+![Showing output of 'gfxtst' command, for basic 2D lines/shapes/fills](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/gfxtst.png "Showing output of 'gfxtst' command, for basic 2D lines/shapes/fills")
 
-These are wayyy out of date and more screenshots will be added in the future
+These may be out of date and more screenshots will be added in the future
 
 How to Build/Run:
 -------------
