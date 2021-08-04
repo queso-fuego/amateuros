@@ -3,16 +3,14 @@
 //
 #include "../include/C/stdint.h"
 #include "../include/C/string.h"
-#include "../include/print/print_char.h"
-#include "../include/print/print_string.h"
-#include "../include/print/print_hex.h"
+#include "../include/gfx/2d_gfx.h"
+#include "../include/print/print_types.h"
 #include "../include/disk/file_ops.h"
 #include "../include/print/print_fileTable.h"
 #include "../include/screen/cursor.h"
 #include "../include/screen/clear_screen.h"
 #include "../include/keyboard/get_key.h"
 #include "../include/type_conversions/hex_to_ascii.h"
-#include "../include/gfx/2d_gfx.h"
 
 #define ENDOFLINE  80
 #define SPACE      0x20  // ASCII space
@@ -79,7 +77,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
     memset(blank_line, ' ', 79);
     blank_line[79] = '\0';
 
-	clear_screen(BLUE); // Initial screen clear
+	clear_screen(convert_color(user_gfx_info->bg_color)); // Initial screen clear
 
 	// Print options string
     print_string(&cursor_x, &cursor_y, new_or_current_string);
@@ -91,7 +89,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
         input_char = get_key();
 
     if (input_char == CREATENEW) {
-        clear_screen(BLUE);
+        clear_screen(convert_color(user_gfx_info->bg_color));
 
         file_mode = NEW;    // Creating a new file
 
@@ -109,7 +107,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
         while (input_char != BINFILE && input_char != OTHERFILE)
             input_char = get_key();
 
-        clear_screen(BLUE);
+        clear_screen(convert_color(user_gfx_info->bg_color));
 
         // Reset cursor position
         cursor_x = 0;
@@ -175,7 +173,7 @@ void editor_load_file(void)
 
         input_char = get_key();
 
-        clear_screen(BLUE);
+        clear_screen(convert_color(user_gfx_info->bg_color));
 
         // Initialize cursor pos
         cursor_x = 0;
@@ -186,7 +184,7 @@ void editor_load_file(void)
 	// Go to editor depending on file type
     if (strncmp(editor_filetype, extBin, 3) == 0) {
         // Load hex file
-        clear_screen(BLUE);
+        clear_screen(convert_color(user_gfx_info->bg_color));
 
         // Reset cursor position
         cursor_x = 0;
@@ -224,7 +222,7 @@ void editor_load_file(void)
 
     } else {
         // Load text file
-        clear_screen(BLUE);
+        clear_screen(convert_color(user_gfx_info->bg_color));
 
         cursor_x = 0;
         cursor_y = 0;

@@ -3,6 +3,9 @@
  */
 #pragma once
 
+#define VBE_MODE_INFO_ADDRESS 0x9000
+#define USER_GFX_INFO_ADDRESS 0x9200
+
 // 32 bit ARGB colors
 #define BLACK      0x00000000 
 #define WHITE      0x00FFFFFF 
@@ -17,6 +20,75 @@
 #define abs(a) ((a > 0) ? a : -a)
 #define ROUND(a) ((int)(a + 0.5))
 
+// VBE Mode info block - holds current graphics mode values
+typedef struct {
+    // Mandatory info for all VBE revisions
+	uint16_t mode_attributes;
+	uint8_t window_a_attributes;
+	uint8_t window_b_attributes;
+	uint16_t window_granularity;
+	uint16_t window_size;
+	uint16_t window_a_segment;
+	uint16_t window_b_segment;
+	uint32_t window_function_pointer;
+	uint16_t bytes_per_scanline;
+
+    // Mandatory info for VBE 1.2 and above
+	uint16_t x_resolution;
+	uint16_t y_resolution;
+	uint8_t x_charsize;
+	uint8_t y_charsize;
+	uint8_t number_of_planes;
+	uint8_t bits_per_pixel;
+	uint8_t number_of_banks;
+	uint8_t memory_model;
+	uint8_t bank_size;
+	uint8_t number_of_image_pages;
+	uint8_t reserved1;
+
+    // Direct color fields (required for direct/6 and YUV/7 memory models)
+	uint8_t red_mask_size;
+	uint8_t red_field_position;
+	uint8_t green_mask_size;
+	uint8_t green_field_position;
+	uint8_t blue_mask_size;
+	uint8_t blue_field_position;
+	uint8_t reserved_mask_size;
+	uint8_t reserved_field_position;
+	uint8_t direct_color_mode_info;
+
+    // Mandatory info for VBE 2.0 and above
+	uint32_t physical_base_pointer;         // Physical address for flat memory frame buffer
+	uint32_t reserved2;
+	uint16_t reserved3;
+
+    // Mandatory info for VBE 3.0 and above
+	uint16_t linear_bytes_per_scanline;
+    uint8_t bank_number_of_image_pages;
+    uint8_t linear_number_of_image_pages;
+    uint8_t linear_red_mask_size;
+    uint8_t linear_red_field_position;
+    uint8_t linear_green_mask_size;
+    uint8_t linear_green_field_position;
+    uint8_t linear_blue_mask_size;
+    uint8_t linear_blue_field_position;
+    uint8_t linear_reserved_mask_size;
+    uint8_t linear_reserved_field_position;
+    uint32_t max_pixel_clock;
+
+    uint8_t reserved4[190];              // Remainder of mode info block
+
+} __attribute__ ((packed)) vbe_mode_info_t;
+
+vbe_mode_info_t *gfx_mode = (vbe_mode_info_t *)VBE_MODE_INFO_ADDRESS;
+
+typedef struct {
+    uint32_t fg_color;
+    uint32_t bg_color;
+} user_gfx_info_t;
+
+user_gfx_info_t *user_gfx_info = (user_gfx_info_t *)USER_GFX_INFO_ADDRESS;
+
 typedef struct point {
     uint16_t X, Y;
 } Point;
@@ -24,9 +96,13 @@ typedef struct point {
 // Draw a single pixel
 void draw_pixel(uint16_t X, uint16_t Y, uint32_t color)
 {
-    uint32_t *framebuffer = (uint32_t *)*(uint32_t *)0x9028; 
-    framebuffer += (Y * 1920 + X);
-    *framebuffer = color;
+    uint8_t *framebuffer    = (uint8_t *)gfx_mode->physical_base_pointer; 
+    uint8_t bytes_per_pixel = (gfx_mode->bits_per_pixel+1) / 8;             // Get # of bytes per pixel, add 1 to fix 15bpp modes
+
+    framebuffer += (Y * gfx_mode->x_resolution + X) * bytes_per_pixel;
+
+    for (uint8_t temp = 0; temp < bytes_per_pixel; temp++)
+        framebuffer[temp] = (uint8_t)(color >> temp * 8);
 }
 
 // Draw a line
@@ -198,11 +274,24 @@ void draw_ellipse(Point center, uint16_t radiusX, uint16_t radiusY, uint32_t col
 void boundary_fill(uint16_t X, uint16_t Y, uint32_t fill_color, uint32_t boundary_color)
 {
     // Recursive - may use a lot of stack space
-    uint32_t *framebuffer = (uint32_t *)*(uint32_t *)0x9028; 
-    framebuffer += (Y * 1920 + X);
+    uint8_t *framebuffer    = (uint8_t *)gfx_mode->physical_base_pointer; 
+    uint8_t bytes_per_pixel = (gfx_mode->bits_per_pixel+1) / 8;             // Get # of bytes per pixel, add 1 to fix 15bpp modes
+    uint8_t draw = 0;
 
-    if (*framebuffer != fill_color && *framebuffer != boundary_color) {
-        *framebuffer = fill_color;
+    framebuffer += (Y * gfx_mode->x_resolution + X) * bytes_per_pixel;
+
+    for (uint8_t temp = 0; temp < bytes_per_pixel; temp++) {
+        if ((framebuffer[temp] != (uint8_t)(fill_color >> (temp * 8))) &&
+            (framebuffer[temp] != (uint8_t)(boundary_color >> (temp * 8)))) {
+
+            draw = 1;
+            break;
+        }
+    }
+
+    if (draw) {
+        for (uint8_t temp = 0; temp < bytes_per_pixel; temp++)
+            framebuffer[temp] = (uint8_t)(fill_color >> temp * 8);
 
         // Check 4 pixels around current pixel
         boundary_fill(X + 1, Y, fill_color, boundary_color);
@@ -283,10 +372,38 @@ void fill_ellipse_solid(Point center, uint16_t radiusX, uint16_t radiusY, uint32
     draw_ellipse(center, radiusX, radiusY, color);
 }
 
+// Convert given 32bit 888ARGB color to set bpp value 
+// 0x00RRGGBB
+uint32_t convert_color(uint32_t color)
+{
+    uint8_t orig_r, orig_g, orig_b;
+    uint8_t convert_r, convert_g, convert_b;
+    uint32_t converted_color = 0;
 
+    // Get original color portions
+    orig_r = (color >> 16) & 0xFF;
+    orig_g = (color >> 8)  & 0xFF;
+    orig_b = color         & 0xFF;
 
+    if (gfx_mode->bits_per_pixel == 8) {
+        // 8bpp uses standard VGA 256 color pallette
+        // User can enter any 8bit value for color 0x00-0xFF
+        convert_r = 0;
+        convert_g = 0;
+        convert_b = orig_b;
+    } else {
+        // Convert to new color portions by getting ratio of bit sizes of color compared to "full" 8 bit colors
+        convert_r = orig_r * (((1 << gfx_mode->linear_red_mask_size) - 1) / 255.0);
+        convert_g = orig_g * (((1 << gfx_mode->linear_green_mask_size) - 1) / 255.0);
+        convert_b = orig_b * (((1 << gfx_mode->linear_blue_mask_size) - 1) / 255.0);
+    }
 
+    // Put new color portions into new color
+    converted_color = (convert_r << gfx_mode->linear_red_field_position)   |
+                      (convert_g << gfx_mode->linear_green_field_position) |
+                      (convert_b << gfx_mode->linear_blue_field_position);
 
-
+    return converted_color;
+}
 
 

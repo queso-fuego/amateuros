@@ -4,17 +4,18 @@
 use16
     org 7C00h              ; 'origin' of Boot code; helps make sure addresses don't change
 
+    xor ax, ax             ; Ensure data & extra segments are 0 to start, can help
+    mov es, ax             ; with booting on hardware
+    mov ds, ax     
+
     mov byte [drive_num], dl	; DL contains initial drive # on boot
 
-    xor ax, ax
-    mov es, ax      ; ES = 0
-
     ;; READ 2ND STAGE BOOTLOADER INTO MEMORY FIRST
-    mov bl, 02h         ; Will be reading 3 sectors 
+    mov bl, 03h         ; Will be reading 4 sectors 
     mov di, 7E00h       ; Memory address to read sectors into
 
     mov dx, 1F2h        ; Sector count port
-    mov al, 03h         ; # of sectors to read
+    mov al, 04h         ; # of sectors to read 
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
@@ -32,21 +33,21 @@ use16
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 09h         ; Sector # to start reading at (1-based)
+    mov al, 0Ah         ; Sector # to start reading at (1-based) 
     out dx, al
 
     call load_sectors
 
     ;; READ KERNEL INTO MEMORY THIRD
-    mov bl, 1Ah         ; Will be reading 1Bh sectors 
+    mov bl, 1Eh         ; Will be reading 1Fh sectors 
     mov di, 2000h       ; Memory address to read sectors into (0000h:2000h)
 
     mov dx, 1F2h        ; Sector count port
-    mov al, 1Bh         ; # of sectors to read
+    mov al, 1Fh         ; # of sectors to read
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 0Ah         ; Sector to start reading at (sectors are 1-based)
+    mov al, 0Bh         ; Sector to start reading at (sectors are 1-based) 
     out dx, al
 
     call load_sectors
@@ -60,7 +61,7 @@ use16
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
-    mov al, 05h         ; Sector to start reading at (sectors are 1-based)
+    mov al, 06h         ; Sector to start reading at (sectors are 1-based)
     out dx, al
 
     call load_sectors

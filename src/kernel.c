@@ -3,19 +3,16 @@
 // ===========================================================================
 #include "../include/C/stdint.h"
 #include "../include/C/string.h"
+#include "../include/gfx/2d_gfx.h"
 #include "../include/screen/clear_screen.h"
-#include "../include/print/print_string.h"
-#include "../include/print/print_char.h"
+#include "../include/print/print_types.h"
 #include "../include/screen/cursor.h"
 #include "../include/keyboard/get_key.h"
-#include "../include/print/print_hex.h"
-#include "../include/print/print_dec.h"
 #include "../include/print/print_registers.h"
 #include "../include/memory/physical_memory_manager.h"
 #include "../include/disk/file_ops.h"
 #include "../include/print/print_fileTable.h"
 #include "../include/type_conversions/hex_to_ascii.h"
-#include "../include/gfx/2d_gfx.h"
 
 void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
 
@@ -55,6 +52,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdDelFile  = "del\0";		    // Delete a file from disk
     uint8_t *cmdRenFile  = "ren\0";         // Rename a file in the file table
     uint8_t *cmdPrtmemmap = "prtmemmap\0";  // Print physical memory map info
+    uint8_t *cmdChgColors = "chgColors\0";  // Change current fg/bg colors
     uint8_t fileExt[3];
     uint8_t *fileBin = "bin\0";
     uint8_t *fileTxt = "txt\0";
@@ -83,8 +81,18 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // --------------------------------------------------------------------
     // Initial setup
     // --------------------------------------------------------------------
+    // Set intial colors
+    if (gfx_mode->bits_per_pixel > 8) {
+        user_gfx_info->fg_color = convert_color(0x00EEEEEE);
+        user_gfx_info->bg_color = convert_color(0x00222222);
+    } else {
+        // Assuming VGA palette
+        user_gfx_info->fg_color = convert_color(0x02);
+        user_gfx_info->bg_color = convert_color(0x00);
+    }
+
     // Clear the screen
-    clear_screen(BLUE);
+    clear_screen(user_gfx_info->bg_color);
 
     // Print OS boot message
     print_string(&kernel_cursor_x, &kernel_cursor_y, menuString);
@@ -250,7 +258,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // --------------------------------------------------------------------
             // Graphics Mode Test(s)
             // --------------------------------------------------------------------
-            clear_screen(LIGHT_GRAY);
+            clear_screen(convert_color(LIGHT_GRAY));
 
             Point p0, p1, p2;
             Point vertex_array[6];
@@ -260,7 +268,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 for (uint8_t j = 0; j < 100; j++) {
                     p0.X = 200 + j;
                     p0.Y = 200 + i;
-                    draw_pixel(p0.X, p0.Y, RED);
+                    draw_pixel(p0.X, p0.Y, convert_color(RED));
                 }
             } 
 
@@ -270,28 +278,28 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             p0.Y = 1080/2 - 100;
             p1.X = 1920/2;
             p1.Y = 1080/2 - 100;
-            draw_line(p0, p1, BLACK);
+            draw_line(p0, p1, convert_color(BLACK));
 
             // Vertical line
             p0.X = 1920/2 + 100;
             p0.Y = 1080/2 - 100;
             p1.X = 1920/2 + 100;
             p1.Y = 1080/2 + 100;
-            draw_line(p0, p1, PURPLE);
+            draw_line(p0, p1, convert_color(PURPLE));
             
             // Diagonal line up-right
             p0.X = 1920/2 + 150;
             p0.Y = 1080/2;
             p1.X = 1920/2 + 300;
             p1.Y = 1080/2 - 100;
-            draw_line(p0, p1, DARK_GRAY);
+            draw_line(p0, p1, convert_color(DARK_GRAY));
             
             // Diagonal line down-right
             p0.X = 1920/2 + 350;
             p0.Y = 1080/2 - 100;
             p1.X = 1920/2 + 500;
             p1.Y = 1080/2 + 100;
-            draw_line(p0, p1, BLUE);
+            draw_line(p0, p1, convert_color(BLUE));
 
             // Draw triangle test - right angle
             p0.X = 1920/2 - 600;
@@ -300,14 +308,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             p1.Y = 1080/2 + 200;
             p2.X = 1920/2 - 450;
             p2.Y = 1080/2 + 200;
-            draw_triangle(p0, p1, p2, 0x00FF7233);  // Sort of "burnt orange"
+            draw_triangle(p0, p1, p2, convert_color(0x00FF7233));  // Sort of "burnt orange"
 
             // Draw rectangle test
             p0.X = 1920/2 - 400;
             p0.Y = 1080/2 + 100;
             p1.X = 1920/2 - 100;
             p1.Y = 1080/2 + 200;
-            draw_rect(p0, p1, 0x0033CEFF);  // Kind of teal maybe
+            draw_rect(p0, p1, convert_color(0x0033CEFF));  // Kind of teal maybe
 
             // Draw polygon test - hexagon
             vertex_array[0].X = 1920/2;
@@ -322,17 +330,17 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             vertex_array[4].Y = 1080/2 + 200;
             vertex_array[5].X = 1920/2 - 100;
             vertex_array[5].Y = 1080/2 + 150;
-            draw_polygon(vertex_array, 6, RED);
+            draw_polygon(vertex_array, 6, convert_color(RED));
 
             // Draw circle test
             p0.X = 1920/2 + 350;
             p0.Y = 1080/2 + 200;
-            draw_circle(p0, 50, BLUE);
+            draw_circle(p0, 50, convert_color(BLUE));
             
             // Draw ellipse test
             p0.X = 1920/2 - 600;
             p0.Y = 1080/2 + 350;
-            draw_ellipse(p0, 100, 50, GREEN - 0x00005500);
+            draw_ellipse(p0, 100, 50, convert_color(GREEN - 0x00005500));
 
             // Fill triangle test
             p0.X = 1920/2 - 400;
@@ -341,14 +349,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             p1.Y = 1080/2 + 350;
             p2.X = 1920/2 - 420;
             p2.Y = 1080/2 + 250;
-            fill_triangle_solid(p0, p1, p2, 0x006315FD);  // Some sort of dark purple
+            fill_triangle_solid(p0, p1, p2, convert_color(0x006315FD));  // Some sort of dark purple
 
             // Fill rectangle test
             p0.X = 1920/2 - 350;
             p0.Y = 1080/2 + 300;
             p1.X = 1920/2 - 150;
             p1.Y = 1080/2 + 350;
-            fill_rect_solid(p0, p1, 0x0015FDCD);  // Mintish greenish
+            fill_rect_solid(p0, p1, convert_color(0x0015FDCD));  // Mintish greenish
 
             // Fill polygon test - hexagon
             vertex_array[0].X = 1920/2 - 50;
@@ -363,22 +371,23 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             vertex_array[4].Y = 1080/2 + 350;
             vertex_array[5].X = 1920/2 - 100;
             vertex_array[5].Y = 1080/2 + 300;
-            fill_polygon_solid(vertex_array, 6, 0x00FD9B15);  // Light orangey
+            fill_polygon_solid(vertex_array, 6, convert_color(0x00FD9B15));  // Light orangey
 
             // Fill circle test
             p0.X = 1920/2 + 200;
             p0.Y = 1080/2 + 270;
-            fill_circle_solid(p0, 50, 0x00FF0FE6);  // Magentish fuschish
+            fill_circle_solid(p0, 50, convert_color(0x00FF0FE6));  // Magentish fuschish
 
             // Fill ellipse test
             p0.X = 1920/2 + 400;
             p0.Y = 1080/2 + 350;
-            fill_ellipse_solid(p0, 100, 50, 0x00FFEE0F);  // I Love GOOOOOOoooolllddd
+            fill_ellipse_solid(p0, 100, 50, convert_color(0x00FFEE0F));  // I Love GOOOOOOoooolllddd
 
             input_char = get_key(); 
-            clear_screen(BLUE);
+            clear_screen(user_gfx_info->bg_color);  
             kernel_cursor_x = 0;
             kernel_cursor_y = 0;
+
             continue;
         }
 
@@ -394,7 +403,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // --------------------------------------------------------------------
             // Clear Screen
             // --------------------------------------------------------------------
-            clear_screen(BLUE);
+            clear_screen(user_gfx_info->bg_color); 
 
             // Update cursor values for new position
             kernel_cursor_x = 0;
@@ -468,6 +477,67 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
+        if (strncmp(tokens, cmdChgColors, strlen(cmdChgColors)) == 0) {
+            uint32_t fg_color = 0;
+            uint32_t bg_color = 0;
+
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Current colors (32bpp ARGB):");
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Foregound: ");
+            print_hex(&kernel_cursor_x, &kernel_cursor_y, user_gfx_info->fg_color);
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Backgound: ");
+            print_hex(&kernel_cursor_x, &kernel_cursor_y, user_gfx_info->bg_color);
+
+            // Foreground color
+            if (gfx_mode->bits_per_pixel > 8)
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "New Foregound (0xRRGGBB): 0x");
+            else
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "New Foregound (0xNN): 0x");
+
+            move_cursor(kernel_cursor_x, kernel_cursor_y);
+
+            while ((input_char = get_key()) != 0x0D) {
+                if (input_char >= 'a' && input_char <= 'f') input_char -= 0x20; // Convert lowercase to Uppercase
+
+                print_char(&kernel_cursor_x, &kernel_cursor_y, input_char);
+                move_cursor(kernel_cursor_x, kernel_cursor_y);
+
+                fg_color *= 16;
+                if      (input_char >= '0' && input_char <= '9') fg_color += input_char - '0';          // Convert hex ascii 0-9 to integer
+                else if (input_char >= 'A' && input_char <= 'F') fg_color += (input_char - 'A') + 10;   // Convert hex ascii 10-15 to integer
+            }
+
+            remove_cursor(kernel_cursor_x, kernel_cursor_y);
+
+            // Background color
+            if (gfx_mode->bits_per_pixel > 8)
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "New Backgound (0xRRGGBB): 0x");
+            else
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "New Backgound (0xNN): 0x");
+
+            move_cursor(kernel_cursor_x, kernel_cursor_y);
+
+            while ((input_char = get_key()) != 0x0D) {
+                if (input_char >= 'a' && input_char <= 'f') input_char -= 0x20; // Convert lowercase to Uppercase
+
+                print_char(&kernel_cursor_x, &kernel_cursor_y, input_char);
+                move_cursor(kernel_cursor_x, kernel_cursor_y);
+
+                bg_color *= 16;
+
+                if      (input_char >= '0' && input_char <= '9') bg_color += input_char - '0';          // Convert hex ascii 0-9 to integer
+                else if (input_char >= 'A' && input_char <= 'F') bg_color += (input_char - 'A') + 10;   // Convert hex ascii 10-15 to integer
+            }
+
+            remove_cursor(kernel_cursor_x, kernel_cursor_y);
+
+            user_gfx_info->fg_color = convert_color(fg_color);  // Convert colors first before setting new values
+            user_gfx_info->bg_color = convert_color(bg_color);
+
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+
+            continue;
+        }
+
         // If command not input, search file table entries for user input file
         file_ptr = check_filename(cmdString, tokens_length[0]);
         if (*file_ptr == 0) {  
@@ -515,7 +585,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             //  of clearing
             
             // Clear the screen before going back
-            clear_screen(BLUE);
+            clear_screen(user_gfx_info->bg_color);  
 
             // Reset cursor position
             kernel_cursor_x = 0;

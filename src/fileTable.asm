@@ -15,12 +15,12 @@
 ;;; ---------------------------------
 use32
     db 'bootSect  ','bin',00h,01h,01h,\
-       '2ndstage  ','bin',00h,02h,03h,\
-       'testfont  ','fnt',00h,05h,04h,\
-       'fileTable ','txt',00h,09h,01h,\
-       'kernel    ','bin',00h,0Ah,1Bh,\
-       'calculator','bin',00h,25h,0Eh,\
-       'editor    ','bin',00h,33h,1Eh
+       '2ndstage  ','bin',00h,02h,04h,\
+       'testfont  ','fnt',00h,06h,04h,\
+       'fileTable ','txt',00h,0Ah,01h,\
+       'kernel    ','bin',00h,0Bh,1Fh,\
+       'calculator','bin',00h,2Ah,10h,\
+       'editor    ','bin',00h,3Ah,20h
 
         ;; Sector padding magic!
         times 512-($-$$) db 0       ; pad rest of sector out with 0s

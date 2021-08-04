@@ -51,11 +51,50 @@ use16
 
     .error:
         stc
+        jmp input_gfx_values
     .done:
         mov [memmap_entries], bp    ; Store # of memory map entries when done
         clc
 
+    ;; User input x/y resolution and bpp values
+    input_gfx_values:
+        xor ecx, ecx
+        cmp word [width], 0  ;; Already has values set, skip
+        jne set_up_vbe
+
+        mov si, choose_gfx_string
+        mov cx, choose_gfx_string.len
+        call print_string
+
+        mov si, width_string
+        mov cx, width_string.len
+        call print_string
+
+        call input_number
+
+        mov [width], bx
+
+        mov si, height_string
+        mov cx, height_string.len
+        call print_string
+
+        call input_number
+
+        mov [height], bx
+
+        mov si, bpp_string
+        mov cx, bpp_string.len
+        call print_string
+
+        call input_number
+
+        mov [bpp], bl   
+
     ;; Set up vbe info structure
+    set_up_vbe:
+    xor ax, ax
+    mov es, ax  ; Reset ES to 0
+
     mov ax, 4F00h
     mov di, vbe_info_block
     int 10h
@@ -90,25 +129,6 @@ use16
         cmp ax, 4Fh
         jne error
 
-        ;; Print out mode values...
-        ;mov dx, [mode_info_block.x_resolution]	
-        ;call print_hex	; Print width
-        ;mov ax, 0E20h	; Print a space
-        ;int 10h
-
-        ;mov dx, [mode_info_block.y_resolution]
-        ;call print_hex	; Print height
-        ;mov ax, 0E20h   ; Print a space
-        ;int 10h
-
-        ;xor dh, dh
-        ;mov dl, [mode_info_block.bits_per_pixel]
-        ;call print_hex	; Print bpp
-        ;mov ax, 0E0Ah	; Print a newline
-        ;int 10h
-        ;mov al, 0Dh
-        ;int 10h
-
         ;; Compare values with desired values
         mov ax, [width]
         cmp ax, [mode_info_block.x_resolution]
@@ -118,13 +138,9 @@ use16
         cmp ax, [mode_info_block.y_resolution]
         jne .next_mode
 
-        mov ax, [bpp]
+        mov al, [bpp]
         cmp al, [mode_info_block.bits_per_pixel]
         jne .next_mode
-
-        ;; Uncomment these to verify correct width/height/bpp values
-;;    	cli
-;;    	hlt
 
         mov ax, 4F02h	; Set VBE mode
         mov bx, [mode]
@@ -150,10 +166,31 @@ use16
         hlt
 
     end_of_modes:
-        mov ax, 0E4Eh	; Print 'N'
+        mov si, mode_not_found_string
+        mov cx, mode_not_found_string.len
+        call print_string
+        .try_again:
+        xor ax, ax
+        int 16h
+        cmp al, 'y'
+        jne .check_no
+        mov word [width], 0
+        mov word [height], 0
+        mov word [bpp], 0
+
+        mov ax, 0E0Ah       ; Print newline
         int 10h
-        cli
-        hlt
+        mov al, 0Dh
+        int 10h
+        jmp input_gfx_values
+
+        .check_no:
+        cmp al, 'n'
+        jne .try_again
+        mov word [width], 1920      ; Take default values
+        mov word [height], 1080
+        mov byte [bpp], 32 
+        jmp set_up_vbe 
 
     ;; print_hex: Suboutine to print a hex string
     print_hex:
@@ -170,13 +207,51 @@ use16
         loop .hex_loop 
 
         mov si, hexString             ; Print out hex string
-        mov ah, 0Eh
         mov cx, 6                     ; Length of string
+
+    ;; print_string: Subroutine to print a string
+    ;;  Inputs:
+    ;;  SI = address of string
+    ;;  CX = length of string
+    print_string:
+        mov ah, 0Eh     ; BIOS teletype output
         .loop:
             lodsb
             int 10h
         loop .loop
         ret
+
+    ;; input_number: Subroutine to input a number
+    ;; Outputs:
+    ;;   BX = number
+    input_number:
+        xor bx, bx
+        mov cx, 10
+        .next_digit:
+            mov ah, 0
+            int 16h         ; BIOS get keystroke, AH = scancode, AL = ascii char
+            mov ah, 0Eh
+            int 10h         ; BIOS teletype output
+
+            cmp al, 08h
+            jne .check_enter
+            mov ax, bx
+            xor dx, dx
+            div cx          ; DX:AX / CX, AX = quotient, DX = remainder
+            mov bx, ax
+            jmp .next_digit
+
+            .check_enter:
+            cmp al, 0Dh     ; Enter key
+            je .done
+            sub al, '0'     ; Convert ascii number to integer
+            mov ah, 0       ; Isolate AL value
+            imul bx, bx, 10 ; BX *= 10
+            add bx, ax      ; BX += AL
+        jmp .next_digit
+
+        .done:
+            ret
 
     ;; Set up GDT
     GDT_start:
@@ -239,16 +314,28 @@ use32                    ; We are officially in 32 bit mode now
 hexString: db '0x0000'
 hex_to_ascii: db '0123456789ABCDEF'
 
+;; String constants and length values
+choose_gfx_string: db 'Input graphics mode values'
+.len = ($-choose_gfx_string)    ;; Fasm needs '=' to set numeric constants
+width_string: db 0Ah,0Dh,'X_Resolution: '
+.len = ($-width_string)    ;; Fasm needs '=' to set numeric constants
+height_string: db 0Ah,0Dh,'Y_Resolution: '
+.len = ($-height_string)    ;; Fasm needs '=' to set numeric constants
+bpp_string: db 0Ah,0Dh,'bpp: '
+.len = ($-bpp_string)    ;; Fasm needs '=' to set numeric constants
+mode_not_found_string: db 0Ah,0Dh,'Video mode not found, try again (Y) or take default 1920x1080 32bpp (N): '
+.len = ($-mode_not_found_string)
+
 ;; VBE Variables
-width: dw 1920
-height: dw 1080
-bpp: db 32
+width: dw 0
+height: dw 0
+bpp: db 0
 offset: dw 0
 t_segment: dw 0	; "segment" is keyword in fasm
 mode: dw 0
 
 ;; End normal 2ndstage bootloader sector padding
-times 512-($-$$) db 0
+times 1024-($-$$) db 0
 
 vbe_info_block:		; 'Sector' 2
 	.vbe_signature: db 'VBE2'
@@ -322,4 +409,4 @@ mode_info_block:	; 'Sector' 3
     .reserved4: times 190 db 0      ; Remainder of mode info block
 
     ;; Sector padding
-    times 1536-($-$$) db 0
+    times 2048-($-$$) db 0

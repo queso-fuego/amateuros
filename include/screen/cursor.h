@@ -4,18 +4,16 @@
 // Parms:
 // input 1: col to move to
 // input 2: row to move to
-// output 1: error/return code in AX
 #pragma once
 
-#define text_bg_color 0x000000FF  // Blue
-#define text_fg_color 0x00EEEEEE  // Light gray / almost white
+#define FONT_ADDRESS  0x6000
 
-uint16_t move_cursor(uint16_t cursor_x, uint16_t cursor_y)
+void move_cursor(uint16_t cursor_x, uint16_t cursor_y)
 {
-    uint32_t *framebuffer       = (uint32_t *)*(uint32_t *)0x9028;   // Framebuffer pointer
-    uint16_t bytes_per_scanline = *(uint16_t *)0x9010;               // bytes per scanline
-    uint32_t row                = (cursor_y * 16 * 1920);           // Row to print to in pixels
-    uint32_t col                = (cursor_x * 8);                   // Col to print to in pixels
+    uint8_t *framebuffer    = (uint8_t *)gfx_mode->physical_base_pointer; 
+    uint8_t bytes_per_pixel = (gfx_mode->bits_per_pixel+1) / 8;
+    uint32_t row            = (cursor_y * 16 * gfx_mode->x_resolution) * bytes_per_pixel;           // Row to print to in pixels
+    uint32_t col            = (cursor_x * 8) * bytes_per_pixel;                   // Col to print to in pixels
     uint8_t *font_char;
 
     // Text Cursor Position in screen in pixels to print to
@@ -25,35 +23,42 @@ uint16_t move_cursor(uint16_t cursor_x, uint16_t cursor_y)
     // Font memory address = 6000h, offset from start of font,
     // multiply char by 16 (length in bytes per char),
     // subtract 1 because 'cursor' is only 1 line
-    font_char = (uint8_t *)(0x6000 + ((127 * 16) - 1));
+    font_char = (uint8_t *)(FONT_ADDRESS + ((127 * 16) - 1));
 
-    framebuffer += (1920*15);   // Go to last row of cursor character
+    framebuffer += (gfx_mode->x_resolution*15) * bytes_per_pixel;   // Go to last row of cursor character
 
     for (int8_t bit = 7; bit >= 0; bit--) {
         // If bit is set draw text color pixel, if not draw background color
-        *framebuffer = (*font_char & (1 << bit)) ? text_fg_color : text_bg_color;
-        framebuffer++;  // Next pixel position
-    }
+        if (*font_char & (1 << bit)) {
+            for (uint8_t temp = 0; temp < bytes_per_pixel; temp++)
+                framebuffer[temp] = (uint8_t)(user_gfx_info->fg_color >> temp * 8);
+        } else {
+            for (uint8_t temp = 0; temp < bytes_per_pixel; temp++)
+                framebuffer[temp] = (uint8_t)(user_gfx_info->bg_color >> temp * 8);
+        }
 
-	return 0;   // Success
+        framebuffer+= bytes_per_pixel;  // Next pixel position
+    }
 }
 
-uint16_t remove_cursor(uint16_t cursor_x, uint16_t cursor_y)
+void remove_cursor(uint16_t cursor_x, uint16_t cursor_y)
 {
-    uint32_t *framebuffer       = (uint32_t *)*(uint32_t *)0x9028;   // Framebuffer pointer
-    uint16_t bytes_per_scanline = *(uint16_t *)0x9010;               // bytes per scanline
-    uint32_t row                = (cursor_y * 16 * 1920);           // Row to print to in pixels
-    uint32_t col                = (cursor_x * 8);                   // Col to print to in pixels
+    uint8_t *framebuffer    = (uint8_t *)gfx_mode->physical_base_pointer; 
+    uint8_t bytes_per_pixel = (gfx_mode->bits_per_pixel+1) / 8;
+    uint32_t row            = (cursor_y * 16 * gfx_mode->x_resolution) * bytes_per_pixel;           // Row to print to in pixels
+    uint32_t col            = (cursor_x * 8) * bytes_per_pixel;                   // Col to print to in pixels
     uint8_t *font_char;
 
     // Text Cursor Position in screen in pixels to print to
     framebuffer += (row + col);
 
-    framebuffer += (1920*15);   // Go to last row of character
+    framebuffer += (gfx_mode->x_resolution*15) * bytes_per_pixel;   // Go to last row of character
 
     // Draw background color for 1 row
-    for (int8_t bit = 7; bit >= 0; bit--)
-        *framebuffer++ = text_bg_color;
+    for (int8_t bit = 7; bit >= 0; bit--) {
+        for (uint8_t temp = 0; temp < bytes_per_pixel; temp++) 
+            framebuffer[temp] = (uint8_t)(user_gfx_info->bg_color >> temp * 8);
 
-	return 0;   // Success
+        framebuffer += bytes_per_pixel;
+    }
 }

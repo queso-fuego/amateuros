@@ -8,8 +8,13 @@ void clear_screen(uint32_t color)
     // Get 32bit pointer to framebuffer value in VBE mode info block, 
     //   dereference to get the 32bit value,
     //   get 32bit pointer to that value - memory address of framebuffer
-    uint32_t *framebuffer = (uint32_t *)*(uint32_t *)0x9028; 
+    uint8_t *framebuffer = (uint8_t *)gfx_mode->physical_base_pointer; 
+    uint8_t bytes_per_pixel = (gfx_mode->bits_per_pixel+1) / 8;
 
-    for (uint32_t i = 0; i < 1920*1080; i++)
-        framebuffer[i] = color;    // Write 32bit ARGB pixel to screen
+    for (uint32_t i = 0; i < gfx_mode->x_resolution*gfx_mode->y_resolution; i++) {
+        for (uint8_t temp = 0; temp < bytes_per_pixel; temp++)
+            framebuffer[temp] = (uint8_t)(color >> temp * 8);
+
+            framebuffer += bytes_per_pixel;
+    }
 }
