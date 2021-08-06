@@ -40,7 +40,7 @@ $(C_FILES):
 
 # Launch OS through qemu 
 run:
-	qemu-system-i386 -drive format=raw,file=$(BINDIR)OS.bin,if=ide,index=0,media=disk
+	qemu-system-i386 -drive format=raw,file=$(BINDIR)OS.bin,if=ide,index=0,media=disk 
 
 # Launch OS through bochs
 bochs:

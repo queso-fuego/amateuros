@@ -24,7 +24,7 @@ void print_char(uint16_t *cursor_x, uint16_t *cursor_y, uint8_t in_char)
 
     if (in_char == 0x0A) {     // Line feed
         (*cursor_y)++;    // Increment cursor Y, go down 1 row
-        if (*cursor_y >= 66) {    // At bottom of screen? (66 * 16 = 1080) 
+        if (*cursor_y >= (gfx_mode->y_resolution / 16) - 1) {    // At bottom of screen? 
             // Copy screen lines 1-<last line> into lines 0-<last line - 1>,
             //   then clear out last line and continue printing
             scroll = (uint8_t *)gfx_mode->physical_base_pointer;
@@ -102,7 +102,7 @@ void print_char(uint16_t *cursor_x, uint16_t *cursor_y, uint8_t in_char)
 
     // LF
     (*cursor_y)++;    // Go down 1 row
-    if (*cursor_y >= 66) {    // At bottom of screen? (66 * 16 = 1080) 
+    if (*cursor_y >= (gfx_mode->y_resolution / 16) - 1) {    // At bottom of screen? 
         // Copy screen lines 1-<last line> into lines 0-<last line - 1>,
         //   then clear out last line and continue printing
         scroll = (uint8_t *)gfx_mode->physical_base_pointer;

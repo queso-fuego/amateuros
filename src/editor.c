@@ -77,7 +77,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
     memset(blank_line, ' ', 79);
     blank_line[79] = '\0';
 
-	clear_screen(convert_color(user_gfx_info->bg_color)); // Initial screen clear
+	clear_screen(user_gfx_info->bg_color); // Initial screen clear
 
 	// Print options string
     print_string(&cursor_x, &cursor_y, new_or_current_string);
@@ -89,7 +89,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
         input_char = get_key();
 
     if (input_char == CREATENEW) {
-        clear_screen(convert_color(user_gfx_info->bg_color));
+        clear_screen(user_gfx_info->bg_color);
 
         file_mode = NEW;    // Creating a new file
 
@@ -107,7 +107,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
         while (input_char != BINFILE && input_char != OTHERFILE)
             input_char = get_key();
 
-        clear_screen(convert_color(user_gfx_info->bg_color));
+        clear_screen(user_gfx_info->bg_color);
 
         // Reset cursor position
         cursor_x = 0;
@@ -173,7 +173,7 @@ void editor_load_file(void)
 
         input_char = get_key();
 
-        clear_screen(convert_color(user_gfx_info->bg_color));
+        clear_screen(user_gfx_info->bg_color);
 
         // Initialize cursor pos
         cursor_x = 0;
@@ -184,7 +184,7 @@ void editor_load_file(void)
 	// Go to editor depending on file type
     if (strncmp(editor_filetype, extBin, 3) == 0) {
         // Load hex file
-        clear_screen(convert_color(user_gfx_info->bg_color));
+        clear_screen(user_gfx_info->bg_color);
 
         // Reset cursor position
         cursor_x = 0;
@@ -222,7 +222,7 @@ void editor_load_file(void)
 
     } else {
         // Load text file
-        clear_screen(convert_color(user_gfx_info->bg_color));
+        clear_screen(user_gfx_info->bg_color);
 
         cursor_x = 0;
         cursor_y = 0;
@@ -309,7 +309,7 @@ void text_editor(void)
         save_x = cursor_x;
         save_y = cursor_y;
         cursor_x = 1;
-        cursor_y = 65;  // Above last line
+        cursor_y = (gfx_mode->y_resolution / 16) - 2;  // Above last line
         print_string(&cursor_x, &cursor_y, x); 
         print_hex(&cursor_x, &cursor_y, save_x);    // Cursor X
 
@@ -953,7 +953,7 @@ void hex_editor(void)
             remove_cursor(cursor_x, cursor_y);  // Blank out cursor line first
 
             // Move 1 line down
-            if (cursor_y != 66)	{   // At bottom row of screen?
+            if (cursor_y != (gfx_mode->y_resolution / 16) - 1)	{   // At bottom row of screen?
                 cursor_y++;
                 file_ptr += 27;		// # of hex bytes (2 nibbles + space) in 1 line
                 file_offset += 27;
@@ -1108,7 +1108,7 @@ void fill_out_bottom_editor_message(const uint8_t *msg)
 void write_bottom_screen_message(const uint8_t *msg)
 {
     cursor_x = 0;
-    cursor_y = 66;
+    cursor_y = (gfx_mode->y_resolution / 16) - 1;
 
     print_string(&cursor_x, &cursor_y, msg);
 }
