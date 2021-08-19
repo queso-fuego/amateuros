@@ -29,9 +29,6 @@
 #define ENDPGM     '?'
 #define SAVEPGM    'S'
 
-#define FONT_WIDTH 0xA000   
-#define FONT_HEIGHT (FONT_WIDTH+1)
-
 // File modes
 enum file_modes {
     NEW    = 1,     // New file

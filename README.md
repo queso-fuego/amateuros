@@ -12,12 +12,14 @@ development environment.
 - The other main reason was to learn OS development as a newbie with no prior knowledge, and no formal CS education. I have an interest in from-scratch tools and
 programming, and in an ideal world with enough time, I could have a full computer with self-made hardware/software stack, from transistors to internet browser and games, as 
 simple as possible, for 1 person to maintain.
-  This is an attempt to start that, and could grow into the other areas over time. This is also the largest personal project and learning/research experience I've done
-so far , and it's really an amateur trying to make something that will take a long time, for his own self-interest, and not for any others really. It might look simple,
-amatuerish, and incomplete. Because it is! Keep that in mind [|:^) 
+  This is an attempt to start that, and could grow into areas other than OS development over time. It's also an attempt to get better at explaining my
+thought processes and how I work through things, through the youtube videos. Maybe those can help with improving public speaking over time too.
+This is the largest personal project and learning/research experience I've done so far, and it's a newbie trying to make something that will take a
+long time, for his own self-interest, and not really for any others. It might look simple, amateurish, and incomplete. Because it is!
+Keep that in mind [|:^) 
 
 - Feel free to fork or make your own changes to your own repos, the license is effectively public domain. Suggestions or improvements are welcome, but they will be covered 
-in a video if used (and will credit you, unless you say otherwise). I might open up this repo to the public in the future, but currently lack sufficient time to manage that. 
+in a video if used (and will credit you, if I remember and you don't say otherwise). I might open up this repo to the public in the future, but currently lack sufficient time to manage that. 
 
 Project Structure:
 ------------------
@@ -30,12 +32,14 @@ Current Standing:
 -----------------
 - 32bit protected mode, all ring 0, no paging (yet). Will probably stick to ring 0 only when/if it's set up, and plan on paging and memory management in the nearish future.
 - No interrupts (yet). This is really a basic almost functioning shell of a start of an OS, for now.
-- Vesa Bios Extensions used, for 1920x1080 32bpp mode. This is set up in 2ndstage.asm, and can be changed as needed, if a desired resolution/bpp is found on your qemu setup.
-All text printing is done assuming 1080p 32bpp however, so until that's made generic, you'd need to change some hardcoded values in places.
-- Barely functioning text/hex editor for 512 byte files, and a calculator. More programs to come in the future
+- Vesa Bios Extensions for graphics modes. On boot you can type in desired X resolution, Y resolution, and bits per pixel values, or take a default of 1920x1080 32bpp. 
+If trying to run on actual hardware, ensure you know what your hardware supports! Trying to run unsupported modes may damage your hardware!!
+- Barely functioning text/hex editor for 512 byte files, and a 4 function calculator. More programs to come in the future.
 - Ability to save and load text or binary (hex) files. Bin files can be run from the hex editor or main kernel command line, assuming they're valid x86 32bit code, and fit
 within 512 bytes. Bin files are auto-ended with a '0xCB', or far return. That isn't guaranteed to work, and will be changed when a 'more proper' memory manager and program loader
 is developed.
+- Several commands available for the in-built kernel "shell" such as del, ren, chgColors, chgFonts, etc. A list of available commands is in the kernel.c source, in main(), where
+they are the prefixed with cmd and their text is similar to "cmdExampleCommand". Eventually there may be a help command or similar to list the available commands at runtime.
 
 TODO (There's ALWAYS more to do, this list may not get updated as much as I'd like):
 ------------------------------------------------------------------------------------
@@ -50,12 +54,12 @@ but I have had no luck so far with structures and intermediate (to me) level C c
 - More C standard library functions/header files: string abstractions, type conversions, other stuff to help out with C code development.
 - Assembler and Compiler for x86 (or x86_64?)code, with a C-like language. Possibly making a forth or other languages later on too.
 - Games, or other graphical things. Or text based games.
-- Read and use other fonts and font standards, such as PC screen font or some types of regular bitmapped fonts.
-- Font editor program, for homemade fonts at least.
+- Read and use other fonts and font standards, such as PC screen font or bdf or other standardized bitmapped fonts.
+- Font editor program, for homemade bitmapped fonts at least.
 - Implement options/flags for the kernel "shell", and other shell commands. Also a way for a user to add shell commands and aliases.
 - Text/bin editor general fixes/improvements
 - A windowing system? If the task scheduling and process creation/management gets done
-- Get this thing to run on me old thinkpad, just to say that I can and that it can run on actual hardware
+- Get this thing to run on me old thinkpad, just to prove it can run on actual hardware. Then UEFI for the newer computers...
 
 - Whatever else comes up...
 
@@ -79,12 +83,12 @@ https://www.youtube.com/playlist?list=PLT7NbkyNWaqajsw8Xh7SP9KJwjfpP8TNX
 Tools used for these videos:
 - recording: OBS Studio
 - video editor: Davinci Resolve
-- audio separating/light edits as needed: Audacity
+- audio separating/light edits as needed: Audacity (use a newer foss port/fork without telemetry!)
 - OS: Windows 10 Enterprise
 - microphone: Shure SM7B, Cloudlifter CL-1, Focusrite Scarlett Solo
 - camera: Sony ZV-1, Elgato Camlink 4k
-- mouse: Logitech G502
-- keyboard: Currently, HHKB professional hybrid type S. It's not worth the price, but it is quite nice.
+- mouse: Logitech M590
+- keyboard: HHKB professional hybrid type S. It's not worth the price, but it is quite nice.
 
 Development:
 ------------
@@ -105,7 +109,7 @@ Screenshots:
 ![Showing 'editor' program updating a text file](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/editor_test.png "Showing 'editor' program updating a text file")
 ![Showing output of 'gfxtst' command, for basic 2D lines/shapes/fills](https://gitlab.com/queso_fuego/quesos/-/raw/master/screenshots/gfxtst.png "Showing output of 'gfxtst' command, for basic 2D lines/shapes/fills")
 
-These may be out of date and more screenshots will be added in the future
+These are definitely most likely out of date and more or different screenshots will be added in the future
 
 How to Build/Run:
 -------------
@@ -113,7 +117,6 @@ How to Build/Run:
 - Download & install 'make' (bsd and gnu make should both work I think, though this is mainly tested with bsdmake)
 - Download & install fasm/flat assembler https://flatassembler.net/download.php (nasm should work as well, though you will need minor changes to any pure .asm files)
 - clone and cd to this repo's /build folder
-- Ensure you have the .bochsrc file (if using bochs) in /bin, and the makefile in /build
 - Run 'make OS' or 'make' from the command line to build the OS.bin binary file in /bin
 - For bochs: In the /build folder, run 'make bochs'; or in the /bin folder, run 'bochs' or 'bochs -q', or some other way of starting bochs that you prefer. 
 - For qemu: In the /build folder, run 'make run'; or in the /bin folder run 'qemu-system-i386 -drive format=raw,file=OS.bin,if=ide,index=0,media=disk'.
