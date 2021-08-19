@@ -4,12 +4,12 @@
 
 # Make variables
 CC = clang
-CFLAGS = -std=c17 -m32 -march=i386 -ffreestanding -fno-builtin -nostdinc -O1 -fno-stack-protector
+CFLAGS = -std=c17 -m32 -march=i386 -ffreestanding -fno-builtin -nostdinc -Oz -fno-stack-protector	
 C_FILES = kernel editor calculator
-ASM_FILES = bootSect 2ndstage fileTable testfont
+ASM_FILES = bootSect 2ndstage fileTable testfont termu16n termu18n
 SRCDIR = ../src/
 BINDIR = ../bin/
-TMPFILES = bootSect 2ndstage testfont fileTable kernel calculator editor
+TMPFILES = bootSect 2ndstage termu16n fileTable kernel calculator editor termu18n testfont
 BINFILES = $(TMPFILES:%=$(BINDIR)%.bin)
 
 # Make final OS.bin binary

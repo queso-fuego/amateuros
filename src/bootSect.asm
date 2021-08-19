@@ -39,11 +39,11 @@ use16
     call load_sectors
 
     ;; READ KERNEL INTO MEMORY THIRD
-    mov bl, 1Eh         ; Will be reading 1Fh sectors 
+    mov bl, 1Ch         ; Will be reading 1Dh sectors 
     mov di, 2000h       ; Memory address to read sectors into (0000h:2000h)
 
     mov dx, 1F2h        ; Sector count port
-    mov al, 1Fh         ; # of sectors to read
+    mov al, 1Dh         ; # of sectors to read
     out dx, al
 
     mov dx, 1F3h        ; Sector # port
@@ -54,7 +54,7 @@ use16
 
     ;; LOAD FONT INTO MEMORY FOURTH
     mov bl, 03h         ; Will be reading 4 sectors 
-    mov di, 6000h       ; Memory address to read sectors into 
+    mov di, 0A000h      ; Memory address to read sectors into 
 
     mov dx, 1F2h        ; Sector count port
     mov al, 04h         ; # of sectors to read

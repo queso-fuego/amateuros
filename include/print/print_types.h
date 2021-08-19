@@ -1,7 +1,9 @@
 // print_types.h: print different types of values, strings/numbers/etc.
 #pragma once
 
-#define FONT_ADDRESS 0x6000
+#define FONT_ADDRESS 0xA000  
+#define FONT_WIDTH   0xA000 
+#define FONT_HEIGHT  (FONT_WIDTH+1)
 
 //----------------------------------------------
 // print_char.h: Print a single character to video memory
@@ -14,9 +16,13 @@ void print_char(uint16_t *cursor_x, uint16_t *cursor_y, uint8_t in_char)
 {
     uint8_t *framebuffer    = (uint8_t *)gfx_mode->physical_base_pointer;   // Framebuffer pointer
     uint8_t bytes_per_pixel = (gfx_mode->bits_per_pixel+1) / 8;             // Get # of bytes per pixel, add 1 to fix 15bpp modes
-    uint32_t row            = (*cursor_y * 16 * gfx_mode->x_resolution) * bytes_per_pixel;           // Row to print to in pixels
-    uint32_t col            = (*cursor_x * 8) * bytes_per_pixel;            // Col to print to in pixels
+    uint8_t font_width      = *(uint8_t *)FONT_WIDTH; 
+    uint8_t font_height     = *(uint8_t *)FONT_HEIGHT;
+    uint32_t row            = (*cursor_y * font_height * gfx_mode->x_resolution) * bytes_per_pixel;           // Row to print to in pixels
+    uint32_t col            = (*cursor_x * font_width) * bytes_per_pixel;            // Col to print to in pixels
     uint8_t *font_char;
+    uint8_t bytes_per_char_line;
+    uint8_t char_size;
     uint8_t *scroll, *scroll2;
 
     // Text Cursor Position in screen in pixels to print to
@@ -24,114 +30,83 @@ void print_char(uint16_t *cursor_x, uint16_t *cursor_y, uint8_t in_char)
 
     if (in_char == 0x0A) {     // Line feed
         (*cursor_y)++;    // Increment cursor Y, go down 1 row
-        if (*cursor_y >= (gfx_mode->y_resolution / 16) - 1) {    // At bottom of screen? 
+        if (*cursor_y >= (gfx_mode->y_resolution / font_height) - 1) {    // At bottom of screen? 
             // Copy screen lines 1-<last line> into lines 0-<last line - 1>,
             //   then clear out last line and continue printing
             scroll = (uint8_t *)gfx_mode->physical_base_pointer;
 
-            // Char row 1 on screen
-            scroll2 = scroll + (gfx_mode->x_resolution * 16) * bytes_per_pixel;  // Multiply by 16 - char height in lines
+            // Char row 1 on screen 
+            scroll2 = scroll + ((gfx_mode->x_resolution * font_height) * bytes_per_pixel);  // Multiply by font_height - char height in lines 
 
-            for (uint32_t pixel = 0; pixel < ((gfx_mode->y_resolution - 16) * gfx_mode->linear_bytes_per_scanline) / bytes_per_pixel; pixel++) {
-                for (uint8_t temp = 0; temp < bytes_per_pixel; temp++)
-                    scroll[temp] = scroll2[temp]; // Move screen data 1 line up
-
-                    scroll  += bytes_per_pixel;
-                    scroll2 += bytes_per_pixel;
-            }
-
-            // Scroll_start pointing at last character line now (last <font_char height> lines)
-            for (uint32_t pixel = 0; pixel < (gfx_mode->x_resolution * 16) / bytes_per_pixel; pixel++) {
-                for (uint8_t temp = 0; temp < bytes_per_pixel; temp++) // Clear last line
-                    scroll[temp] = (uint8_t)(user_gfx_info->bg_color >> temp * 8);
-
-                scroll += bytes_per_pixel;
-            }
+            memcpy32(scroll, scroll2, ((gfx_mode->y_resolution - font_height) * gfx_mode->linear_bytes_per_scanline));
 
             (*cursor_y)--;  // set Y = last line
 
-        } else {
-            // Go down 1 char row on screen
-            framebuffer += (gfx_mode->x_resolution * 16) * bytes_per_pixel;     // Line of pixels * char height 
-        }
+        } 
         goto ret;
 
     } else if (in_char == 0x0D) { // Carriage return
-        framebuffer -= (*cursor_x * 8) * bytes_per_pixel;  // Go to start of line; Multiply cursor X by char pixel width
         *cursor_x = 0;                   // New cursor X position = 0 / start of line
         goto ret;
     }
 
-    // Font memory address = 6000h, offset from start of font,
-    // multiply char by 16 (length in bytes per char),
-    // subtract 16 to get start of char
-    font_char = (uint8_t *)(FONT_ADDRESS + ((in_char * 16) - 16));
+    // Font memory address = FONT_ADDRESS, offset from start of font,
+    // multiply char by font_height (length in bytes per char),
+    // subtract font_height to get start of char
+    bytes_per_char_line = ((font_width - 1) / 8) + 1;
+    char_size = bytes_per_char_line * font_height;
+    font_char = (uint8_t *)(FONT_ADDRESS + ((in_char * char_size) - char_size));
 
     // Print character
-    // Char height is 16 lines
-    for (uint8_t line = 0; line < 16; line++) {
-        for (int8_t bit = 7; bit >= 0; bit--) {
-            // If bit is set draw text color pixel, if not draw background color
-            if (font_char[line] & (1 << bit)) {
-                for (uint8_t temp = 0; temp < bytes_per_pixel; temp++)
-                    framebuffer[temp] = (uint8_t)(user_gfx_info->fg_color >> temp * 8);
-            } else {
-                for (uint8_t temp = 0; temp < bytes_per_pixel; temp++)
-                    framebuffer[temp] = (uint8_t)(user_gfx_info->bg_color >> temp * 8);
-            }
+    // Char height is font_height lines
+    for (uint8_t line = 0; line < font_height; line++) { 
+        uint8_t num_px_drawn = 0;
+        for (int8_t byte = bytes_per_char_line - 1; byte >= 0; byte--) {
+            for (int8_t bit = 7; bit >= 0; bit--) {
+                // If bit is set draw text color pixel, if not draw background color
+                if (font_char[line * bytes_per_char_line + byte] & (1 << bit)) {
+                    *((uint32_t *)framebuffer) = user_gfx_info->fg_color;
+                } else {
+                    *((uint32_t *)framebuffer) = user_gfx_info->bg_color;
+                }
 
-            framebuffer += bytes_per_pixel;  // Next pixel position
+                framebuffer += bytes_per_pixel;  // Next pixel position
+                num_px_drawn++;
+
+                // If done drawing all pixels in current line of char, stop and go on
+                if (num_px_drawn == font_width) {
+                    num_px_drawn = 0;
+                    break;
+                }
+            }
         }
+
         // Go down 1 line on screen - 1 char pixel width to line up next line of char
-        framebuffer += (gfx_mode->x_resolution - 8) * bytes_per_pixel;
+        framebuffer += (gfx_mode->x_resolution - font_width) * bytes_per_pixel;
     }
 
     // Increment cursor 
-    // Move screen position back up 1 char height to start next char
-    framebuffer -= (gfx_mode->x_resolution * 16) * bytes_per_pixel;  // Char height = 16 lines
-
     (*cursor_x)++;    // Update cursor X position
-    framebuffer += 8 * bytes_per_pixel;
     if (*cursor_x != 80)    // at end of line?
         goto ret;           // No, go on
 
     // Yes, at end of line, do a CR/LF
     // CR
-    framebuffer -= (*cursor_x * 8) * bytes_per_pixel;  // Go to start of line; Multiply cursor X by char pixel width
     *cursor_x = 0;      // New cursor X position = 0 / start of line
 
     // LF
     (*cursor_y)++;    // Go down 1 row
-    if (*cursor_y >= (gfx_mode->y_resolution / 16) - 1) {    // At bottom of screen? 
+    if (*cursor_y >= (gfx_mode->y_resolution / font_height) - 1) {    // At bottom of screen? 
         // Copy screen lines 1-<last line> into lines 0-<last line - 1>,
         //   then clear out last line and continue printing
         scroll = (uint8_t *)gfx_mode->physical_base_pointer;
 
-        // Byte location of char row 1 on screen
-        scroll2 = scroll + (gfx_mode->x_resolution * 16) * bytes_per_pixel;  // Multiply by 16 - char height in lines
+        // Char row 1 on screen 
+        scroll2 = scroll + ((gfx_mode->x_resolution * font_height) * bytes_per_pixel);  // Multiply by font_height - char height in lines 
 
-        for (uint32_t pixel = 0; pixel < (gfx_mode->y_resolution * gfx_mode->linear_bytes_per_scanline) / bytes_per_pixel; pixel++) {
-            for (uint8_t temp = 0; temp < bytes_per_pixel; temp++)
-                scroll[temp] = scroll2[temp]; // Move screen data 1 line up
-
-                scroll  += bytes_per_pixel;
-                scroll2 += bytes_per_pixel;
-        }
-
-        // Scroll_start pointing at last character line now (last <font_char height> lines)
-        for (uint32_t pixel = 0; pixel < (gfx_mode->x_resolution * 16) / bytes_per_pixel; pixel++) {
-            for (uint8_t temp = 0; temp < bytes_per_pixel; temp++) // Clear last line
-                scroll[temp] = (uint8_t)(user_gfx_info->bg_color >> temp * 8);
-
-            scroll += bytes_per_pixel;
-        }
+        memcpy32(scroll, scroll2, ((gfx_mode->y_resolution - font_height) * gfx_mode->linear_bytes_per_scanline));
 
         (*cursor_y)--;  // set Y = last line
-
-    } else {
-        // Go down 1 char row on screen
-        // Multiply by char height in lines
-        framebuffer += (gfx_mode->x_resolution * 16) * bytes_per_pixel; 
     }
 
     ret:

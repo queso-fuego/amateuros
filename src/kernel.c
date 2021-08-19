@@ -14,6 +14,10 @@
 #include "../include/print/print_fileTable.h"
 #include "../include/type_conversions/hex_to_ascii.h"
 
+// Constants
+#define MEMMAP_AREA 0x30000
+// TODO: Fill out more constants to replace magic numbers
+
 void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
 
 // Physical memory map entry from Bios Int 15h EAX E820h
@@ -34,8 +38,8 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint16_t tokens_length[5];      // length of each token in tokens array (0-10)
     uint16_t *tokens_length_ptr = tokens_length;
     uint8_t token_count;            // How many tokens did the user enter?
-    uint8_t token_file_name1[10];   // Filename 1 for commands
-    uint8_t token_file_name2[10];   // Filename 2 for commands
+    uint8_t token_file_name1[11] = {0};   // Filename 1 for commands
+    uint8_t token_file_name2[11] = {0};   // Filename 2 for commands
     uint8_t cmdString[256];         // User input string
     uint8_t *cmdString_ptr = cmdString;
     uint8_t input_char   = 0;       // User input character
@@ -53,6 +57,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdRenFile  = "ren\0";         // Rename a file in the file table
     uint8_t *cmdPrtmemmap = "prtmemmap\0";  // Print physical memory map info
     uint8_t *cmdChgColors = "chgColors\0";  // Change current fg/bg colors
+    uint8_t *cmdChgFont   = "chgFont\0";    // Change current font
     uint8_t fileExt[3];
     uint8_t *fileBin = "bin\0";
     uint8_t *fileTxt = "txt\0";
@@ -67,16 +72,15 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *failure        = "\x0A\x0D" "Command/Program not found, Try again" "\x0A\x0D\0";
     uint8_t *prompt         = ">:\0";
     uint8_t *pgmNotLoaded   = "\x0A\x0D" "Program found but not loaded, Try Again" "\x0A\x0D\0";
+    uint8_t *fontNotFound   = "\x0A\x0D" "Font not found!" "\x0A\x0D\0";
 
     uint32_t num_SMAP_entries; 
     uint32_t total_memory; 
     SMAP_entry_t *SMAP_entry;
     uint32_t needed_blocks;
     uint32_t *allocated_address;
-
-    // Constants
-    const uint32_t MEMMAP_AREA = 0x30000;
-    // TODO: Fill out more constants to replace magic numbers
+    uint8_t font_width  = *(uint8_t *)FONT_WIDTH;
+    uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
 
     // --------------------------------------------------------------------
     // Initial setup
@@ -123,7 +127,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     }
 
     // Set memory regions/blocks for the kernel and "OS" memory map areas as used/reserved
-    deinitialize_memory_region(0x1000, 0x9000);                            // Reserve all memory below A000h for the kernel/OS
+    deinitialize_memory_region(0x1000, 0xB000);                            // Reserve all memory below C000h for the kernel/OS
     deinitialize_memory_region(MEMMAP_AREA, max_blocks / BLOCKS_PER_BYTE); // Reserve physical memory map area 
 
     // Successfully set up and initialized the physical memory manager
@@ -469,6 +473,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
+        // Print memory map command
         if (strncmp(tokens, cmdPrtmemmap, strlen(cmdPrtmemmap)) == 0) {
             // Print out physical memory map info
             print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D-------------------\x0A\x0DPhysical Memory Map"
@@ -477,6 +482,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
+        // Change colors command
         if (strncmp(tokens, cmdChgColors, strlen(cmdChgColors)) == 0) {
             uint32_t fg_color = 0;
             uint32_t bg_color = 0;
@@ -534,6 +540,53 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             user_gfx_info->bg_color = convert_color(bg_color);
 
             print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+
+            continue;
+        }
+
+        // Change font command; Usage: chgFont <name of font>
+        if (strncmp(tokens, cmdChgFont, strlen(cmdChgFont)) == 0) {
+            // First check if font exists - name is 2nd token
+            file_ptr = check_filename(tokens+10, tokens_length[1]);
+            if (*file_ptr == 0) {  
+                print_string(&kernel_cursor_x, &kernel_cursor_y, fontNotFound);  // File not found in filetable, error
+                move_cursor(kernel_cursor_x, kernel_cursor_y);
+
+                continue;
+            }
+
+            // Check if file has .fnt extension
+            if (strncmp(file_ptr+10, "fnt", 3) != 0) {
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nError: file is not a font\r\n"); 
+                move_cursor(kernel_cursor_x, kernel_cursor_y);
+
+                continue;
+            }
+
+            // Save file name
+            strncpy(token_file_name1, file_ptr, 10);
+            token_file_name1[10] = '\0';
+
+            // File is a valid font, try to load it to memory
+            if (load_file(tokens+10, tokens_length[1], (uint32_t)FONT_ADDRESS, fileExt) != 0) {
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nError: file could not be loaded\r\n"); 
+                move_cursor(kernel_cursor_x, kernel_cursor_y);
+
+                continue;
+            }
+
+            // New font should be loaded and in use now
+            font_width  = *(uint8_t *)FONT_WIDTH;
+            font_height = *(uint8_t *)FONT_HEIGHT;
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nFont loaded: \r\n");
+            print_string(&kernel_cursor_x, &kernel_cursor_y, token_file_name1);
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nWidth: ");
+            print_dec(&kernel_cursor_x, &kernel_cursor_y, font_width);
+            print_string(&kernel_cursor_x, &kernel_cursor_y, " Height: ");
+            print_dec(&kernel_cursor_x, &kernel_cursor_y, font_height);
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+
+            move_cursor(kernel_cursor_x, kernel_cursor_y);
 
             continue;
         }

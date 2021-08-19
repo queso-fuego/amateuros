@@ -2,8 +2,10 @@
 ;;; font file - 0-127 for ascii, 8x16 pixels each. Stored as 1 byte (8 bits) * 16 = 16 bytes per char, 127*16 = 2048 = 4 512 byte sectors
 ;;; based on GNU Unifont 8x16
 ;;;
-;; 0-31
-times 31*16 db 0
+;; Font "header" for width & height
+db 8,16
+;; 0-31 ascii characters
+times (31*16)-2 db 0
 ;; Space ' ' or '_' - starts at ascii 32/20h
 db 00000000b,\
    00000000b,\

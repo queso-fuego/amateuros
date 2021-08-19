@@ -93,3 +93,28 @@ void *memset(void *buffer, const uint8_t byte, const uint32_t len)
 
     return buffer;
 }
+
+// memcpy: Copy len bytes from src buffer to dst buffer
+//
+// Returns:
+//  buffer
+void *memcpy(void *dst, const void *src, const uint32_t len)
+{
+    for (uint32_t i = 0; i < len; i++)
+        ((uint8_t *)dst)[i] = ((uint8_t *)src)[i];
+
+    return dst;
+}
+
+// memcpy32: Copy len bytes from src buffer to dst buffer, 4 bytes at a time
+//
+// Returns:
+//  buffer
+void *memcpy32(void *dst, const void *src, const uint32_t len)
+{
+    for (uint32_t i = 0; i < len/4; i++)
+        ((uint32_t *)dst)[i] = ((uint32_t *)src)[i];
+
+    return dst;
+}
+

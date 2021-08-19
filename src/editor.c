@@ -29,6 +29,9 @@
 #define ENDPGM     '?'
 #define SAVEPGM    'S'
 
+#define FONT_WIDTH 0xA000   
+#define FONT_HEIGHT (FONT_WIDTH+1)
+
 // File modes
 enum file_modes {
     NEW    = 1,     // New file
@@ -297,6 +300,7 @@ void text_editor(void)
     uint8_t unsaved = 0;
     uint8_t *new = "NEW \0";
     uint8_t *upd = "UPD \0";
+    uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
 
     // Write keybinds at bottom of screen
     fill_out_bottom_editor_message(keybinds_text_editor);
@@ -309,7 +313,7 @@ void text_editor(void)
         save_x = cursor_x;
         save_y = cursor_y;
         cursor_x = 1;
-        cursor_y = (gfx_mode->y_resolution / 16) - 2;  // Above last line
+        cursor_y = (gfx_mode->y_resolution / font_height) - 2;  // Above last line
         print_string(&cursor_x, &cursor_y, x); 
         print_hex(&cursor_x, &cursor_y, save_x);    // Cursor X
 
@@ -1107,8 +1111,10 @@ void fill_out_bottom_editor_message(const uint8_t *msg)
 // Write message at bottom of screen
 void write_bottom_screen_message(const uint8_t *msg)
 {
+    uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
+
     cursor_x = 0;
-    cursor_y = (gfx_mode->y_resolution / 16) - 1;
+    cursor_y = (gfx_mode->y_resolution / font_height) - 1;
 
     print_string(&cursor_x, &cursor_y, msg);
 }
