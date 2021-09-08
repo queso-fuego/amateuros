@@ -1,7 +1,6 @@
-# MakeFile is located in quesos/bin/
-#-----------------------------------
-# Create OS.bin file (use 'make OS' or 'make') - padding out to full 1.44MB "floppy" bochs img
-
+#-----------------------------------------
+# MakeFile should be in <OS>/build/ folder
+#-----------------------------------------
 # Make variables
 CC = clang
 CFLAGS = -std=c17 -m32 -march=i386 -ffreestanding -fno-builtin -nostdinc -Oz -fno-stack-protector	
@@ -12,7 +11,7 @@ BINDIR = ../bin/
 TMPFILES = bootSect 2ndstage termu16n fileTable kernel calculator editor termu18n testfont
 BINFILES = $(TMPFILES:%=$(BINDIR)%.bin)
 
-# Make final OS.bin binary
+# Make final OS.bin binary - padding out to full 1.44MB "floppy" bochs img
 OS: $(ASM_FILES) $(C_FILES)
 	@cat $(BINFILES) > $(BINDIR)temp.bin
 	@dd if=/dev/zero of=$(BINDIR)OS.bin bs=512 count=2880 status=none
@@ -29,7 +28,7 @@ $(ASM_FILES):
 # Compile C source files into binary files, and pad out their size to next 512 byte sector size
 $(C_FILES):
 	@$(CC) -c $(CFLAGS) -o $@.o $(SRCDIR)$@.c
-	@ld -T$@.ld $@.o --oformat binary -o $@.bin
+	@ld -T$@.ld $@.o -z notext --oformat binary -o $@.bin
 	@rm -f $@.o
 	@size=$$(wc -c < $@.bin);\
 	size=$${size##*( )};\

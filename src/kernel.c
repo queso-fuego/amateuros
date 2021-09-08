@@ -13,6 +13,11 @@
 #include "../include/disk/file_ops.h"
 #include "../include/print/print_fileTable.h"
 #include "../include/type_conversions/hex_to_ascii.h"
+#include "../include/interrupts/idt.h"
+#include "../include/interrupts/exceptions.h"
+#include "../include/interrupts/syscalls.h"
+#include "../include/interrupts/pic.h"
+#include "../include/ports/io.h"
 
 // Constants
 #define MEMMAP_AREA 0x30000
@@ -135,6 +140,42 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
     // Print memory map info
     print_physical_memory_info();
+
+    // Set up interrupts
+    init_idt_32();  
+
+    // Set up exception handlers (ISRs 0-31)
+    set_idt_descriptor_32(0, div_by_0_handler, TRAP_GATE_FLAGS); // Divide by 0 error, ISR 0
+    // Set up additional exceptions here...
+    
+    // Set up software interrupts
+    set_idt_descriptor_32(0x80, syscall_dispatcher, INT_GATE_USER_FLAGS);  // System call handler/dispatcher
+    // Set up additional interrupts here...
+
+    // Debugging/testing system calls, uncomment these lines to test
+    __asm__ __volatile__ ("movl $0, %eax; int $0x80");
+    __asm__ __volatile__ ("movl $1, %eax; int $0x80");
+
+    __asm__ __volatile__ ("movl $2, %eax; int $0x80");   // Should do nothing
+
+    // Mask off all hardware interrupts (disable the PIC)
+    disable_pic();
+
+    // Remap PIC interrupts to after exceptions (PIC1 starts at 0x20)
+    remap_pic();
+
+    // TODO: Add ISRs for PIC hardware interrupts
+    //set_idt_descriptor_32(0x20, <timer_irq_handler>, INT_FLAGS);  
+    //set_idt_descriptor_32(0x21, <keyboard_irq_handler>, INT_FLAGS);
+    // Put more PIC IRQ handlers here...
+    
+    // TODO: Enable PIC IRQ interrupts after setting their descriptors
+    // clear_irq_mask(0); // Enable timer (will tick every ~18.2/s)
+    // clear_irq_mask(1); // Enable keyboard interrupts
+
+    // TODO: After setting up hardware interrupts & PIC, set IF to enable 
+    //   non-exception and not NMI hardware interrupts
+    __asm__ __volatile__("sti");
 
     // --------------------------------------------------------------------
     // Get user input, print to screen & run command/program  
