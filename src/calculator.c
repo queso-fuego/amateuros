@@ -41,10 +41,11 @@ int32_t parse_num = 0;
 __attribute__ ((section ("calc_entry"))) void calc_main(void)
 {
     uint8_t input_char;
-    uint8_t *valid_input = "0123456789+-*/()" "\x20\x0D\x1B";
+    uint8_t *valid_input = "0123456789+-*/()" "\x20\x0D\x1B" "r";
     uint8_t idx;
+    uint8_t *ctrl = (uint8_t *)0x1603; // Ctrl key press = 1, 0 if not
 
-	clear_screen(convert_color(user_gfx_info->bg_color));
+	clear_screen(user_gfx_info->bg_color);
 
     calc_csr_x = 0;
     calc_csr_y = 0;
@@ -55,9 +56,9 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
     while (1) {
         input_char = get_key();
 
-        for (idx = 0; idx < 19 && valid_input[idx] != input_char; idx++) ;
+        for (idx = 0; idx < 20 && valid_input[idx] != input_char; idx++) ;
 
-        if (idx == 19)  // Not valid input character
+        if (idx == 20)  // Not valid input character
             continue;
 
         // Enter key with some input or buffer is full
@@ -73,7 +74,7 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
             continue;
         }
 
-        if (input_char == 0x1B)     // Escape key
+        if (input_char == 0x1B || (*ctrl && input_char == 'r'))    // Escape key or ctrl-R
            return;  // Return to caller
 
         buffer[scan] = input_char;

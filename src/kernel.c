@@ -91,13 +91,15 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // Initial setup
     // --------------------------------------------------------------------
     // Set intial colors
-    if (gfx_mode->bits_per_pixel > 8) {
-        user_gfx_info->fg_color = convert_color(0x00EEEEEE);
-        user_gfx_info->bg_color = convert_color(0x00222222);
-    } else {
-        // Assuming VGA palette
-        user_gfx_info->fg_color = convert_color(0x02);
-        user_gfx_info->bg_color = convert_color(0x00);
+    while (!user_gfx_info->fg_color) {
+        if (gfx_mode->bits_per_pixel > 8) {
+            user_gfx_info->fg_color = convert_color(0x00EEEEEE);
+            user_gfx_info->bg_color = convert_color(0x00222222);
+        } else {
+            // Assuming VGA palette
+            user_gfx_info->fg_color = convert_color(0x02);
+            user_gfx_info->bg_color = convert_color(0x00);
+        }
     }
 
     // Clear the screen
@@ -285,9 +287,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
         if (strncmp(tokens, cmdReboot, strlen(cmdReboot)) == 0) {
             // --------------------------------------------------------------------
-            // Reboot: far jump to reset vector
+            // Reboot: Reboot the PC
             // --------------------------------------------------------------------
-            __asm ("jmpl $0xFFFF, $0x0000");
+            outb(0x64, 0xFE);  // Send "Reset CPU" command to PS/2 keyboard controller port
         }
 
         if (strncmp(tokens, cmdPrtreg, strlen(cmdPrtreg)) == 0) {

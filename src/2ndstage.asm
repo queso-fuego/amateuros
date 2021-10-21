@@ -308,7 +308,7 @@ use32                    ; We are officially in 32 bit mode now
     mov ecx, 64                 ; Mode info block is 256 bytes / 4 = # of dbl words
     rep movsd
 
-    jmp 08h:2000h              ; Jump to kernel
+    jmp 08h:50000h              ; Jump to kernel
 
 ;; DATA AREA
 hexString: db '0x0000'

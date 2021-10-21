@@ -27,17 +27,15 @@ int16_t strcmp(const uint8_t *string1, const uint8_t *string2)
 //   negative value if string1 is less than string2
 //   0 if string1 = string2
 //   positive value if string1 is greater than string2
-int16_t strncmp(const uint8_t *string1, const uint8_t *string2, const uint8_t len)
+int16_t strncmp(const uint8_t *string1, const uint8_t *string2, uint8_t len)
 {
-    uint8_t i = 0;
-
-    while (*string1 && *string1 == *string2 && i < len) {
+    while (len > 0  && *string1 == *string2) {
         string1++;
         string2++;
-        i++;
+        len--;
     }
-
-    return *string1 - *string2;
+    if (len == 0) return 0;
+    else          return *string1 - *string2;
 }
 
 // strlen: Get length of a string up until the NUL terminator
