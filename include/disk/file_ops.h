@@ -115,9 +115,9 @@ void rw_sectors(const uint8_t size_in_sectors, uint8_t starting_sector, const ui
                               "outsw\n"               // Write words from (DS:)SI into DX port
                               "jmp .+2\n"             // Small delay after each word written to port
                               "loop 1b"               // Write words until CX = 0
-                              // SI = address to write sector from, CX = # of words for 1 sector,
+                              // SI = address to write sectors from, CX = # of words to write,
                               // DX = data port
-                              : : "S"(address), "c"(256), "d"(0x1F0) );   
+                              : : "S"(address), "c"(256*size_in_sectors), "d"(0x1F0) );  
 
         // Send cache flush command after write command is finished
         __asm__ __volatile__ ("outb %%al, %%dx" : : "a"(0xE7), "d"(0x1F7) );  // Command port - cache flush
