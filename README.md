@@ -109,9 +109,9 @@ files. I'm assuming only the binary file would be changing at that point. So I m
 
 Screenshots:
 ---
-![Showing boot screen and example of reading a file to screen](https://git.sr.ht/~queso_fuego/quesos/tree/master/item/screenshots/boot_phys_mem_mgr.png "Showing boot screen and example of reading a file to screen")
-![Showing 'editor' program updating a text file](https://git.sr.ht/~queso_fuego/quesos/tree/master/item/screenshots/editor_test.png  "Showing 'editor' program updating a text file")
-![Showing 'gfxtst' command showing basic 2D graphics primitives](https://git.sr.ht/~queso_fuego/quesos/tree/master/item/screenshots/gfxtst.png  "Showing 'gfxtst' command showing basic 2D graphics primitives")
+![Showing boot screen and example of reading a file to screen](./screenshots/boot_phys_mem_mgr.png "Showing boot screen and example of reading a file to screen")
+![Showing 'editor' program updating a text file](./screenshots/editor_test.png "Showing 'editor' program updating a text file")
+![Showing 'gfxtst' command showing basic 2D graphics primitives](./screenshots/gfxtst.png "Showing 'gfxtst' command showing basic 2D graphics primitives")
 
 These are most likely out of date and more or different screenshots will be added in the future
 
