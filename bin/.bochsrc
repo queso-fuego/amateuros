@@ -2,3 +2,4 @@ ata0-master: type=disk, mode=flat, path=../bin/OS.bin, translation=none
 display_library: sdl
 megs: 1
 boot: disk
+clock: sync=realtime, time0=local, rtc_sync=1

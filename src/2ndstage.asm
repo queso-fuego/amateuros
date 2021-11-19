@@ -316,15 +316,15 @@ hex_to_ascii: db '0123456789ABCDEF'
 
 ;; String constants and length values
 choose_gfx_string: db 'Input graphics mode values'
-.len = ($-choose_gfx_string)    ;; Fasm needs '=' to set numeric constants
+.len equ ($-choose_gfx_string)    ;
 width_string: db 0Ah,0Dh,'X_Resolution: '
-.len = ($-width_string)    ;; Fasm needs '=' to set numeric constants
+.len equ ($-width_string)   
 height_string: db 0Ah,0Dh,'Y_Resolution: '
-.len = ($-height_string)    ;; Fasm needs '=' to set numeric constants
+.len equ ($-height_string) 
 bpp_string: db 0Ah,0Dh,'bpp: '
-.len = ($-bpp_string)    ;; Fasm needs '=' to set numeric constants
+.len equ ($-bpp_string)   
 mode_not_found_string: db 0Ah,0Dh,'Video mode not found, try again (Y) or take default 1920x1080 32bpp (N): '
-.len = ($-mode_not_found_string)
+.len equ ($-mode_not_found_string)
 
 ;; VBE Variables
 width: dw 0

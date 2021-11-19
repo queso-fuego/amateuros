@@ -23,13 +23,13 @@ OS: reset_filetable $(ASM_FILES) $(C_FILES)
 
 reset_filetable:
 	@echo -n 1 > sector_num.txt
-	@fasm $(SRCDIR)bootSect.asm $(BINDIR)bootSect.bin 1>/dev/null
+	@nasm -f bin -o $(BINDIR)bootSect.bin $(SRCDIR)bootSect.asm 1>/dev/null
 	@./add_filetable_entry.sh bootSect 1
 	@./add_filetable_entry.sh fileTable 1
 
 # Assemble assembly source files into binary files
 $(ASM_FILES):
-	@fasm $(SRCDIR)$@.asm $(BINDIR)$@.bin 1>/dev/null
+	@nasm -f bin -o $(BINDIR)$@.bin $(SRCDIR)$@.asm 1>/dev/null
 	@size=$$(($$(wc -c < $(BINDIR)$@.bin)));\
 	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors)";\
 	./add_filetable_entry.sh $@ $$((size / 512))
@@ -56,3 +56,4 @@ bochs:
 
 clean:
 	rm -f $(BINDIR)*.bin
+	rm -f ./sector_num.txt

@@ -4,8 +4,9 @@
 #pragma once
 
 #include "../print/print_types.h"
+#include "../interrupts/pic.h"
 
-#define MAX_SYSCALLS 2
+#define MAX_SYSCALLS 3
 
 // Test syscall 0
 void syscall_test0(void)
@@ -31,10 +32,23 @@ void syscall_test1(void)
     user_gfx_info->fg_color = color;    // Restore text color
 }
 
+// Sleep for a given number of milliseconds
+// INPUTS:
+//  EBX = # of milliseconds
+void syscall_sleep(void)
+{
+    //__asm__ __volatile__ ("movl %%ebx, %0" : "=r"(*sleep_timer_ticks) );
+    __asm__ __volatile__ ("mov %%ebx, %0" : "=r"(*sleep_timer_ticks) );
+
+    // Wait ("Sleep") until # of ticks is 0
+    while (*sleep_timer_ticks > 0) __asm__ __volatile__ ("sti;hlt;cli");
+}
+
 // Syscall table
 void *syscalls[MAX_SYSCALLS] = {
     syscall_test0,
-    syscall_test1
+    syscall_test1,
+    syscall_sleep
 };
 
 // Syscall dispatcher
@@ -52,7 +66,7 @@ __attribute__ ((naked)) void syscall_dispatcher(void)
     // NOTE: Easier to do call in intel syntax, I'm not sure how to do it in att syntax
     __asm__ __volatile__ (".intel_syntax noprefix\n"
 
-                          ".equ MAX_SYSCALLS, 2\n"  // Have to define again, inline asm does not see the #define
+                          ".equ MAX_SYSCALLS, 3\n"  // Have to define again, inline asm does not see the #define
 
                           "cmp eax, MAX_SYSCALLS-1\n"   // syscalls table is 0-based
                           "ja invalid_syscall\n"        // invalid syscall number, skip and return

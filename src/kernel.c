@@ -2,7 +2,9 @@
 // Kernel.c: basic 'kernel' loaded from 2nd stage bootloader
 // ===========================================================================
 #include "../include/C/stdint.h"
+#include "../include/C/stdlib.h"
 #include "../include/C/string.h"
+#include "../include/C/time.h"
 #include "../include/gfx/2d_gfx.h"
 #include "../include/screen/clear_screen.h"
 #include "../include/print/print_types.h"
@@ -15,8 +17,8 @@
 #include "../include/type_conversions/hex_to_ascii.h"
 #include "../include/interrupts/idt.h"
 #include "../include/interrupts/exceptions.h"
-#include "../include/interrupts/syscalls.h"
 #include "../include/interrupts/pic.h"
+#include "../include/interrupts/syscalls.h"
 #include "../include/ports/io.h"
 
 // Constants
@@ -63,6 +65,8 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdPrtmemmap = "prtmemmap\0";  // Print physical memory map info
     uint8_t *cmdChgColors = "chgColors\0";  // Change current fg/bg colors
     uint8_t *cmdChgFont   = "chgFont\0";    // Change current font
+    uint8_t *cmdSleep     = "sleep\0";      // Sleep for a # of seconds
+    uint8_t *cmdMSleep    = "msleep\0";     // Sleep for a # of milliseconds
     uint8_t fileExt[3];
     uint8_t *fileBin = "bin\0";
     uint8_t *fileTxt = "txt\0";
@@ -155,10 +159,10 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // Set up additional interrupts here...
 
     // Debugging/testing system calls, uncomment these lines to test
-    __asm__ __volatile__ ("movl $0, %eax; int $0x80");
-    __asm__ __volatile__ ("movl $1, %eax; int $0x80");
+    //__asm__ __volatile__ ("movl $0, %eax; int $0x80");
+    //__asm__ __volatile__ ("movl $1, %eax; int $0x80");
 
-    __asm__ __volatile__ ("movl $2, %eax; int $0x80");   // Should do nothing
+    //__asm__ __volatile__ ("movl $2, %eax; int $0x80");   // Should do nothing
 
     // Mask off all hardware interrupts (disable the PIC)
     disable_pic();
@@ -166,18 +170,23 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // Remap PIC interrupts to after exceptions (PIC1 starts at 0x20)
     remap_pic();
 
-    // TODO: Add ISRs for PIC hardware interrupts
-    //set_idt_descriptor_32(0x20, <timer_irq_handler>, INT_FLAGS);  
-    //set_idt_descriptor_32(0x21, <keyboard_irq_handler>, INT_FLAGS);
+    // Add ISRs for PIC hardware interrupts
+    set_idt_descriptor_32(0x20, timer_irq0_handler, INT_GATE_FLAGS);  
+    //set_idt_descriptor_32(0x21, <keyboard_irq_handler>, INT_GATE_FLAGS);
+    //set_idt_descriptor_32(0x28, <cmos_rtc_irq8_handler>, INT_GATE_FLAGS);
     // Put more PIC IRQ handlers here...
     
-    // TODO: Enable PIC IRQ interrupts after setting their descriptors
-    // clear_irq_mask(0); // Enable timer (will tick every ~18.2/s)
+    // Enable PIC IRQ interrupts after setting their descriptors
+    clear_irq_mask(0); // Enable timer (will tick every ~18.2/s)
     // clear_irq_mask(1); // Enable keyboard interrupts
 
-    // TODO: After setting up hardware interrupts & PIC, set IF to enable 
+    // After setting up hardware interrupts & PIC, set IF to enable 
     //   non-exception and not NMI hardware interrupts
     __asm__ __volatile__("sti");
+
+    // Set default PIT Timer IRQ0 rate - ~1000hz
+    // 1193182 MHZ / 1193 = ~1000
+    set_pit_channel_mode_frequency(0, 2, 1193);
 
     // --------------------------------------------------------------------
     // Get user input, print to screen & run command/program  
@@ -631,6 +640,22 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
             move_cursor(kernel_cursor_x, kernel_cursor_y);
 
+            continue;
+        }
+
+        // Sleep command - sleep for given number of seconds
+        if (strncmp(tokens, cmdSleep, strlen(cmdSleep)) == 0) {
+            sleep_seconds(atoi(tokens+10)); 
+
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+            continue;
+        }
+
+        // MSleep command - sleep for given number of milliseconds
+        if (strncmp(tokens, cmdMSleep, strlen(cmdMSleep)) == 0) {
+            sleep_milliseconds(atoi(tokens+10));
+
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
             continue;
         }
 

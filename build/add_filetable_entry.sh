@@ -30,7 +30,7 @@ printf "%s" "$filename" >> $filetable
 i=${#filename} # get length of variable
 while [ $i -lt 10 ] 
     do
-        echo -n " " >> $filetable
+        printf "%c" " " >> $filetable
         i=$((i + 1))
     done
 
@@ -48,17 +48,17 @@ case "$filename" in
 esac
         
 # Directory entry    
-printf "%b" "\x00" >> $filetable
+dd if=/dev/zero bs=1 count=1 status=none >> $filetable
 
 # Starting sector
 sector=$(cat sector_num.txt)    # Get decimal string
-sector=$(printf "%x" $sector)   # Convert decimal to hex string
-printf "%b" "\x$sector" >> $filetable # Output hex string as numeric bytes
+sector=$(printf "%o" $sector)   # Convert decimal to octal string
+printf "%b" "\0$sector" >> $filetable # Output octal string as numeric bytes
 
-sector=$(printf "%d" 0x$sector) # Convert hex string to decimal string
+sector=$(printf "%d" 0$sector) # Convert octal string to decimal string
 sector=$((sector + filesize))   # Set next starting sector (current sector + filesize)
-echo -n $sector > sector_num.txt
+printf "%d" $sector > sector_num.txt
 
 # File size
-filesize=$(printf "%x" $filesize) # Convert decimal to hex string
-printf "%b" "\x$filesize" >> $filetable
+filesize=$(printf "%o" $filesize) # Convert decimal to octal string
+printf "%b" "\0$filesize" >> $filetable
