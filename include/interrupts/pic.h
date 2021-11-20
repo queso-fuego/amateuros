@@ -3,8 +3,10 @@
  */
 #pragma once
 
+#include "../C/stdbool.h"
 #include "../ports/io.h"
 #include "../interrupts/idt.h"
+#include "../print/print_types.h"
 
 #define PIC_1_CMD  0x20
 #define PIC_1_DATA 0x21
@@ -18,6 +20,7 @@
 #define PIC_EOI    0x20 // "End of interrupt" command
 
 #define IRQ0_SLEEP_TIMER_TICKS_AREA 0x1700
+#define RTC_DATETIME_AREA 0x1610
 
 uint32_t *sleep_timer_ticks = (uint32_t *)IRQ0_SLEEP_TIMER_TICKS_AREA;
 
@@ -173,11 +176,173 @@ void set_pit_channel_mode_frequency(const uint8_t channel, const uint8_t operati
     __asm__ __volatile__ ("sti");
 }
 
+// Show date time info or not
+static bool show_datetime = false;
 
+// Date time info
+typedef struct {
+    uint8_t second;
+    uint8_t minute;
+    uint8_t hour;
+    uint8_t day;
+    uint8_t month;
+    uint16_t year;
+} __attribute__ ((packed)) datetime_t;
 
+datetime_t *datetime = (datetime_t *)RTC_DATETIME_AREA;
 
+// CMOS registers
+enum {
+    cmos_address = 0x70,
+    cmos_data = 0x71 
+};
 
+// Read CMOS update in progress flag/bit in status register A
+bool cmos_update_in_progress(void)
+{
+    outb(cmos_address, 0x8A);       // Will read from status register A, disable NMI
+    return (inb(cmos_data) & 80);   // If register A top bit is set, CMOS update is in progress
+}
 
+// Get an RTC register value
+uint8_t get_rtc_register(uint8_t reg)
+{
+    outb(cmos_address, reg | 0x80);     // Disable NMI when sending register to read
+    return inb(cmos_data);              // Return data at that register
+}
 
+// Enable RTC
+void enable_rtc(void)
+{
+    uint8_t prev_regB_value = get_rtc_register(0x0B);
 
+    outb(cmos_address, 0x8B);                // Select register B again, because reading a CMOS register resets to register D
+    outb(cmos_data, prev_regB_value | 0x40); // Set bit 6 to enable periodic interrupts at default rate of 1024hz
+
+    get_rtc_register(0x0C);                 // Read status register C to clear out any pending IRQ8 interrupts
+}
+
+// Disable RTC
+void disable_rtc(void)
+{
+    uint8_t prev_regB_value;
+
+    __asm__ __volatile__ ("cli");   
+
+    prev_regB_value = get_rtc_register(0x0B);
+
+    outb(cmos_address, 0x8B);                // Select register B again, because reading a CMOS register resets to register D
+    outb(cmos_data, prev_regB_value & 0xBF); // Clear bit 6 to disable periodic interrupts
+
+    __asm__ __volatile__ ("sti");   
+}
+
+// CMOS RTC IRQ8 Handler
+__attribute__ ((interrupt)) void cmos_rtc_irq8_handler (int_frame_32_t *frame)
+{
+    datetime_t new_datetime, old_datetime; 
+    static uint16_t rtc_ticks = 0;
+    uint8_t regB_value;
+
+    __asm__ __volatile__ ("cli");
+
+    rtc_ticks++;
+
+    // If one second passed, get new date/time values
+    if (rtc_ticks % 1024 == 0) {
+        while (cmos_update_in_progress()) ; // Wait until CMOS is done updating
+
+        new_datetime.second = get_rtc_register(0x00);
+        new_datetime.minute = get_rtc_register(0x02);
+        new_datetime.hour   = get_rtc_register(0x04);
+        new_datetime.day    = get_rtc_register(0x07);
+        new_datetime.month  = get_rtc_register(0x08);
+        new_datetime.year   = get_rtc_register(0x09);
+
+        do {
+            old_datetime = new_datetime;
+
+            while (cmos_update_in_progress()) ; // Wait until CMOS is done updating
+
+            new_datetime.second = get_rtc_register(0x00);
+            new_datetime.minute = get_rtc_register(0x02);
+            new_datetime.hour   = get_rtc_register(0x04);
+            new_datetime.day    = get_rtc_register(0x07);
+            new_datetime.month  = get_rtc_register(0x08);
+            new_datetime.year   = get_rtc_register(0x09);
+
+        } while (
+            (new_datetime.second != old_datetime.second) || 
+            (new_datetime.minute != old_datetime.minute) || 
+            (new_datetime.hour   != old_datetime.hour)   || 
+            (new_datetime.day    != old_datetime.day)    || 
+            (new_datetime.month  != old_datetime.month)  || 
+            (new_datetime.year   != old_datetime.year)
+          );
+
+        regB_value = get_rtc_register(0x0B);
+
+        // Convert BCD values to binary if needed (bit 2 is clear)
+        if (!(regB_value & 0x04)) {
+            new_datetime.second = (new_datetime.second & 0x0F) + ((new_datetime.second / 16) * 10);
+            new_datetime.minute = (new_datetime.minute & 0x0F) + ((new_datetime.minute / 16) * 10);
+            new_datetime.hour = ((new_datetime.hour & 0x0F) + (((new_datetime.hour & 0x70) / 16) * 10)) | (new_datetime.hour & 0x80);
+            new_datetime.day = (new_datetime.day & 0x0F) + ((new_datetime.day / 16) * 10);
+            new_datetime.month = (new_datetime.month & 0x0F) + ((new_datetime.month / 16) * 10);
+            new_datetime.year = (new_datetime.year & 0x0F) + ((new_datetime.year / 16) * 10);
+        }
+
+        // Convert 12hr to 24hr if needed (bit 1 is clear in register B and top bit of hour is set)
+        if (!(regB_value & 0x02) && (new_datetime.hour & 0x80)) {
+            new_datetime.hour = ((new_datetime.hour & 0x7F) + 12) % 24;
+        }
+
+        // Get year 
+        new_datetime.year += 2000;
+
+        // Set datetime values in memory
+        datetime->second = new_datetime.second;
+        datetime->minute = new_datetime.minute;
+        datetime->hour   = new_datetime.hour;
+        datetime->day    = new_datetime.day;
+        datetime->month  = new_datetime.month;
+        datetime->year   = new_datetime.year;
+
+        // Print date/time on screen
+        if (show_datetime) {
+            uint16_t x = 50, y = 30; // TODO: Change later to fit exactly in lower right corner of screen
+
+            // ISO Formatted date/time - YYYY-MM-DD HH:MM:SS
+            print_dec(&x, &y, datetime->year);
+            print_char(&x, &y, '-');
+
+            if (datetime->month < 10) print_char(&x, &y, '0');
+            print_dec(&x, &y, datetime->month);
+            print_char(&x, &y, '-');
+
+            if (datetime->day < 10) print_char(&x, &y, '0');
+            print_dec(&x, &y, datetime->day);
+
+            print_char(&x, &y, ' ');
+
+            if (datetime->hour < 10) print_char(&x, &y, '0');
+            print_dec(&x, &y, datetime->hour);
+            print_char(&x, &y, ':');
+
+            if (datetime->minute < 10) print_char(&x, &y, '0');
+            print_dec(&x, &y, datetime->minute);
+            print_char(&x, &y, ':');
+
+            if (datetime->second < 10) print_char(&x, &y, '0');
+            print_dec(&x, &y, datetime->second);
+        }
+    }
+
+    // Read register C so that future IRQ8s can occur
+    get_rtc_register(0x0C);
+
+    send_pic_eoi(8);
+
+    __asm__ __volatile__ ("sti");
+}
 

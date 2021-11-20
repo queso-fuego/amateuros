@@ -63,10 +63,11 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdDelFile  = "del\0";		    // Delete a file from disk
     uint8_t *cmdRenFile  = "ren\0";         // Rename a file in the file table
     uint8_t *cmdPrtmemmap = "prtmemmap\0";  // Print physical memory map info
-    uint8_t *cmdChgColors = "chgColors\0";  // Change current fg/bg colors
-    uint8_t *cmdChgFont   = "chgFont\0";    // Change current font
+    uint8_t *cmdChgColors = "chgcolors\0";  // Change current fg/bg colors
+    uint8_t *cmdChgFont   = "chgfont\0";    // Change current font
     uint8_t *cmdSleep     = "sleep\0";      // Sleep for a # of seconds
     uint8_t *cmdMSleep    = "msleep\0";     // Sleep for a # of milliseconds
+    uint8_t *cmdShowDateTime = "showdatetime\0";  // Show CMOS RTC date/time values
     uint8_t fileExt[3];
     uint8_t *fileBin = "bin\0";
     uint8_t *fileTxt = "txt\0";
@@ -173,12 +174,17 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // Add ISRs for PIC hardware interrupts
     set_idt_descriptor_32(0x20, timer_irq0_handler, INT_GATE_FLAGS);  
     //set_idt_descriptor_32(0x21, <keyboard_irq_handler>, INT_GATE_FLAGS);
-    //set_idt_descriptor_32(0x28, <cmos_rtc_irq8_handler>, INT_GATE_FLAGS);
+    set_idt_descriptor_32(0x28, cmos_rtc_irq8_handler, INT_GATE_FLAGS);
     // Put more PIC IRQ handlers here...
     
     // Enable PIC IRQ interrupts after setting their descriptors
     clear_irq_mask(0); // Enable timer (will tick every ~18.2/s)
+    clear_irq_mask(2); // Enable PIC2 line
+    clear_irq_mask(8); // Enable CMOS RTC IRQ8
     // clear_irq_mask(1); // Enable keyboard interrupts
+    
+    // Enable CMOS RTC
+    enable_rtc();
 
     // After setting up hardware interrupts & PIC, set IF to enable 
     //   non-exception and not NMI hardware interrupts
@@ -654,6 +660,20 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         // MSleep command - sleep for given number of milliseconds
         if (strncmp(tokens, cmdMSleep, strlen(cmdMSleep)) == 0) {
             sleep_milliseconds(atoi(tokens+10));
+
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+            continue;
+        }
+
+        // Show CMOS RTC date/time values
+        if (strncmp(tokens, cmdShowDateTime, strlen(cmdShowDateTime)) == 0) {
+            show_datetime = !show_datetime;  
+
+            if (!show_datetime) {
+                // Blank out date/time
+                uint16_t x = 50, y = 30;
+                print_string(&x, &y, "                   "); // Overwrite date/time with spaces
+            }
 
             print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
             continue;

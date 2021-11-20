@@ -46,9 +46,11 @@ $(C_FILES):
 	./add_filetable_entry.sh $@ $$((newsize / 512))
 
 # Launch OS through qemu 
+# NOTE: Remove driftfix=slew if not needed, it is needed for my OpenBSD VM setup
 run:
 	qemu-system-i386\
-	-drive format=raw,file=$(BINDIR)OS.bin,if=ide,index=0,media=disk 
+	-drive format=raw,file=$(BINDIR)OS.bin,if=ide,index=0,media=disk\
+	-rtc base=localtime,clock=host,driftfix=slew
 
 # Launch OS through bochs
 bochs:
