@@ -33,15 +33,16 @@ Project Structure:
 Current Standing:
 ---
 * 32bit protected mode, all ring 0, no paging (yet). Will probably stick to ring 0 only when/if it's set up, and plan on paging and memory management in the nearish future.
-* Initial interrupt support for exceptions, system calls (using int 0x80), regular software interrupts, and the PIC. Limited to no interrupt handlers are implemented for most of these, but there are places and functions to implement your own as desired. 
+* Initial interrupt support for exceptions, system calls (using int 0x80), regular software interrupts, and the PIC. PIC IRQs 0 & 8 are implemented for PIT channel 0 (at a default rate of ~1000hz for sleep() syscalls, though you can change this as needed) and CMOS Real time clock (at a default rate of 1024hz). 
+IRQ1 for keyboard handling should be added soon, at least for scancode set 1. Currently keystrokes are retrieved from the PS/2 data port 0x60 in a busy loop. There are also places and functions to implement your own interrupts as desired. 
 * Vesa Bios Extensions for graphics modes. On boot you can type in desired X resolution, Y resolution, and bits per pixel values, or take a default of 1920x1080 32bpp. 
 If trying to run on actual hardware, ensure you know what your hardware supports! Trying to run unsupported modes may damage your hardware!!
-* "Generic" bitmap font support. Add a font in the style of the current fonts in /src (see testfont or termu* files) with a 2 byte width/height "header", add the filename to ASM_FILES in the makefile, and use 'chgFont <filename>' after booting.
+* "Generic" bitmap font support. Add a font in the style of the current fonts in /src (see testfont or termu* files) with a 2 byte width/height "header", add the filename to ASM_FILES in the makefile, and use 'chgfont <filename>' at the prompt after boot.
 * Barely functioning text/hex editor for 512 byte length files, and a 4 function calculator. More programs to come in the future.
 * Ability to save and load text or binary (hex) files. Valid x86 binary files can be run from the hex editor if the file length is <= 1 sector, or from the main kernel command line if set up in the file table.
-Binary files written in the hex editor are auto-ended with a '0xCB', or far return. That probably doesn't work, and will chang when better memory management and program loading is developed.
-* Several commands available for the in-built kernel "shell" such as del, ren, chgColors, chgFont, etc. A list of available commands is in the kernel.c source, in main(), where
-they're prefixed with "cmd". Eventually there should be a better implementation like a "help" command or similar to list available commands and descriptions at runtime.
+Binary files written in the hex editor are auto-ended with a '0xCB', or far return. That probably doesn't work, and will change when better memory management and program loading is developed.
+* Several commands available for the in-built kernel "shell" such as del, ren, chgcolors, chgfont, etc. A list of available commands is in the kernel.c source, in kernel_main(), where
+they're prefixed with "cmd*". Eventually there should be a better implementation like a "help" command or similar to list available commands and descriptions at runtime.
 
 TODO (There's ALWAYS more to do e.g. lots of TODOs in the source files, this list is updated when/if I remember):
 ---
