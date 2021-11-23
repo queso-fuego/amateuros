@@ -119,16 +119,16 @@ How to Build/Run:
 ---
 * Disclaimer: Mainly tested on 64bit OpenBSD and FreeBSD, not guaranteeing any other platforms will work
 
-* Install Dependencies: 
+* Install Dependencies:
   * bochs http://bochs.sourceforge.net/ and/or qemu https://www.qemu.org/download/ 
   * make (bsd and gnu make should both work I think, though this is mainly tested with bsdmake)
   * nasm assembler https://www.nasm.us
   * clang (8.0.1 or newer). Eventually I want gcc to work as well, but it needs a different setup for -mno-general-regs at minimum, at least for any ISR code.
 
 * clone and cd to this repo's /build folder
-* Run 'make OS' or 'make' from the command line to build the final OS.bin binary in /bin
-* For bochs: In the /build folder, run 'make bochs'; or in the /bin folder, run 'bochs' or 'bochs -q'
-* For qemu: In the /build folder, run 'make run'; or in the /bin folder run 'qemu-system-i386 -drive format=raw,file=OS.bin,if=ide,index=0,media=disk'.
+* Run 'make OS' or 'make' from the command line to build the OS.bin binary in /bin
+* For bochs: In the /build folder, run 'make bochs'
+* For qemu: In the /build folder, run 'make run'
  
 Note: Qemu seems to run and act better than bochs, and I use it for the most part, with some limited testing in bochs for accuracy/stability. If anything is broken on bochs let me know. 
 Also let me know of any suggestions to simplify the build process/makefile, or ways to make the OS more portable for other environments (POSIX utilities or compliance, etc.)
