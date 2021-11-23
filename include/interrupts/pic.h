@@ -201,7 +201,7 @@ enum {
 bool cmos_update_in_progress(void)
 {
     outb(cmos_address, 0x8A);       // Will read from status register A, disable NMI
-    return (inb(cmos_data) & 80);   // If register A top bit is set, CMOS update is in progress
+    return (inb(cmos_data) & 0x80); // If register A top bit is set, CMOS update is in progress
 }
 
 // Get an RTC register value
