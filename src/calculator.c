@@ -41,7 +41,7 @@ int32_t parse_num = 0;
 __attribute__ ((section ("calc_entry"))) void calc_main(void)
 {
     uint8_t input_char;
-    uint8_t *valid_input = "0123456789+-*/()" "\x20\x0D\x1B" "r";
+    const uint8_t valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
     uint8_t idx;
 
 	clear_screen(user_gfx_info->bg_color);

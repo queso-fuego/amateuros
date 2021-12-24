@@ -1,0 +1,288 @@
+// Overworld theme, credit to www.vgleadsheets.com
+set_bpm(100);
+set_time_signature(4, QUARTER);
+
+thirty2nd_note(E5);
+thirty2nd_rest();
+eigth_note(E5);
+thirty2nd_rest();
+eigth_note(E5);
+sixteenth_note(C5);
+eigth_note(E5);
+quarter_note(G5);
+quarter_note(G4);
+
+// A
+for (int i = 0; i < 2; i++) {
+    dotted_eigth_note(C5);
+    dotted_eigth_note(G4);
+    eigth_note(E4);
+    sixteenth_rest();
+    eigth_note(A4);
+    eigth_note(B4);
+    sixteenth_note(Bb4);
+    eigth_note(A4);
+
+    eigth_triplet(G4, E5, G5);
+    eigth_note(A5);
+    sixteenth_note(F5);
+    eigth_note(G5);
+    eigth_note(E5);
+    sixteenth_note(C5);
+    sixteenth_note(D5);
+    sixteenth_note(B4);
+    eigth_rest();
+}
+
+// B
+for (int i = 0; i < 2; i++) {
+    eigth_rest();
+    sixteenth_note(G5);
+    sixteenth_note(Gb5);
+    sixteenth_note(F5);
+    eigth_note(Ds5);
+    sixteenth_note(E5);
+    sixteenth_rest();
+    sixteenth_note(G4);
+    sixteenth_note(A4);
+    sixteenth_note(C5);
+    sixteenth_rest();
+    sixteenth_note(A4);
+    sixteenth_note(C5);
+    sixteenth_note(D5);
+
+    eigth_rest();
+    sixteenth_note(G5);
+    sixteenth_note(Gb5);
+    sixteenth_note(F5);
+    eigth_note(Ds5);
+    sixteenth_note(E5);
+    sixteenth_rest();
+    sixteenth_note(C6);
+    sixteenth_rest();
+    sixteenth_note(C6);
+    quarter_note(C6);
+
+    eigth_rest();
+    sixteenth_note(G5);
+    sixteenth_note(Gb5);
+    sixteenth_note(F5);
+    eigth_note(Ds5);
+    sixteenth_note(E5);
+    sixteenth_rest();
+    sixteenth_note(G4);
+    sixteenth_note(A4);
+    sixteenth_note(C5);
+    sixteenth_rest();
+    sixteenth_note(A4);
+    sixteenth_note(C5);
+    sixteenth_note(D5);
+
+    eigth_rest();
+    eigth_note(Eb5);
+    sixteenth_rest();
+    dotted_eigth_note(D5);
+    quarter_note(C5);
+    quarter_rest();
+}
+
+// C
+thirty2nd_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+sixteenth_note(C5);
+eigth_note(D5);
+sixteenth_note(E5);
+eigth_note(C5);
+sixteenth_note(A4);
+quarter_note(G4);
+
+thirty2nd_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+sixteenth_note(C5);
+sixteenth_note(D5);
+sixteenth_note(E5);
+half_rest();
+
+thirty2nd_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+sixteenth_note(C5);
+eigth_note(D5);
+sixteenth_note(E5);
+eigth_note(C5);
+sixteenth_note(A4);
+quarter_note(G4);
+
+thirty2nd_note(E5);
+thirty2nd_rest();
+eigth_note(E5);
+thirty2nd_rest();
+eigth_note(E5);
+sixteenth_note(C5);
+eigth_note(E5);
+quarter_note(G5);
+quarter_note(G4);
+
+// A'
+for (int i = 0; i < 2; i++) {
+    dotted_eigth_note(C5);
+    dotted_eigth_note(G4);
+    eigth_note(E4);
+    sixteenth_rest();
+    eigth_note(A4);
+    eigth_note(B4);
+    sixteenth_note(Bb4);
+    eigth_note(A4);
+
+    eigth_triplet(G4, E5, G5);
+    eigth_note(A5);
+    sixteenth_note(F5);
+    eigth_note(G5);
+    eigth_note(E5);
+    sixteenth_note(C5);
+    sixteenth_note(D5);
+    sixteenth_note(B4);
+    eigth_rest();
+}
+
+// D
+for (int i = 0; i < 2; i++) {
+    sixteenth_note(E5);
+    eigth_note(C5);
+    dotted_eigth_note(G4);
+    eigth_note(Gs4);
+    sixteenth_note(A4);
+    sixteenth_note(F5);
+    sixteenth_rest();
+    sixteenth_note(F5);
+    quarter_note(A4);
+
+    play_note(B4, quarter_note_duration/3);
+    play_note(A5, quarter_note_duration/6);
+    rest(quarter_note_duration/6);
+    play_note(A5, quarter_note_duration/6);
+    rest(quarter_note_duration/6);
+    eigth_triplet(A5, G5, F5);
+    sixteenth_note(E5);
+    eigth_note(C5);
+    sixteenth_note(A4);
+    quarter_note(G4);
+
+    sixteenth_note(E5);
+    eigth_note(C5);
+    dotted_eigth_note(G4);
+    eigth_note(Gs4);
+    sixteenth_note(A4);
+    sixteenth_note(F5);
+    sixteenth_rest();
+    sixteenth_note(F5);
+    quarter_note(A4);
+
+    sixteenth_note(B4);
+    sixteenth_note(F5);
+    sixteenth_rest();
+    thirty2nd_note(F5);
+    thirty2nd_rest();
+    eigth_triplet(F5, E5, D5);
+    quarter_note(C5);
+    quarter_rest();
+}
+
+// E
+thirty2nd_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+sixteenth_note(C5);
+eigth_note(D5);
+sixteenth_note(E5);
+eigth_note(C5);
+sixteenth_note(A4);
+quarter_note(G4);
+
+thirty2nd_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+sixteenth_note(C5);
+sixteenth_note(D5);
+sixteenth_note(E5);
+half_rest();
+
+thirty2nd_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+eigth_note(C5);
+thirty2nd_rest();
+sixteenth_note(C5);
+eigth_note(D5);
+sixteenth_note(E5);
+eigth_note(C5);
+sixteenth_note(A4);
+quarter_note(G4);
+
+thirty2nd_note(E5);
+thirty2nd_rest();
+eigth_note(E5);
+thirty2nd_rest();
+eigth_note(E5);
+sixteenth_note(C5);
+eigth_note(E5);
+quarter_note(G5);
+quarter_note(G4);
+
+sixteenth_note(E5);
+eigth_note(C5);
+dotted_eigth_note(G4);
+eigth_note(Gs4);
+sixteenth_note(A4);
+sixteenth_note(F5);
+sixteenth_rest();
+sixteenth_note(F5);
+quarter_note(A4);
+
+play_note(B4, quarter_note_duration/3);
+play_note(A5, quarter_note_duration/6);
+rest(quarter_note_duration/6);
+play_note(A5, quarter_note_duration/6);
+rest(quarter_note_duration/6);
+eigth_triplet(A5, G5, F5);
+sixteenth_note(E5);
+eigth_note(C5);
+sixteenth_note(A4);
+quarter_note(G4);
+
+sixteenth_note(E5);
+eigth_note(C5);
+dotted_eigth_note(G4);
+eigth_note(Gs4);
+sixteenth_note(A4);
+sixteenth_note(F5);
+sixteenth_rest();
+sixteenth_note(F5);
+quarter_note(A4);
+
+sixteenth_note(B4);
+sixteenth_note(F5);
+sixteenth_rest();
+thirty2nd_note(F5);
+thirty2nd_rest();
+eigth_triplet(F5, E5, D5);
+quarter_note(C5);
+quarter_rest();

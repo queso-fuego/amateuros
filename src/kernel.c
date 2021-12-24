@@ -687,7 +687,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         if (strncmp(tokens, cmdSoundTest, strlen(cmdSoundTest)) == 0) {
             enable_pc_speaker();
 
-            play_note(A4, 1000); // TEST: Play A4 for ~1 second
+            #include "../include/sound/italianplumberbrothers.mus"
 
             disable_pc_speaker();
 

@@ -2,7 +2,7 @@
 # MakeFile should be in <OS>/build/ folder
 #-----------------------------------------
 # Make variables
-CFLAGS = -std=c17 -m32 -march=i386 -ffreestanding -fno-builtin -nostdinc -fPIE -Os -fno-stack-protector	
+CFLAGS = -std=c17 -m32 -march=i386 -ffreestanding -fno-builtin -nostdinc -fPIE -Os -fno-stack-protector	-Wno-pointer-sign
 C_FILES = kernel editor calculator
 ASM_FILES = 2ndstage testfont termu16n termu18n
 SRCDIR = ../src/
