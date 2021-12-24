@@ -50,7 +50,8 @@ $(C_FILES):
 run:
 	qemu-system-i386\
 	-drive format=raw,file=$(BINDIR)OS.bin,if=ide,index=0,media=disk\
-	-rtc base=localtime,clock=host,driftfix=slew
+	-rtc base=localtime,clock=host,driftfix=slew\
+	-soundhw pcspk
 
 # Launch OS through bochs
 bochs:

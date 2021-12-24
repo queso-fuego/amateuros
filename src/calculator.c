@@ -13,7 +13,7 @@
 #include "../include/print/print_types.h"
 #include "../include/screen/cursor.h"
 #include "../include/screen/clear_screen.h"
-#include "../include/keyboard/get_key.h"
+#include "../include/keyboard/keyboard.h"
 
 void parse_buffer(void);    // Function declarations
 int32_t parse_sum(void);
@@ -43,7 +43,6 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
     uint8_t input_char;
     uint8_t *valid_input = "0123456789+-*/()" "\x20\x0D\x1B" "r";
     uint8_t idx;
-    uint8_t *ctrl = (uint8_t *)0x1603; // Ctrl key press = 1, 0 if not
 
 	clear_screen(user_gfx_info->bg_color);
 
@@ -74,7 +73,7 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
             continue;
         }
 
-        if (input_char == 0x1B || (*ctrl && input_char == 'r'))    // Escape key or ctrl-R
+        if (input_char == 0x1B || (key_info->ctrl && input_char == 'r'))    // Escape key or ctrl-R
            return;  // Return to caller
 
         buffer[scan] = input_char;

@@ -5,11 +5,11 @@
 #include "../include/C/stdlib.h"
 #include "../include/C/string.h"
 #include "../include/C/time.h"
+#include "../include/global/global_addresses.h"
 #include "../include/gfx/2d_gfx.h"
 #include "../include/screen/clear_screen.h"
 #include "../include/print/print_types.h"
 #include "../include/screen/cursor.h"
-#include "../include/keyboard/get_key.h"
 #include "../include/print/print_registers.h"
 #include "../include/memory/physical_memory_manager.h"
 #include "../include/disk/file_ops.h"
@@ -20,10 +20,8 @@
 #include "../include/interrupts/pic.h"
 #include "../include/interrupts/syscalls.h"
 #include "../include/ports/io.h"
-
-// Constants
-#define MEMMAP_AREA 0x30000
-// TODO: Fill out more constants to replace magic numbers
+#include "../include/keyboard/keyboard.h"
+#include "../include/sound/pc_speaker.h"
 
 void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
 
@@ -68,6 +66,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdSleep     = "sleep\0";      // Sleep for a # of seconds
     uint8_t *cmdMSleep    = "msleep\0";     // Sleep for a # of milliseconds
     uint8_t *cmdShowDateTime = "showdatetime\0";  // Show CMOS RTC date/time values
+    uint8_t *cmdSoundTest = "soundtest\0";  // Test pc speaker square wave sound
     uint8_t fileExt[3];
     uint8_t *fileBin = "bin\0";
     uint8_t *fileTxt = "txt\0";
@@ -173,15 +172,20 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
     // Add ISRs for PIC hardware interrupts
     set_idt_descriptor_32(0x20, timer_irq0_handler, INT_GATE_FLAGS);  
-    //set_idt_descriptor_32(0x21, <keyboard_irq_handler>, INT_GATE_FLAGS);
+    set_idt_descriptor_32(0x21, keyboard_irq1_handler, INT_GATE_FLAGS);
     set_idt_descriptor_32(0x28, cmos_rtc_irq8_handler, INT_GATE_FLAGS);
     // Put more PIC IRQ handlers here...
     
+    // Clear out PS/2 keyboard buffer: check status register and read from data port
+    //   until clear
+    // This may fix not getting keys on boot
+    while (inb(0x64) & 1) inb(0x60);    // Status register 0x64 bit 0 is set, output buffer is full
+
     // Enable PIC IRQ interrupts after setting their descriptors
     clear_irq_mask(0); // Enable timer (will tick every ~18.2/s)
+    clear_irq_mask(1); // Enable keyboard IRQ1, keyboard interrupts
     clear_irq_mask(2); // Enable PIC2 line
     clear_irq_mask(8); // Enable CMOS RTC IRQ8
-    // clear_irq_mask(1); // Enable keyboard interrupts
     
     // Enable CMOS RTC
     enable_rtc();
@@ -674,6 +678,18 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 uint16_t x = 50, y = 30;
                 print_string(&x, &y, "                   "); // Overwrite date/time with spaces
             }
+
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+            continue;
+        }
+
+        // Test Sound
+        if (strncmp(tokens, cmdSoundTest, strlen(cmdSoundTest)) == 0) {
+            enable_pc_speaker();
+
+            play_note(A4, 1000); // TEST: Play A4 for ~1 second
+
+            disable_pc_speaker();
 
             print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
             continue;

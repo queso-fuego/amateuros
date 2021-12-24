@@ -4,9 +4,11 @@
 #pragma once
 
 #include "../C/stdbool.h"
+#include "../global/global_addresses.h"
 #include "../ports/io.h"
 #include "../interrupts/idt.h"
 #include "../print/print_types.h"
+#include "../keyboard/keyboard.h"
 
 #define PIC_1_CMD  0x20
 #define PIC_1_DATA 0x21
@@ -19,8 +21,7 @@
 
 #define PIC_EOI    0x20 // "End of interrupt" command
 
-#define IRQ0_SLEEP_TIMER_TICKS_AREA 0x1700
-#define RTC_DATETIME_AREA 0x1610
+#define PS2_DATA_PORT 0x60
 
 uint32_t *sleep_timer_ticks = (uint32_t *)IRQ0_SLEEP_TIMER_TICKS_AREA;
 
@@ -176,6 +177,77 @@ void set_pit_channel_mode_frequency(const uint8_t channel, const uint8_t operati
     __asm__ __volatile__ ("sti");
 }
 
+// Keyboard IRQ1 handler
+__attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame)
+{
+    enum {
+        LSHIFT_MAKE  = 0x2A,
+        LSHIFT_BREAK = 0xAA,
+        RSHIFT_MAKE  = 0x36,
+        RSHIFT_BREAK = 0xB6,
+        LCTRL_MAKE   = 0x1D,
+        LCTRL_BREAK  = 0x9D,
+    };
+
+    uint8_t key;
+    static bool e0 = false; 
+    static bool e1 = false;
+
+    // TODO: Add keyboard initialization & scancode functions, 
+    //   do not assume scancode set 1
+    
+    // Scancode set 1 -> Ascii lookup table
+    const uint8_t *scancode_to_ascii = "\x00\x1B" "1234567890-=" "\x08"
+    "\x00" "qwertyuiop[]" "\x0D\x1D" "asdfghjkl;'`" "\x00" "\\"
+    "zxcvbnm,./" "\x00\x00\x00" " ";
+
+    // Shift key pressed on number row lookup table (0-9 keys)
+    const uint8_t *num_row_shifts = ")!@#$%^&*(";
+
+    // Set current key to null
+    key_info->key = 0;
+
+    key = inb(PS2_DATA_PORT);   // Read in new key
+
+    if (key) {
+        if      (key == LSHIFT_MAKE  || key == RSHIFT_MAKE) key_info->shift = true; 
+        else if (key == LSHIFT_BREAK || key == RSHIFT_BREAK) key_info->shift = false; 
+        else if (key == LCTRL_MAKE)  key_info->ctrl = true;
+        else if (key == LCTRL_BREAK) key_info->ctrl = false;
+        else if (key == 0xE0) e0 = true;
+        else {
+            if (!(key & 0x80)) {
+                // Don't translate escaped scancodes, only return them
+                if (!e0) { 
+                    key = scancode_to_ascii[key]; 
+
+                    // If pressed shift, translate key to shifted key
+                    if (key_info->shift) {
+                        if      (key >= 'a' && key <= 'z') key -= 0x20;  // Convert lowercase into uppercase
+                        else if (key >= '0' && key <= '9') key = num_row_shifts[key-0x30];  // Get int value of character, offset into shifted nums
+                        else {
+                            if      (key == '=')  key = '+';
+                            else if (key == '\\') key = '|'; 
+                            else if (key == '`')  key = '~';
+                            else if (key == '[')  key = '{';
+                            else if (key == ']')  key = '}';
+                            else if (key == '\'') key = '\"';
+                            else if (key == ';')  key = ':';
+                            else if (key == ',')  key = '<';
+                            else if (key == '.')  key = '>';
+                            else if (key == '/')  key = '?';
+                            // TODO: Add more shifted keys here...
+                        }
+                    }
+                }
+                key_info->key = key;    // Set ascii key value in struct
+            }
+            if (e0) e0 = false;
+        }
+    }
+    send_pic_eoi(1);
+}
+
 // Show date time info or not
 static bool show_datetime = false;
 
@@ -301,12 +373,7 @@ __attribute__ ((interrupt)) void cmos_rtc_irq8_handler (int_frame_32_t *frame)
         new_datetime.year += 2000;
 
         // Set datetime values in memory
-        datetime->second = new_datetime.second;
-        datetime->minute = new_datetime.minute;
-        datetime->hour   = new_datetime.hour;
-        datetime->day    = new_datetime.day;
-        datetime->month  = new_datetime.month;
-        datetime->year   = new_datetime.year;
+        *datetime = new_datetime;
 
         // Print date/time on screen
         if (show_datetime) {

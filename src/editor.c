@@ -9,7 +9,7 @@
 #include "../include/print/print_fileTable.h"
 #include "../include/screen/cursor.h"
 #include "../include/screen/clear_screen.h"
-#include "../include/keyboard/get_key.h"
+#include "../include/keyboard/keyboard.h"
 #include "../include/type_conversions/hex_to_ascii.h"
 
 #define ENDOFLINE  80
@@ -55,8 +55,6 @@ uint16_t current_line_length;
 uint16_t file_length_lines;
 uint16_t file_length_bytes;
 static const uint8_t *filename_string = "Enter file name: \0";
-uint8_t scancode;
-uint8_t ctrl_key;
 uint8_t hex_count = 0;
 uint8_t blank_line[80];
 uint8_t *extBin = "bin";
@@ -354,11 +352,8 @@ void text_editor(void)
 
         input_char = get_key();
 
-        scancode = *(uint8_t *)0x1601;  // Scancode for key stored from get_key
-        ctrl_key = *(uint8_t *)0x1603;  // Ctrl key status stored from get_key
-
 		// Check for text editor keybinds
-        if (ctrl_key == 1) {    // CTRL Key pressed
+        if (key_info->ctrl) {    // CTRL Key pressed
             if (input_char == 'r')  // CTRLR Return to kernel
                 return; 
 
@@ -528,7 +523,7 @@ void text_editor(void)
 			
         // Backspace or delete
         // TODO: May not be consistent with multiple lines and deleting at different positions
-        if (input_char == 0x08 || scancode == DELKEY) {
+        if (input_char == 0x08 || input_char == DELKEY) {
             if (input_char == 0x08 && cursor_x == 0) continue;  // Skip backspace at start of line
 
             // TODO: Handle newline deletion
@@ -584,7 +579,7 @@ void text_editor(void)
             continue;
         }
 
-        if (scancode == LEFTARROW) {    // Left arrow key
+        if (input_char == LEFTARROW) {    // Left arrow key
             // Move 1 byte left (till beginning of line)
             if (cursor_x != 0) {
                 remove_cursor(cursor_x, cursor_y);
@@ -597,7 +592,7 @@ void text_editor(void)
             continue;
         }
 
-        if (scancode == RIGHTARROW) {    // Right arrow key
+        if (input_char == RIGHTARROW) {    // Right arrow key
             // Move 1 byte right (till end of line)
             if (cursor_x+1 < current_line_length) { 
                 remove_cursor(cursor_x, cursor_y);
@@ -610,7 +605,7 @@ void text_editor(void)
             continue;
         }
 
-        if (scancode == UPARROW) {      // Up arrow key
+        if (input_char == UPARROW) {      // Up arrow key
             if (cursor_y == 0)  // On 1st line, can't go up
                 continue;
 
@@ -661,7 +656,7 @@ void text_editor(void)
             continue;
         }
 
-        if (scancode == DOWNARROW) {    // Down arrow key
+        if (input_char == DOWNARROW) {    // Down arrow key
             if (cursor_y == file_length_lines)  // On last line of file
                 continue;
                 
@@ -710,7 +705,7 @@ void text_editor(void)
 			continue;
         }
 
-        if (scancode == HOMEKEY) {      // Home key
+        if (input_char == HOMEKEY) {      // Home key
             remove_cursor(cursor_x, cursor_y);
 
             // Move to beginning of line
@@ -724,7 +719,7 @@ void text_editor(void)
             continue;
         }
 
-        if (scancode == ENDKEY) {       // End key
+        if (input_char == ENDKEY) {       // End key
             remove_cursor(cursor_x, cursor_y);
 
             // Move to end of line
@@ -843,9 +838,6 @@ void hex_editor(void)
     while (1) {
         input_char = get_key();
 
-        scancode = *(uint8_t *)0x1601;  // Scancode for key stored from get_key
-        ctrl_key = *(uint8_t *)0x1603;  // Ctrl key status stored from get_key
-
         // Check for hex editor keybinds
         if (input_char == RUNINPUT) {
             *(uint8_t *)(0x20000 + editor_filesize) = 0xCB; // CB = far return
@@ -895,7 +887,7 @@ void hex_editor(void)
 
         // Check delete key
         // TODO: Move all file data back 1 byte after blanking out current byte
-        if (scancode == DELKEY) {
+        if (input_char == DELKEY) {
             // Blank out 1st and 2nd nibbles of hex byte
             print_char(&cursor_x, &cursor_y, SPACE);     // space ' ' in ascii
             print_char(&cursor_x, &cursor_y, SPACE);     // space ' ' in ascii
@@ -908,7 +900,7 @@ void hex_editor(void)
         }
         
         // Check navigation keys (arrows + home/end)
-        if (scancode == LEFTARROW) {     // Left arrow key
+        if (input_char == LEFTARROW) {     // Left arrow key
             remove_cursor(cursor_x, cursor_y);  // Blank out cursor line first
 
             // Move 1 byte left (till beginning of line)
@@ -922,7 +914,7 @@ void hex_editor(void)
             continue;
         }
 
-        if (scancode == RIGHTARROW) {    // Right arrow key
+        if (input_char == RIGHTARROW) {    // Right arrow key
             remove_cursor(cursor_x, cursor_y);  // Blank out cursor line first
 
             // Move 1 byte right (till end of line)
@@ -936,7 +928,7 @@ void hex_editor(void)
             continue;
         }
 
-        if (scancode == UPARROW) {     // Up arrow key
+        if (input_char == UPARROW) {     // Up arrow key
             remove_cursor(cursor_x, cursor_y);  // Blank out cursor line first
 
             // Move 1 line up
@@ -950,7 +942,7 @@ void hex_editor(void)
             continue;
         }
 
-        if (scancode == DOWNARROW) {   // Down arrow key
+        if (input_char == DOWNARROW) {   // Down arrow key
             remove_cursor(cursor_x, cursor_y);  // Blank out cursor line first
 
             // Move 1 line down
@@ -964,7 +956,7 @@ void hex_editor(void)
             continue;
         }
 
-        if (scancode == HOMEKEY) {     // Home key pressed
+        if (input_char == HOMEKEY) {     // Home key pressed
             remove_cursor(cursor_x, cursor_y);  // Blank out cursor line first
 
             // Move to beginning of line
@@ -977,7 +969,7 @@ void hex_editor(void)
             continue;
         }
 
-        if (scancode == ENDKEY) {       // End key pressed
+        if (input_char == ENDKEY) {       // End key pressed
             remove_cursor(cursor_x, cursor_y);  // Blank out cursor line first
 
             // Move to end of line
