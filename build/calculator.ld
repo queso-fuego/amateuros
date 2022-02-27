@@ -5,6 +5,10 @@ SECTIONS
         *(calc_entry); 
         *(.text*);
     }
+    .data :
+    {
+        *(.data*);
+    }
     .rodata :
     {
         *(.rodata*);

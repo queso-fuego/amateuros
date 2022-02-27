@@ -273,6 +273,7 @@ enum {
 bool cmos_update_in_progress(void)
 {
     outb(cmos_address, 0x8A);       // Will read from status register A, disable NMI
+    io_wait();                      // Small delay
     return (inb(cmos_data) & 0x80); // If register A top bit is set, CMOS update is in progress
 }
 
@@ -280,6 +281,7 @@ bool cmos_update_in_progress(void)
 uint8_t get_rtc_register(uint8_t reg)
 {
     outb(cmos_address, reg | 0x80);     // Disable NMI when sending register to read
+    io_wait();                          // Small delay
     return inb(cmos_data);              // Return data at that register
 }
 
@@ -289,9 +291,10 @@ void enable_rtc(void)
     uint8_t prev_regB_value = get_rtc_register(0x0B);
 
     outb(cmos_address, 0x8B);                // Select register B again, because reading a CMOS register resets to register D
+    io_wait();                               // Small delay
     outb(cmos_data, prev_regB_value | 0x40); // Set bit 6 to enable periodic interrupts at default rate of 1024hz
 
-    get_rtc_register(0x0C);                 // Read status register C to clear out any pending IRQ8 interrupts
+    get_rtc_register(0x0C);                  // Read status register C to clear out any pending IRQ8 interrupts
 }
 
 // Disable RTC
@@ -304,6 +307,7 @@ void disable_rtc(void)
     prev_regB_value = get_rtc_register(0x0B);
 
     outb(cmos_address, 0x8B);                // Select register B again, because reading a CMOS register resets to register D
+    io_wait();                               // Small delay
     outb(cmos_data, prev_regB_value & 0xBF); // Clear bit 6 to disable periodic interrupts
 
     __asm__ __volatile__ ("sti");   

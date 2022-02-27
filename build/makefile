@@ -2,11 +2,12 @@
 # MakeFile should be in <OS>/build/ folder
 #-----------------------------------------
 # Make variables
-CFLAGS = -std=c17 -m32 -march=i386 -ffreestanding -fno-builtin -nostdinc -fPIE -Os -fno-stack-protector	-Wno-pointer-sign
-C_FILES = kernel editor calculator
-ASM_FILES = 2ndstage testfont termu16n termu18n
+CFLAGS = -std=c17 -m32 -march=i386 -ffreestanding -fno-builtin -nostdinc -fPIE -Os -fno-stack-protector	-Wno-pointer-sign\
+	-I../include/
 SRCDIR = ../src/
 BINDIR = ../bin/
+C_FILES != find $(SRCDIR) -name *.c -exec basename -s ".c" {} \;
+ASM_FILES != find $(SRCDIR) -name *.asm ! -name bootSect.asm -exec basename -s ".asm" {} \;
 TMPFILES = bootSect fileTable $(ASM_FILES) $(C_FILES)
 BINFILES = $(TMPFILES:%=$(BINDIR)%.bin)
 
@@ -46,7 +47,7 @@ $(C_FILES):
 	./add_filetable_entry.sh $@ $$((newsize / 512))
 
 # Launch OS through qemu 
-# NOTE: Remove driftfix=slew if not needed, it is needed for my OpenBSD VM setup
+# NOTE: Remove driftfix=slew if not needed
 run:
 	qemu-system-i386\
 	-drive format=raw,file=$(BINDIR)OS.bin,if=ide,index=0,media=disk\

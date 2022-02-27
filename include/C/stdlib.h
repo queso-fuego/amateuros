@@ -3,6 +3,8 @@
  */
 #pragma once
 
+#include "C/stdint.h"
+
 // Convert ascii string to integer
 uint32_t atoi(const uint8_t *string)
 {
@@ -14,4 +16,24 @@ uint32_t atoi(const uint8_t *string)
         result = result * 10 + string[i] - '0';
 
     return result;
+}
+
+// Allocate uninitialized memory, uses syscall
+void *malloc(const uint32_t size)
+{
+    void *ptr = 0;
+
+    // TODO: Don't hardcode syscall numbers!
+    __asm__ __volatile__ ("int $0x80" : : "a"(3), "b"(size) );
+
+    __asm__ __volatile__ ("movl %%EAX, %0" : "=r"(ptr) ); 
+
+    return ptr;
+}
+
+// Free allocated memory at a pointer, uses syscall
+void free(const void *ptr)
+{
+    // TODO: Don't hardcode syscall numbers!
+    __asm__ __volatile__ ("int $0x80" : : "a"(4), "b"(ptr) );
 }

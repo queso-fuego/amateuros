@@ -17,23 +17,23 @@ enum {
 // Output 1: Error Code 0-success, 1-Fail
 //       (2): File pointer will point to start of file table entry if found
 //-------------------------------------
-uint8_t *check_filename(uint8_t *filename, uint16_t filename_length)
+uint8_t *check_filename(uint8_t *filename, const uint16_t filename_length)
 {
     uint16_t i; 
-    uint8_t *file_ptr = (uint8_t *)0x1000;    // 1000h = location of fileTable in memory
+    uint8_t *ptr = (uint8_t *)0x1000;    // 1000h = location of fileTable in memory
 
     // Check passed in filename to filetable entry
-    while (*file_ptr != 0) {
-        for (i = 0; i < filename_length && filename[i] == file_ptr[i]; i++) 
+    while (*ptr != 0) {
+        for (i = 0; i < filename_length && filename[i] == ptr[i]; i++) 
             ; 
 
-        if (i == MAX_FILENAME_LENGTH || (i == filename_length && file_ptr[i+1] == ' '))  // Found file
+        if (i == MAX_FILENAME_LENGTH || (i == filename_length && ptr[i] == ' '))  // Found file
             break;
 
-        file_ptr += 16;     // Go to next file table entry
+        ptr += 16;     // Go to next file table entry
     }
 
-    return file_ptr;
+    return ptr;
 }
 
 //-----------------------------------------------
@@ -171,9 +171,6 @@ uint16_t delete_file(uint8_t *filename, uint16_t filename_length)
     for (uint8_t i = 0; i < 3; i++)
         *file_ptr++ = ' ';              // File type
     
-    for (uint8_t i = 0; i < 3; i++)
-        *file_ptr++ = 0;              // Directory entry #, starting sector, file size
-
     // Write changed filetable to disk 
     rw_sectors(ft_size, ft_start_sector, 0x1000, WRITE_WITH_RETRY);
 
@@ -199,20 +196,20 @@ uint16_t delete_file(uint8_t *filename, uint16_t filename_length)
 // output 1: Return code
 uint16_t load_file(uint8_t *filename, uint16_t filename_length, uint32_t address, uint8_t *file_ext)
 {
-    uint16_t return_code    = 0;
+    uint16_t return_code = 0;
     uint8_t *file_ptr;
 
     // Check for filename in file table, if successful file_ptr points to file table entry
     file_ptr = check_filename(filename, filename_length);  
 
     if (*file_ptr == 0)  // File not found
-        return 1;
+        return 0;
 
 	// Get file type into variable to pass back
     for (uint8_t i = 0; i < 3; i++)
         file_ext[i] = file_ptr[10+i];
 
-    return_code = 0;    // Init return code to 'success'
+    return_code = 1;    // Init return code to 'success'
 
     // Read sectors using ATA PIO
     rw_sectors(file_ptr[15], file_ptr[14], address, READ_WITH_RETRY);
@@ -339,5 +336,5 @@ uint16_t save_file(uint8_t *filename, uint8_t *file_ext, uint8_t in_file_size, u
     // Write file data to disk
     rw_sectors(in_file_size, last_saved_sector, address, WRITE_WITH_RETRY);
    
-    return 0;
+    return 1;
 }

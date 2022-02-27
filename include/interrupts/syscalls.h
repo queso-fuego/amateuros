@@ -3,10 +3,11 @@
  */
 #pragma once
 
-#include "../print/print_types.h"
-#include "../interrupts/pic.h"
+#include "print/print_types.h"
+#include "interrupts/pic.h"
+#include "memory/malloc.h"
 
-#define MAX_SYSCALLS 3
+#define MAX_SYSCALLS 5
 
 // Test syscall 0
 void syscall_test0(void)
@@ -44,16 +45,51 @@ void syscall_sleep(void)
     while (*sleep_timer_ticks > 0) __asm__ __volatile__ ("sti;hlt;cli");
 }
 
+// Allocate uninitialized memory
+// INPUT:
+//   EBX = size in bytes to allocate
+void syscall_malloc(void)
+{
+    uint32_t bytes = 0;
+
+    __asm__ __volatile__ ("mov %%EBX, %0" : "=b"(bytes) );
+
+    // First malloc() from the calling program?
+    if (!malloc_list_head)
+        malloc_init(bytes); // Yes, set up initial memory/linked list
+
+    void *ptr = malloc_next_block(bytes);
+
+    merge_free_blocks();    // Combine consecutive free blocks of memory
+
+    // Return pointer to malloc-ed memory
+    __asm__ __volatile__ ("mov %0, %%EAX" : : "r"(ptr) );
+}
+
+// Free allocated memory at a pointer
+// INPUT:
+//   EBX = pointer to malloc-ed bytes
+void syscall_free(void)
+{
+    void *ptr = 0;
+
+    __asm__ __volatile__ ("mov %%EBX, %0" : "=b"(ptr) );
+
+    malloc_free(ptr);
+}
+
 // Syscall table
 void *syscalls[MAX_SYSCALLS] = {
     syscall_test0,
     syscall_test1,
-    syscall_sleep
+    syscall_sleep,
+    syscall_malloc,
+    syscall_free,
 };
 
 // Syscall dispatcher
 // naked attribute means no function prologue/epilogue, and only allows inline asm
-__attribute__ ((naked)) void syscall_dispatcher(void)
+__attribute__ ((naked)) __attribute__ ((interrupt)) void syscall_dispatcher(int_frame_32_t *frame)
 {
     // "basic" syscall handler, push everything we want to save, call the syscall by
     //   offsetting into syscalls table with value in eax, then pop everything back 
@@ -66,7 +102,7 @@ __attribute__ ((naked)) void syscall_dispatcher(void)
     // NOTE: Easier to do call in intel syntax, I'm not sure how to do it in att syntax
     __asm__ __volatile__ (".intel_syntax noprefix\n"
 
-                          ".equ MAX_SYSCALLS, 3\n"  // Have to define again, inline asm does not see the #define
+                          ".equ MAX_SYSCALLS, 5\n"  // Have to define again, inline asm does not see the #define
 
                           "cmp eax, MAX_SYSCALLS-1\n"   // syscalls table is 0-based
                           "ja invalid_syscall\n"        // invalid syscall number, skip and return
@@ -99,6 +135,7 @@ __attribute__ ((naked)) void syscall_dispatcher(void)
                           "iretd\n"         // Need interrupt return here! iret, NOT ret
 
                           "invalid_syscall:\n"
+                          "mov eax, -1\n"   // Error will be -1
                           "iretd\n"
 
                           ".att_syntax");

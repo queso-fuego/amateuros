@@ -1,27 +1,29 @@
 // =========================================================================== 
 // Kernel.c: basic 'kernel' loaded from 2nd stage bootloader
 // ===========================================================================
-#include "../include/C/stdint.h"
-#include "../include/C/stdlib.h"
-#include "../include/C/string.h"
-#include "../include/C/time.h"
-#include "../include/global/global_addresses.h"
-#include "../include/gfx/2d_gfx.h"
-#include "../include/screen/clear_screen.h"
-#include "../include/print/print_types.h"
-#include "../include/screen/cursor.h"
-#include "../include/print/print_registers.h"
-#include "../include/memory/physical_memory_manager.h"
-#include "../include/disk/file_ops.h"
-#include "../include/print/print_fileTable.h"
-#include "../include/type_conversions/hex_to_ascii.h"
-#include "../include/interrupts/idt.h"
-#include "../include/interrupts/exceptions.h"
-#include "../include/interrupts/pic.h"
-#include "../include/interrupts/syscalls.h"
-#include "../include/ports/io.h"
-#include "../include/keyboard/keyboard.h"
-#include "../include/sound/pc_speaker.h"
+#include "C/stdint.h"
+#include "C/stdlib.h"
+#include "C/string.h"
+#include "C/time.h"
+#include "global/global_addresses.h"
+#include "gfx/2d_gfx.h"
+#include "screen/clear_screen.h"
+#include "print/print_types.h"
+#include "screen/cursor.h"
+#include "print/print_registers.h"
+#include "memory/physical_memory_manager.h"
+#include "memory/virtual_memory_manager.h"
+#include "memory/malloc.h"
+#include "disk/file_ops.h"
+#include "print/print_fileTable.h"
+#include "type_conversions/hex_to_ascii.h"
+#include "interrupts/idt.h"
+#include "interrupts/exceptions.h"
+#include "interrupts/pic.h"
+#include "interrupts/syscalls.h"
+#include "ports/io.h"
+#include "keyboard/keyboard.h"
+#include "sound/pc_speaker.h"
 
 void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
 
@@ -72,28 +74,113 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *fileTxt = "txt\0";
     uint8_t fileSize = 0;
     uint8_t *file_ptr;
-    uint8_t *windowsMsg     = "\x0A\x0D" "Oops! Something went wrong :(" "\x0A\x0D\0";
-    uint8_t *notFoundString = "\x0A\x0D" "Program/file not found!, Try again? (Y)" "\x0A\x0D\0";
-    uint8_t *sectNotFound   = "\x0A\x0D" "Sector not found!, Try again? (Y)" "\x0A\x0D\0";
-    uint8_t *menuString     = "------------------------------------------------------\x0A\x0D"
-                              "Kernel Booted, Welcome to QuesOS - 32 Bit 'C' Edition!\x0A\x0D"
-                              "------------------------------------------------------\x0A\x0D\x0A\x0D\0";
-    uint8_t *failure        = "\x0A\x0D" "Command/Program not found, Try again" "\x0A\x0D\0";
+    uint8_t *windowsMsg     = "\r\n" "Oops! Something went wrong :(" "\r\n\0";
+    uint8_t *notFoundString = "\r\n" "Program/file not found!, Try again? (Y)" "\r\n\0";
+    uint8_t *sectNotFound   = "\r\n" "Sector not found!, Try again? (Y)" "\r\n\0";
+    uint8_t *menuString     = "------------------------------------------------------\r\n"
+                              "Kernel Booted, Welcome to QuesOS - 32 Bit 'C' Edition!\r\n"
+                              "------------------------------------------------------\r\n\r\n\0";
+    uint8_t *failure        = "\r\n" "Command/Program not found, Try again" "\r\n\0";
     uint8_t *prompt         = ">:\0";
-    uint8_t *pgmNotLoaded   = "\x0A\x0D" "Program found but not loaded, Try Again" "\x0A\x0D\0";
-    uint8_t *fontNotFound   = "\x0A\x0D" "Font not found!" "\x0A\x0D\0";
+    uint8_t *pgmNotLoaded   = "\r\n" "Program found but not loaded, Try Again" "\r\n\0";
+    uint8_t *fontNotFound   = "\r\n" "Font not found!" "\r\n\0";
 
     uint32_t num_SMAP_entries; 
     uint32_t total_memory; 
     SMAP_entry_t *SMAP_entry;
-    uint32_t needed_blocks;
+    uint32_t needed_blocks, needed_pages;
     uint32_t *allocated_address;
     uint8_t font_width  = *(uint8_t *)FONT_WIDTH;
     uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
 
     // --------------------------------------------------------------------
-    // Initial setup
+    // Initial hardware, interrupts, etc. setup
     // --------------------------------------------------------------------
+    // Set up interrupts
+    init_idt_32();  
+
+    // Set up exception handlers (ISRs 0-31)
+    set_idt_descriptor_32(0, div_by_0_handler, TRAP_GATE_FLAGS); // Divide by 0 error #DE, ISR 0
+    set_idt_descriptor_32(14, page_fault_handler, TRAP_GATE_FLAGS); // Page fault #PF errors, ISR 14
+    
+    // Set up software interrupts
+    set_idt_descriptor_32(0x80, syscall_dispatcher, INT_GATE_USER_FLAGS);  // System call handler/dispatcher
+
+    // Mask off all hardware interrupts (disable the PIC)
+    disable_pic();
+
+    // Remap PIC interrupts to after exceptions (PIC1 starts at 0x20)
+    remap_pic();
+
+    // Add ISRs for PIC hardware interrupts
+    set_idt_descriptor_32(0x20, timer_irq0_handler, INT_GATE_FLAGS);  
+    set_idt_descriptor_32(0x21, keyboard_irq1_handler, INT_GATE_FLAGS);
+    set_idt_descriptor_32(0x28, cmos_rtc_irq8_handler, INT_GATE_FLAGS);
+    
+    // Clear out PS/2 keyboard buffer: check status register and read from data port
+    //   until clear
+    // This may fix not getting keys on boot
+    while (inb(0x64) & 1) inb(0x60);    // Status register 0x64 bit 0 is set, output buffer is full
+
+    // Enable PIC IRQ interrupts after setting their descriptors
+    clear_irq_mask(0); // Enable timer (will tick every ~18.2/s)
+    clear_irq_mask(1); // Enable keyboard IRQ1, keyboard interrupts
+    clear_irq_mask(2); // Enable PIC2 line
+    clear_irq_mask(8); // Enable CMOS RTC IRQ8
+    
+    // Enable CMOS RTC
+    show_datetime = false;  // Don't show date/time on boot 
+    enable_rtc();
+
+    // Set default PIT Timer IRQ0 rate - ~1000hz
+    // 1193182 MHZ / 1193 = ~1000
+    set_pit_channel_mode_frequency(0, 2, 1193);
+
+    // After setting up hardware interrupts & PIC, set IF to enable 
+    //   non-exception and not NMI hardware interrupts
+    __asm__ __volatile__("sti");
+
+    // Set up physical memory manager
+    num_SMAP_entries = *(uint32_t *)0x8500;
+    SMAP_entry       = (SMAP_entry_t *)0x8504;
+    SMAP_entry += num_SMAP_entries - 1;
+
+    total_memory = SMAP_entry->base_address + SMAP_entry->length - 1;
+
+    // Initialize physical memory manager to all available memory, put it at some location
+    // All memory will be set as used/reserved by default
+    initialize_memory_manager(MEMMAP_AREA, total_memory);
+
+    // Initialize memory regions for the available memory regions in the SMAP (type = 1)
+    SMAP_entry = (SMAP_entry_t *)0x8504;
+    for (uint32_t i = 0; i < num_SMAP_entries; i++) {
+        if (SMAP_entry->type == 1)
+            initialize_memory_region(SMAP_entry->base_address, SMAP_entry->length);
+
+        SMAP_entry++;
+    }
+
+    // Set memory regions/blocks for the kernel and "OS" memory map areas as used/reserved
+    deinitialize_memory_region(0x1000, 0xB000);                            // Reserve all memory below C000h for the kernel/OS
+    deinitialize_memory_region(MEMMAP_AREA, max_blocks / BLOCKS_PER_BYTE); // Reserve physical memory map area 
+
+    // Set up virtual memory & paging - TODO: Check if return value is true/false
+    initialize_virtual_memory_manager();
+
+    // Identity map VBE framebuffer
+    const uint32_t fb_size_in_bytes = (gfx_mode->y_resolution * gfx_mode->linear_bytes_per_scanline);
+    uint32_t fb_size_in_pages = fb_size_in_bytes / PAGE_SIZE;
+    if (fb_size_in_pages % PAGE_SIZE > 0) fb_size_in_pages++;
+    
+    // For hardware, double size of framebuffer pages just in case    
+    fb_size_in_pages *= 2;
+
+    for (uint32_t i = 0, fb_start = gfx_mode->physical_base_pointer; i < fb_size_in_pages; i++, fb_start += PAGE_SIZE)
+        map_page((void *)fb_start, (void *)fb_start);
+
+    // Mark framebuffer as in use for physical memory manager
+    deinitialize_memory_region(gfx_mode->physical_base_pointer, fb_size_in_pages * BLOCK_SIZE);
+
     // Set intial colors
     while (!user_gfx_info->fg_color) {
         if (gfx_mode->bits_per_pixel > 8) {
@@ -111,92 +198,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
     // Print OS boot message
     print_string(&kernel_cursor_x, &kernel_cursor_y, menuString);
-
-    // Physical memory manager setup
-    num_SMAP_entries = *(uint32_t *)0x8500;
-    SMAP_entry       = (SMAP_entry_t *)0x8504;
-    SMAP_entry += num_SMAP_entries - 1;
-
-    total_memory = SMAP_entry->base_address + SMAP_entry->length - 1;
-
-    // Initialize physical memory manager to all available memory, put it at some location
-    // All memory will be set as used/reserved by default
-    initialize_memory_manager(MEMMAP_AREA, total_memory);
-
-    // TODO: First free location seems to be at 0x20000, find why, is this wrong? Should be at 0xA000
-
-    // Initialize memory regions for the available memory regions in the SMAP (type = 1)
-    SMAP_entry = (SMAP_entry_t *)0x8504;
-    //for (uint32_t i = 0; i < num_SMAP_entries; i++, SMAP_entry++) DEBUGGING
-    //    if (SMAP_entry->type == 1)
-    //        initialize_memory_region(SMAP_entry->base_address, SMAP_entry->length);
-    for (uint32_t i = 0; i < num_SMAP_entries; i++) {
-        if (SMAP_entry->type == 1)
-            initialize_memory_region(SMAP_entry->base_address, SMAP_entry->length);
-
-        SMAP_entry++;
-    }
-
-    // Set memory regions/blocks for the kernel and "OS" memory map areas as used/reserved
-    deinitialize_memory_region(0x1000, 0xB000);                            // Reserve all memory below C000h for the kernel/OS
-    deinitialize_memory_region(MEMMAP_AREA, max_blocks / BLOCKS_PER_BYTE); // Reserve physical memory map area 
-
-    // Successfully set up and initialized the physical memory manager
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "Physical Memory Manager initialized.\x0A\x0D\x0A\x0D");
-
-    // Print memory map info
-    print_physical_memory_info();
-
-    // Set up interrupts
-    init_idt_32();  
-
-    // Set up exception handlers (ISRs 0-31)
-    set_idt_descriptor_32(0, div_by_0_handler, TRAP_GATE_FLAGS); // Divide by 0 error, ISR 0
-    // Set up additional exceptions here...
-    
-    // Set up software interrupts
-    set_idt_descriptor_32(0x80, syscall_dispatcher, INT_GATE_USER_FLAGS);  // System call handler/dispatcher
-    // Set up additional interrupts here...
-
-    // Debugging/testing system calls, uncomment these lines to test
-    //__asm__ __volatile__ ("movl $0, %eax; int $0x80");
-    //__asm__ __volatile__ ("movl $1, %eax; int $0x80");
-
-    //__asm__ __volatile__ ("movl $2, %eax; int $0x80");   // Should do nothing
-
-    // Mask off all hardware interrupts (disable the PIC)
-    disable_pic();
-
-    // Remap PIC interrupts to after exceptions (PIC1 starts at 0x20)
-    remap_pic();
-
-    // Add ISRs for PIC hardware interrupts
-    set_idt_descriptor_32(0x20, timer_irq0_handler, INT_GATE_FLAGS);  
-    set_idt_descriptor_32(0x21, keyboard_irq1_handler, INT_GATE_FLAGS);
-    set_idt_descriptor_32(0x28, cmos_rtc_irq8_handler, INT_GATE_FLAGS);
-    // Put more PIC IRQ handlers here...
-    
-    // Clear out PS/2 keyboard buffer: check status register and read from data port
-    //   until clear
-    // This may fix not getting keys on boot
-    while (inb(0x64) & 1) inb(0x60);    // Status register 0x64 bit 0 is set, output buffer is full
-
-    // Enable PIC IRQ interrupts after setting their descriptors
-    clear_irq_mask(0); // Enable timer (will tick every ~18.2/s)
-    clear_irq_mask(1); // Enable keyboard IRQ1, keyboard interrupts
-    clear_irq_mask(2); // Enable PIC2 line
-    clear_irq_mask(8); // Enable CMOS RTC IRQ8
-    
-    // Enable CMOS RTC
-    enable_rtc();
-
-    // After setting up hardware interrupts & PIC, set IF to enable 
-    //   non-exception and not NMI hardware interrupts
-    __asm__ __volatile__("sti");
-
-    // Set default PIT Timer IRQ0 rate - ~1000hz
-    // 1193182 MHZ / 1193 = ~1000
-    set_pit_channel_mode_frequency(0, 2, 1193);
 
     // --------------------------------------------------------------------
     // Get user input, print to screen & run command/program  
@@ -538,8 +539,8 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         // Print memory map command
         if (strncmp(tokens, cmdPrtmemmap, strlen(cmdPrtmemmap)) == 0) {
             // Print out physical memory map info
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D-------------------\x0A\x0DPhysical Memory Map"
-                                                             "\x0A\x0D-------------------\x0A\x0D\x0A\x0D");
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n-------------------\r\nPhysical Memory Map"
+                                                             "\r\n-------------------\r\n\r\n");
             print_physical_memory_info();
             continue;
         }
@@ -549,17 +550,17 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             uint32_t fg_color = 0;
             uint32_t bg_color = 0;
 
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Current colors (32bpp ARGB):");
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Foregound: ");
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Current colors (32bpp ARGB):");
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Foregound: ");
             print_hex(&kernel_cursor_x, &kernel_cursor_y, user_gfx_info->fg_color);
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Backgound: ");
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Backgound: ");
             print_hex(&kernel_cursor_x, &kernel_cursor_y, user_gfx_info->bg_color);
 
             // Foreground color
             if (gfx_mode->bits_per_pixel > 8)
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "New Foregound (0xRRGGBB): 0x");
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "New Foregound (0xRRGGBB): 0x");
             else
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "New Foregound (0xNN): 0x");
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "New Foregound (0xNN): 0x");
 
             move_cursor(kernel_cursor_x, kernel_cursor_y);
 
@@ -578,9 +579,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
             // Background color
             if (gfx_mode->bits_per_pixel > 8)
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "New Backgound (0xRRGGBB): 0x");
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "New Backgound (0xRRGGBB): 0x");
             else
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "New Backgound (0xNN): 0x");
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "New Backgound (0xNN): 0x");
 
             move_cursor(kernel_cursor_x, kernel_cursor_y);
 
@@ -601,7 +602,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             user_gfx_info->fg_color = convert_color(fg_color);  // Convert colors first before setting new values
             user_gfx_info->bg_color = convert_color(bg_color);
 
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
 
             continue;
         }
@@ -630,7 +631,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             token_file_name1[10] = '\0';
 
             // File is a valid font, try to load it to memory
-            if (load_file(tokens+10, tokens_length[1], (uint32_t)FONT_ADDRESS, fileExt) != 0) {
+            if (!load_file(tokens+10, tokens_length[1], (uint32_t)FONT_ADDRESS, fileExt)) {
                 print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nError: file could not be loaded\r\n"); 
                 move_cursor(kernel_cursor_x, kernel_cursor_y);
 
@@ -704,28 +705,38 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        // file_ptr is pointing to filetable entry, get number of blocks needed to load the file
-        //   num_blocks = (file size in sectors * # of bytes in a sector) / size of a block in bytes
-        needed_blocks = (file_ptr[15] * 512) / BLOCK_SIZE;  // Convert file size in bytes to blocks
-        if (needed_blocks == 0) needed_blocks = 1;          // If file size < 1 block, use 1 block default
+        // file_ptr is pointing to filetable entry, get number of pages needed to load the file
+        //   num_pages = (file size in sectors * # of bytes in a sector) / size of a page in bytes
+        needed_pages = (file_ptr[15] * 512) / PAGE_SIZE;  // Convert file size in bytes to pages
+        if ((file_ptr[15] * 512) % PAGE_SIZE > 0) needed_pages++;   // Allocate extra page for partial page of memory
 
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Allocating ");
-        print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_blocks);
-        print_string(&kernel_cursor_x, &kernel_cursor_y, " block(s)\x0A\x0D");
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Allocating ");
+        print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_pages);
+        print_string(&kernel_cursor_x, &kernel_cursor_y, " page(s)\r\n");
         
-        allocated_address = allocate_blocks(needed_blocks); // Allocate 4KB blocks of memory, get address to memory
+        // Load files/programs to this starting address
+        const uint32_t entry_point = 0x400000;  // Put entry point right after identity mapped 4MB page table
 
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Allocated to address ");
-        print_hex(&kernel_cursor_x, &kernel_cursor_y, (uint32_t)allocated_address);
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+        // Allocate & map pages
+        for (uint32_t i = 0; i < needed_pages; i++) {
+            pt_entry page = 0;
+            uint32_t phys_addr = (uint32_t)allocate_page(&page);
+
+            if (!map_page((void *)phys_addr, (void *)(entry_point + i*PAGE_SIZE)))
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "Couldn't map pages, may be out of memory :'(");
+        }
+
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Allocated to virtual address ");
+        print_hex(&kernel_cursor_x, &kernel_cursor_y, entry_point);
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
         
-        // Call load_file function to load program/file to memory address
+        // Call load_file function to load program/file to starting memory address
         // Input 1: File name (address)
         //       2: File name length
         //       3: Memory offset to load file to
         //       4: File extension variable
         // Return value - 0 = Success, !0 = error
-        if (load_file(cmdString, tokens_length[0], (uint32_t)allocated_address, fileExt) != 0) {
+        if (!load_file(cmdString, tokens_length[0], entry_point, fileExt)) {
             // Error, program did not load correctly
             print_string(&kernel_cursor_x, &kernel_cursor_y, pgmNotLoaded);
             move_cursor(kernel_cursor_x, kernel_cursor_y);
@@ -735,9 +746,32 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
         // Check file extension in file table entry, if 'bin'/binary, far jump & run
         if (strncmp(fileExt, fileBin, 3) == 0) {
-            // Void function pointer to jump to and execute code at specific address in C
-            ((void (*)(void))allocated_address)();     // Execute program, this can return
+            // Reset malloc variables before calling program
+            malloc_list_head    = 0;    // Start of linked list
+            malloc_virt_address = entry_point + (needed_pages * PAGE_SIZE);
+            malloc_phys_address = 0;
+            total_malloc_pages  = 0;
 
+            // Void function pointer to jump to and execute code at specific address in C
+            ((void (*)(void))entry_point)();     // Execute program, this can return
+
+            // If used malloc(), free remaining memory to prevent memory leaks
+            for (uint32_t i = 0, virt = malloc_virt_address; i < total_malloc_pages; i++, virt += PAGE_SIZE) {
+                pt_entry *page = get_page(virt);
+
+                if (PAGE_PHYS_ADDRESS(page) && TEST_ATTRIBUTE(page, PTE_PRESENT)) {
+                    free_page(page);
+                    unmap_page((uint32_t *)virt);
+                    flush_tlb_entry(virt);  // Invalidate page as it is no longer present
+                }
+            }
+
+            // Reset malloc variables after calling program
+            malloc_list_head    = 0;    // Start of linked list
+            malloc_virt_address = 0;
+            malloc_phys_address = 0;
+            total_malloc_pages  = 0;
+            
             // TODO: In the future, if using a backbuffer, restore screen data from that buffer here instead
             //  of clearing
             
@@ -748,27 +782,34 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             kernel_cursor_x = 0;
             kernel_cursor_y = 0;
 
-            // Free memory when done
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Freeing ");
-            print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_blocks);
-            print_string(&kernel_cursor_x, &kernel_cursor_y, " block(s)\x0A\x0D");
+            // Free previously allocated pages when done
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Freeing ");
+            print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_pages);
+            print_string(&kernel_cursor_x, &kernel_cursor_y, " page(s)\r\n");
             
-            free_blocks(allocated_address, needed_blocks); // Free previously allocated blocks
+            for (uint32_t i = 0, virt = entry_point; i < needed_pages; i++, virt += PAGE_SIZE) {
+                pt_entry *page = get_page(virt);
 
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Freed at address ");
-            print_hex(&kernel_cursor_x, &kernel_cursor_y, (uint32_t)allocated_address);
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+                if (PAGE_PHYS_ADDRESS(page) && TEST_ATTRIBUTE(page, PTE_PRESENT)) {
+                    free_page(page);
+                    unmap_page((uint32_t *)virt);
+                    flush_tlb_entry(virt);  // Invalidate page as it is no longer present or mapped
+                }
+            }
+
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Freed at address ");
+            print_hex(&kernel_cursor_x, &kernel_cursor_y, entry_point);
+            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
 
             continue;   // Loop back to prompt for next input
         }
 
         // Else print text file to screen
         // TODO: Put this behind a "shell" command like 'typ'/'type' or other
-        file_ptr = (uint8_t *)allocated_address;   // File location to print from
+        file_ptr = (uint8_t *)entry_point;   // File location to print from
 
         // Print newline first
-        print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0A);
-        print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0D);
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
         
         // Get size of filesize in bytes (512 byte per sector)
         // TODO: Change this later - currently assuming text files are only 1 sector
@@ -787,19 +828,26 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         }
 
         // Print newline after printing file contents
-        print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0A);
-        print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0D);
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
 
-        // Free memory when done
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Freeing ");
-        print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_blocks);
-        print_string(&kernel_cursor_x, &kernel_cursor_y, " block(s)\x0A\x0D");
+        // Free pages when done
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Freeing ");
+        print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_pages);
+        print_string(&kernel_cursor_x, &kernel_cursor_y, " page(s)\r\n");
         
-        free_blocks(allocated_address, needed_blocks); // Free previously allocated blocks
+        for (uint32_t i = 0, virt = entry_point; i < needed_pages; i++, virt += PAGE_SIZE) {
+            pt_entry *page = get_page(virt);
 
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Freed at address ");
-        print_hex(&kernel_cursor_x, &kernel_cursor_y, (uint32_t)allocated_address);
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+            if (PAGE_PHYS_ADDRESS(page) && TEST_ATTRIBUTE(page, PTE_PRESENT)) {
+                free_page(page);
+                unmap_page((uint32_t *)virt);
+                flush_tlb_entry(virt);  // Invalidate page as it is no longer present or mapped
+            }
+        }
+
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Freed at address ");
+        print_hex(&kernel_cursor_x, &kernel_cursor_y, entry_point);
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
     }
 }
 
@@ -840,29 +888,29 @@ void print_physical_memory_info(void)
                 break;
         }
 
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
         SMAP_entry++;   // Go to next entry
     }
 
     // Print total amount of memory
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D");
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
     print_string(&kernel_cursor_x, &kernel_cursor_y, "Total memory in bytes: ");
 
     SMAP_entry--;   // Get last SMAP entry
     print_hex(&kernel_cursor_x, &kernel_cursor_y, SMAP_entry->base_address + SMAP_entry->length - 1);
   
-    // TODO: Print out memory manager block info:
+    // Print out memory manager block info:
     //   total memory in 4KB blocks, total # of used blocks, total # of free blocks
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0DTotal 4KB blocks: ");
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nTotal 4KB blocks: ");
     print_dec(&kernel_cursor_x, &kernel_cursor_y, max_blocks);
 
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0DUsed or reserved blocks: ");
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nUsed or reserved blocks: ");
     print_dec(&kernel_cursor_x, &kernel_cursor_y, used_blocks);
 
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D" "Free or available blocks: ");
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Free or available blocks: ");
     print_dec(&kernel_cursor_x, &kernel_cursor_y, max_blocks - used_blocks);
 
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\x0A\x0D\x0A\x0D");
+    print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n\r\n");
 }
 
 

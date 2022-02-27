@@ -3,6 +3,7 @@
 //
 #include "../include/C/stdint.h"
 #include "../include/C/string.h"
+#include "../include/C/stdlib.h"
 #include "../include/gfx/2d_gfx.h"
 #include "../include/print/print_types.h"
 #include "../include/disk/file_ops.h"
@@ -45,19 +46,19 @@ void write_bottom_screen_message(const uint8_t *msg);
 
 uint8_t editor_filetype[3];     // Global variables
 uint8_t editor_filename[10];
-uint16_t editor_filesize = 0;
+uint32_t editor_filesize = 0;
 uint8_t input_char;
 uint16_t cursor_x = 0;
 uint16_t cursor_y = 0;
 uint8_t *file_ptr;
-uint16_t file_offset;
-uint16_t current_line_length;
-uint16_t file_length_lines;
-uint16_t file_length_bytes;
+uint32_t file_offset;
+uint32_t file_address;
+uint32_t current_line_length;
+uint32_t file_length_lines;
+uint32_t file_length_bytes;
 static const uint8_t *filename_string = "Enter file name: \0";
 uint8_t hex_count = 0;
 uint8_t blank_line[80];
-uint8_t *extBin = "bin";
 static const uint8_t *choose_file_msg = "File to load: \0";
 static const uint8_t *load_file_error_msg = "Load file error occurred";
 static const uint8_t *save_file_error_msg = "Save file error occurred";
@@ -111,7 +112,8 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
         cursor_x = 0;
         cursor_y = 0;
 
-        file_ptr = (uint8_t *)0x20000;  // New file starts at 20,000h
+        file_ptr = (uint8_t *)malloc(512); // New file buffer for 1 sector size
+        file_address = (uint32_t)file_ptr;
         file_offset = 0;
 
         if (input_char == BINFILE) {
@@ -126,6 +128,7 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
             fill_out_bottom_editor_message(keybinds_text_editor);   // Write keybinds & filetype at bottom of screen
 
             // Fill out 1 blank sector for new file
+            // TODO: Use calloc for this
             memset(file_ptr, 0, 512);
 
             // Initialize cursor and file variables for new file
@@ -149,6 +152,7 @@ void editor_load_file(void)
 {
     uint8_t idx;
     uint8_t *keybinds_text_editor = " Ctrl-R = Return to kernel Ctrl-S = Save file to disk\0";
+    uint32_t file_size = 0;
 
     // Choose file to load
     while (1) {
@@ -161,10 +165,19 @@ void editor_load_file(void)
         // Have user input file name to load
         input_file_name();
 
-        // Load file from input file name
-        // filename, filename length, memory to load file to, file extension
-        if (load_file(editor_filename, 10, 0x20000, editor_filetype) == 0)
-            break;  // Success
+        // TODO: Change to variable length (strlen?), don't always use/need 10 length
+        file_ptr = check_filename(editor_filename, 10);
+
+        if (*file_ptr > 0) {
+            file_size = file_ptr[15]*512; // File size in bytes, from sector size
+
+            file_ptr     = (uint8_t *)malloc(file_size);    // Allocate memory for file buffer
+            file_address = (uint32_t)file_ptr;
+
+            // Load file: filename, filename length, memory to load file to, file extension
+            if (load_file(editor_filename, 10, file_address, editor_filetype))
+                break;  // Success
+        }
 
         // Loading file error
         write_bottom_screen_message(load_file_error_msg);
@@ -180,7 +193,7 @@ void editor_load_file(void)
 
     // Load file success
 	// Go to editor depending on file type
-    if (strncmp(editor_filetype, extBin, 3) == 0) {
+    if (strncmp(editor_filetype, "bin", 3) == 0) {
         // Load hex file
         clear_screen(user_gfx_info->bg_color);
 
@@ -189,10 +202,7 @@ void editor_load_file(void)
         cursor_y = 0;
      
         // Load file bytes to screen
-        file_ptr = (uint8_t *)0x20000;  // File location
-
-        // TODO: Change to actual file size, not 1 sector/512 bytes
-        for (uint16_t i = 0; i < 512; i++) {
+        for (uint32_t i = 0; i < file_size; i++) {
             input_char = (*file_ptr >> 4) & 0x0F;   // Read hex byte from file location - 2 nibbles!
             input_char = hex_to_ascii(input_char);  // 1st nibble as ascii
 
@@ -213,7 +223,7 @@ void editor_load_file(void)
         }
 
         hex_count = 0;      // Reset byte counter
-        file_ptr = (uint8_t *)0x20000;  // File location
+        file_ptr = (uint8_t *)file_address;  // Reset pointer to file 
         file_offset = 0;
         
         hex_editor();
@@ -227,11 +237,10 @@ void editor_load_file(void)
         current_line_length = 0;
         file_length_lines = 0;
         file_length_bytes = 0;
-        file_ptr = (uint8_t *)0x20000;  // File location
+        file_ptr = (uint8_t *)file_address;  // File location
 
-        // Load file bytes to screen - stop at EOF if not 512 bytes
-        // TODO: Change to actual file size, not just 1 sector
-        for (uint16_t i = 0; i < 512 && *file_ptr != 0x00; i++) { 
+        // Load file bytes to screen - stop at EOF if less than file size
+        for (uint32_t i = 0; i < file_size && *file_ptr != 0x00; i++) { 
             if (*file_ptr == 0x0A) {
                 print_char(&cursor_x, &cursor_y, SPACE);  // Newline = space visually
 
@@ -389,7 +398,8 @@ void text_editor(void)
 
                 // Call save file
                 // file name, file type, file size, address to save from
-                if (save_file(editor_filename, editor_filetype, 0x0001, 0x20000) != 0) {
+                // TODO: Use actual file size, not hardcoded 0x0001
+                if (!save_file(editor_filename, editor_filetype, 0x0001, file_address)) {
                     write_bottom_screen_message(save_file_error_msg);   // Errored on save_file()
 
                 } else {
@@ -436,7 +446,8 @@ void text_editor(void)
                 rename_file(changed_filename, 10, editor_filename, 10);
 
                 // Call save_file() to update file ext and data on disk
-                if (save_file(editor_filename, editor_filetype, 1, 0x20000) == 0) {
+                // TODO: Use actual file size, not hardcoded 1
+                if (save_file(editor_filename, editor_filetype, 1, file_address)) {
                     fill_out_bottom_editor_message(keybinds_text_editor);
 
                     cursor_x = save_x;
@@ -550,7 +561,7 @@ void text_editor(void)
             }
 
             // Move all file data ahead of cursor back 1 byte
-            for (uint16_t i = 0; i < (file_length_bytes - file_offset); i++)
+            for (uint32_t i = 0; i < (file_length_bytes - file_offset); i++)
                 file_ptr[i] = file_ptr[i+1];
 
             file_length_bytes--;    // Deleted a char/byte from file data
@@ -740,7 +751,7 @@ void text_editor(void)
         if (input_char == 0x0D) file_length_lines++;  // Update file length
 
         // Move all file data forward 1 byte then fill in current character
-        for (uint16_t i = (file_length_bytes - file_offset); i > 0; i--)
+        for (uint32_t i = (file_length_bytes - file_offset); i > 0; i--)
             file_ptr[i] = file_ptr[i-1];
 
         if (input_char == 0x0D) input_char = 0x0A;  // Convert CR to LF
@@ -840,12 +851,12 @@ void hex_editor(void)
 
         // Check for hex editor keybinds
         if (input_char == RUNINPUT) {
-            *(uint8_t *)(0x20000 + editor_filesize) = 0xCB; // CB = far return
+            *(uint8_t *)(file_address + editor_filesize) = 0xCB; // CB = far return
 
-            ((void (*)(void))0x20000)();       // Jump to and execute input
+            ((void (*)(void))file_address)();       // Jump to and execute input
 
-            hex_count = 0;                     // Reset byte counter
-            file_ptr = (uint8_t *)0x20000;     // Reset to hex memory location 20,000h
+            hex_count = 0;                          // Reset byte counter
+            file_ptr = (uint8_t *)file_address;     // Reset to hex memory location 20,000h
             file_offset = 0;
             
             // Reset cursor x/y
@@ -1032,17 +1043,13 @@ void save_hex_program(void)
 	// Fill out rest of sector with data if not already filled out
 	// Divide file size by 512 to get # of sectors filled out and remainder of sector not filled out
     if (editor_filesize / 512 == 0) { // Less than 1 sector filled out?
-        if (editor_filesize % 512 != 0) {
+        if (editor_filesize % 512 != 0) 
             memset(file_ptr, 0, 512 - (editor_filesize % 512));
-
-        } else {
-            // Otherwise file is empty, fill out 1 whole sector	
-            memset(file_ptr, 0, 512);
-        }
+        else 
+            memset(file_ptr, 0, 512); // Otherwise file is empty, fill out 1 whole sector	
 
     } else if (editor_filesize % 512 != 0) {
-        // Fill out rest of sector with 0s
-        memset(file_ptr, 0, 512 - (editor_filesize % 512));
+        memset(file_ptr, 0, 512 - (editor_filesize % 512)); // Fill out rest of sector with 0s
     }
 
 	// Print filename string
@@ -1058,8 +1065,8 @@ void save_hex_program(void)
 
 	// Call save_file function
     // file name, file ext, file size (hex sectors), address to save from
-    // TODO: Allow file size >1
-    if (save_file(editor_filename, editor_filetype, 0x0001, 0x20000) != 0) {
+    // TODO: Allow file size > 1, don't hardcode 0x0001
+    if (!save_file(editor_filename, editor_filetype, 0x0001, file_address)) {
         write_bottom_screen_message(save_file_error_msg);   // Error on save_file()
 
     } else {

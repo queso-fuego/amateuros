@@ -1,6 +1,9 @@
 // print_types.h: print different types of values, strings/numbers/etc.
 #pragma once
 
+#include "C/string.h"
+#include "gfx/2d_gfx.h"
+
 #define FONT_ADDRESS 0xA000  
 #define FONT_WIDTH   0xA000 
 #define FONT_HEIGHT  (FONT_WIDTH+1)

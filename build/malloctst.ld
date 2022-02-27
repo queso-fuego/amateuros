@@ -1,8 +1,8 @@
 SECTIONS
 {
-    .text 0x50000 :
+    .text :
     {
-        *(kernel_entry); 
+        *(test_entry);
         *(.text*);
     }
     .data :
