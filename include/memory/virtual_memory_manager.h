@@ -199,7 +199,7 @@ bool initialize_virtual_memory_manager(void)
     for (uint32_t i = 0; i < 1024; i++)
         dir->entries[i] = 0x02; // Supervisor, read/write, not present
 
-    // Allocate a default page table
+    // Allocate page table for 0-4MB
     page_table *table = (page_table *)allocate_blocks(1);
 
     if (!table) return false;   // Out of memory
@@ -233,7 +233,7 @@ bool initialize_virtual_memory_manager(void)
         SET_ATTRIBUTE(&page, PTE_READ_WRITE);
         SET_FRAME(&page, frame);
 
-        // Add page to 3GB page table
+        // Add page to 0-4MB page table
         table->entries[PT_INDEX(virt)] = page;
     }
 

@@ -1,9 +1,8 @@
 SECTIONS
 {
-    /* Higher half kernel - will run from 3GB+ addresses */
-    .text 0xC0000000 :
+    .text 0x50000 :
     {
-        *(kernel_entry); 
+        *(prekernel_entry); 
         *(.text*);
     }
     .data :

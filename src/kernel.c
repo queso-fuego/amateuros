@@ -85,9 +85,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *pgmNotLoaded   = "\r\n" "Program found but not loaded, Try Again" "\r\n\0";
     uint8_t *fontNotFound   = "\r\n" "Font not found!" "\r\n\0";
 
-    uint32_t num_SMAP_entries; 
-    uint32_t total_memory; 
-    SMAP_entry_t *SMAP_entry;
     uint32_t needed_blocks, needed_pages;
     uint32_t *allocated_address;
     uint8_t font_width  = *(uint8_t *)FONT_WIDTH;
@@ -96,6 +93,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // --------------------------------------------------------------------
     // Initial hardware, interrupts, etc. setup
     // --------------------------------------------------------------------
+    // Get & set current kernel page directory
+    current_page_directory = (page_directory *)*(uint32_t *)CURRENT_PAGE_DIR_ADDRESS;
+
+    // Set physical memory manager variables
+    memory_map  = (uint32_t *)MEMMAP_AREA;
+    max_blocks  = *(uint32_t *)PHYS_MEM_MAX_BLOCKS;
+    used_blocks = *(uint32_t *)PHYS_MEM_USED_BLOCKS;
+
     // Set up interrupts
     init_idt_32();  
 
@@ -139,47 +144,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // After setting up hardware interrupts & PIC, set IF to enable 
     //   non-exception and not NMI hardware interrupts
     __asm__ __volatile__("sti");
-
-    // Set up physical memory manager
-    num_SMAP_entries = *(uint32_t *)0x8500;
-    SMAP_entry       = (SMAP_entry_t *)0x8504;
-    SMAP_entry += num_SMAP_entries - 1;
-
-    total_memory = SMAP_entry->base_address + SMAP_entry->length - 1;
-
-    // Initialize physical memory manager to all available memory, put it at some location
-    // All memory will be set as used/reserved by default
-    initialize_memory_manager(MEMMAP_AREA, total_memory);
-
-    // Initialize memory regions for the available memory regions in the SMAP (type = 1)
-    SMAP_entry = (SMAP_entry_t *)0x8504;
-    for (uint32_t i = 0; i < num_SMAP_entries; i++) {
-        if (SMAP_entry->type == 1)
-            initialize_memory_region(SMAP_entry->base_address, SMAP_entry->length);
-
-        SMAP_entry++;
-    }
-
-    // Set memory regions/blocks for the kernel and "OS" memory map areas as used/reserved
-    deinitialize_memory_region(0x1000, 0xB000);                            // Reserve all memory below C000h for the kernel/OS
-    deinitialize_memory_region(MEMMAP_AREA, max_blocks / BLOCKS_PER_BYTE); // Reserve physical memory map area 
-
-    // Set up virtual memory & paging - TODO: Check if return value is true/false
-    initialize_virtual_memory_manager();
-
-    // Identity map VBE framebuffer
-    const uint32_t fb_size_in_bytes = (gfx_mode->y_resolution * gfx_mode->linear_bytes_per_scanline);
-    uint32_t fb_size_in_pages = fb_size_in_bytes / PAGE_SIZE;
-    if (fb_size_in_pages % PAGE_SIZE > 0) fb_size_in_pages++;
-    
-    // For hardware, double size of framebuffer pages just in case    
-    fb_size_in_pages *= 2;
-
-    for (uint32_t i = 0, fb_start = gfx_mode->physical_base_pointer; i < fb_size_in_pages; i++, fb_start += PAGE_SIZE)
-        map_page((void *)fb_start, (void *)fb_start);
-
-    // Mark framebuffer as in use for physical memory manager
-    deinitialize_memory_region(gfx_mode->physical_base_pointer, fb_size_in_pages * BLOCK_SIZE);
 
     // Set intial colors
     while (!user_gfx_info->fg_color) {
@@ -723,7 +687,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             uint32_t phys_addr = (uint32_t)allocate_page(&page);
 
             if (!map_page((void *)phys_addr, (void *)(entry_point + i*PAGE_SIZE)))
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "Couldn't map pages, may be out of memory :'(");
+                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nCouldn't map pages, may be out of memory :'(");
         }
 
         print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Allocated to virtual address ");

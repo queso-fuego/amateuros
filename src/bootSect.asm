@@ -51,7 +51,7 @@ FILETABLE_ADDRESS equ 1000h
     call load_sectors
 
     ;; READ KERNEL INTO MEMORY THIRD
-    mov si, kernel_string
+    mov si, prekernel_string
     call get_filetable_entry
 
     push es
@@ -193,7 +193,7 @@ load_sectors:
 ;; VARIABLES
 drive_num: db 0
 bootloader_string: db '2ndstage  '
-kernel_string: db 'kernel    '
+prekernel_string: db '3rdstage  '
 font_string: db 'termu18n  '
 cylinder: dw 0
 head: db 0
