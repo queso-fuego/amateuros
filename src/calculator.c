@@ -7,13 +7,14 @@
 //	product := term | product '*' term | product '/' term ;
 //	term	:= '-' term | '(' sum ')' | number ;
 //
-#include "../include/C/stdint.h"
-#include "../include/C/string.h"
-#include "../include/gfx/2d_gfx.h"
-#include "../include/print/print_types.h"
-#include "../include/screen/cursor.h"
-#include "../include/screen/clear_screen.h"
-#include "../include/keyboard/keyboard.h"
+#include "C/stdint.h"
+#include "C/string.h"
+#include "C/stdio.h"
+#include "sys/syscall_wrappers.h"
+#include "gfx/2d_gfx.h"
+#include "screen/cursor.h"
+#include "screen/clear_screen.h"
+#include "keyboard/keyboard.h"
 
 void parse_buffer(void);    // Function declarations
 int32_t parse_sum(void);
@@ -23,7 +24,6 @@ void skip_blanks(void);
 int32_t parse_number(void);
 int8_t is_digit(int32_t *num);
 int8_t match_char(uint8_t in_char);
-void print_newline(void);
 
 // TODO: Change how ERRORs are handled and percolated back up through function calls
 //   because getting a -1 result will print Syntax Error regardless - BUG
@@ -34,8 +34,6 @@ const uint8_t FALSE = 0;
 uint8_t buffer[80];
 uint16_t scan;
 static uint8_t *error_msg = "Syntax Error\0";
-uint16_t calc_csr_x;
-uint16_t calc_csr_y;
 int32_t parse_num = 0;
 
 __attribute__ ((section ("calc_entry"))) void calc_main(void)
@@ -44,15 +42,12 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
     const uint8_t valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
     uint8_t idx;
 
-	clear_screen(user_gfx_info->bg_color);
-
-    calc_csr_x = 0;
-    calc_csr_y = 0;
-    move_cursor(calc_csr_x, calc_csr_y);    // Show initial cursor
+	clear_screen_esc();
 
     // Get line of input
     scan = 0;
     while (1) {
+        write(1, "\eCSRON;", 7);
         input_char = get_key();
 
         for (idx = 0; idx < 20 && valid_input[idx] != input_char; idx++) ;
@@ -61,8 +56,8 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
             continue;
 
         // Enter key with some input or buffer is full
-        if ((input_char == 0x0D && scan > 0) || scan == 80) {    
-            remove_cursor(calc_csr_x, calc_csr_y);  // Remove cursor befor evaluating
+        if ((input_char == '\r' && scan > 0) || scan == 80) {    
+            write(1, "\eCSROFF;", 8);
             parse_buffer();
             scan = 0;
 
@@ -80,8 +75,7 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
         scan++;
 
         // Print char to screen
-        print_char(&calc_csr_x, &calc_csr_y, input_char);
-        move_cursor(calc_csr_x, calc_csr_y);
+        putc(input_char);
     }
 }
 
@@ -90,15 +84,15 @@ void parse_buffer(void)
     int32_t num = 0;
 
     scan = 0;
-	print_newline();
+    printf("\r\n");
 
 	// Print error msg or result
 	if ((num = parse_sum()) == ERROR)
-        print_string(&calc_csr_x, &calc_csr_y, error_msg);
+        printf("%s", error_msg);
     else
-        print_dec(&calc_csr_x, &calc_csr_y, num);
+        printf("%d", num);
 
-	print_newline();
+    printf("\r\n");
 }
 
 int32_t parse_sum(void)
@@ -199,12 +193,4 @@ int8_t match_char(uint8_t in_char)
         return TRUE;
 
     } else return FALSE;
-}
-
-// Subroutine to print a newline
-void print_newline(void)
-{
-    print_char(&calc_csr_x, &calc_csr_y, 0x0A);
-    print_char(&calc_csr_x, &calc_csr_y, 0x0D);
-    move_cursor(calc_csr_x, calc_csr_y);
 }

@@ -3,10 +3,7 @@
 
 #include "C/string.h"
 #include "gfx/2d_gfx.h"
-
-#define FONT_ADDRESS 0xA000  
-#define FONT_WIDTH   0xA000 
-#define FONT_HEIGHT  (FONT_WIDTH+1)
+#include "global/global_addresses.h"
 
 //----------------------------------------------
 // print_char.h: Print a single character to video memory

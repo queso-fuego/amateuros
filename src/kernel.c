@@ -4,6 +4,7 @@
 #include "C/stdint.h"
 #include "C/stdlib.h"
 #include "C/string.h"
+#include "C/stdio.h"
 #include "C/time.h"
 #include "global/global_addresses.h"
 #include "gfx/2d_gfx.h"
@@ -24,6 +25,8 @@
 #include "ports/io.h"
 #include "keyboard/keyboard.h"
 #include "sound/pc_speaker.h"
+#include "sys/syscall_numbers.h"
+#include "sys/syscall_wrappers.h"
 
 void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
 
@@ -166,14 +169,19 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // --------------------------------------------------------------------
     // Get user input, print to screen & run command/program  
     // --------------------------------------------------------------------
+    // TODO: Change printing everywhere to use printf/write instead of print_types functions, 
+    //   then remove kernel cursor variables
+    write(1, "\eX0Y3;\eCSROFF;", strlen("\eX0Y3;\eCSROFF;"));
+    printf("TESTING PRINTF; Char: %c, Int: %d, String: %s, Hex: %x, %: %%\r\n", 'f', 123, "Hello", 0xAB12);
+    
     while (1) {
         // Reset tokens data, arrays, and variables for next input line
-        memset(tokens, 0, 50);
-        memset(tokens_length, 0, 10);
+        memset(tokens, 0, sizeof tokens);
+        memset(tokens_length, 0, sizeof tokens_length);
         token_count = 0;
-        memset(token_file_name1, 0 , 10);
-        memset(token_file_name2, 0 , 10);
-        memset(cmdString, 0 , 255);
+        memset(token_file_name1, 0, sizeof token_file_name1);
+        memset(token_file_name2, 0, sizeof token_file_name2);
+        memset(cmdString, 0, sizeof cmdString);
 
         // Print prompt
         print_string(&kernel_cursor_x, &kernel_cursor_y, prompt);

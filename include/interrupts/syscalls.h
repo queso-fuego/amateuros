@@ -3,11 +3,12 @@
  */
 #pragma once
 
+#include "C/stdint.h"
+#include "sys/syscall_numbers.h"
 #include "print/print_types.h"
 #include "interrupts/pic.h"
 #include "memory/malloc.h"
-
-#define MAX_SYSCALLS 5
+#include "terminal/terminal.h"
 
 // Test syscall 0
 void syscall_test0(void)
@@ -78,18 +79,39 @@ void syscall_free(void)
     malloc_free(ptr);
 }
 
+// Write system call: Write bytes from a buffer to a file descriptor
+void syscall_write(void)
+{
+    int fd = 0;
+    void *buf = 0;
+    uint32_t len = 0;
+
+    __asm__ __volatile__ ("mov %%EBX, %0;"
+                          "mov %%ECX, %1;"
+                          "mov %%EDX, %2;"
+                          : "=b"(fd), "=c"(buf), "=d"(len) );
+
+    // TODO: Change to use some sort of calling process open fd table?
+    if (fd == 1) {
+        __asm__ __volatile__ ("mov %0, %%EAX" : : "a"(terminal_write(buf, len)) );
+    } else {
+        __asm__ __volatile__ ("movl $-1, %EAX"); // Unsupported FD for write
+    }
+}
+
 // Syscall table
-void *syscalls[MAX_SYSCALLS] = {
-    syscall_test0,
-    syscall_test1,
-    syscall_sleep,
-    syscall_malloc,
-    syscall_free,
+void (*syscalls[MAX_SYSCALLS])(void) = {
+    [SYSCALL_TEST1]  = syscall_test1,
+    [SYSCALL_TEST0]  = syscall_test0,
+    [SYSCALL_SLEEP]  = syscall_sleep,
+    [SYSCALL_MALLOC] = syscall_malloc,
+    [SYSCALL_FREE]   = syscall_free,
+    [SYSCALL_WRITE]  = syscall_write,
 };
 
 // Syscall dispatcher
 // naked attribute means no function prologue/epilogue, and only allows inline asm
-__attribute__ ((naked)) __attribute__ ((interrupt)) void syscall_dispatcher(int_frame_32_t *frame)
+__attribute__ ((naked, interrupt)) void syscall_dispatcher(int_frame_32_t *frame)
 {
     // "basic" syscall handler, push everything we want to save, call the syscall by
     //   offsetting into syscalls table with value in eax, then pop everything back 
@@ -102,7 +124,7 @@ __attribute__ ((naked)) __attribute__ ((interrupt)) void syscall_dispatcher(int_
     // NOTE: Easier to do call in intel syntax, I'm not sure how to do it in att syntax
     __asm__ __volatile__ (".intel_syntax noprefix\n"
 
-                          ".equ MAX_SYSCALLS, 5\n"  // Have to define again, inline asm does not see the #define
+                          ".equ MAX_SYSCALLS, 6\n"  // Have to define again, inline asm does not see the #define
 
                           "cmp eax, MAX_SYSCALLS-1\n"   // syscalls table is 0-based
                           "ja invalid_syscall\n"        // invalid syscall number, skip and return

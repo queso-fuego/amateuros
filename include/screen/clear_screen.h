@@ -3,6 +3,8 @@
 //
 #pragma once
 
+#include "sys/syscall_wrappers.h"
+
 void clear_screen(uint32_t color)
 {
     // Get 32bit pointer to framebuffer value in VBE mode info block, 
@@ -16,4 +18,9 @@ void clear_screen(uint32_t color)
 
         framebuffer += bytes_per_pixel;
     }
+}
+
+void clear_screen_esc(void)
+{
+    write(1, "\eCLS;", 5);
 }
