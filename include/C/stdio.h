@@ -48,10 +48,10 @@ void printf_int(const int32_t num, const uint8_t base, const bool sign)
 // Print formatted string
 void printf(const char *fmt, ...)
 {
-    char *arg_ptr = (char *)&fmt;
+    uint32_t *arg_ptr = (uint32_t *)&fmt;
     int state = 0;  // Inside a format string or not?
 
-    arg_ptr += sizeof(char *);
+    arg_ptr++;
 
     for (uint32_t i = 0; fmt[i] != '\0'; i++) {
         char c = fmt[i];
@@ -64,23 +64,27 @@ void printf(const char *fmt, ...)
             case 'd':
                 // Decimal integer e.g. "123"
                 printf_int(*(int *)arg_ptr, 10, true);
-                arg_ptr += sizeof(int *);
+                //arg_ptr += sizeof(int *);
+                arg_ptr++;
                 break;
             case 'x':
                 // Hex integer e.g. "0xFFFF"
                 puts("0x");
                 printf_int(*(unsigned int *)arg_ptr, 16, false);
-                arg_ptr += sizeof(unsigned int *); 
+                //arg_ptr += sizeof(unsigned int *); 
+                arg_ptr++;
                 break;
             case 's':
                 // String
                 puts(*(char **)arg_ptr); 
-                arg_ptr += sizeof(char **);
+                //arg_ptr += sizeof(char **);
+                arg_ptr++;
                 break;
             case 'c':
                 // Single Character
                 putc(*(char *)arg_ptr);
-                arg_ptr += sizeof(char *);  
+                //arg_ptr += sizeof(char *);  
+                arg_ptr++;
                 break;
             case '%':
                 // Character literal '%'
