@@ -148,6 +148,26 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     //   non-exception and not NMI hardware interrupts
     __asm__ __volatile__("sti");
 
+    // Set up kernel malloc variables for e.g. printf() calls
+    uint32_t kernel_malloc_virt_address     = 0x300000;
+    uint32_t kernel_malloc_phys_address     = (uint32_t)allocate_blocks(1);
+    uint32_t kernel_total_malloc_pages      = 1;
+
+    map_page((void *)kernel_malloc_phys_address, (void *)kernel_malloc_virt_address);
+    pt_entry *kernel_malloc_page = get_page(kernel_malloc_virt_address);
+    SET_ATTRIBUTE(kernel_malloc_page, PTE_READ_WRITE);  // Add read/write flags for malloc-ed memory
+
+    malloc_block_t *kernel_malloc_list_head = (malloc_block_t *)kernel_malloc_virt_address;
+
+    kernel_malloc_list_head->size = PAGE_SIZE - sizeof(malloc_block_t);
+    kernel_malloc_list_head->free = true;
+    kernel_malloc_list_head->next = 0;
+    
+    malloc_list_head    = kernel_malloc_list_head;
+    malloc_virt_address = kernel_malloc_virt_address;
+    malloc_phys_address = kernel_malloc_phys_address;
+    total_malloc_pages  = kernel_total_malloc_pages;
+
     // Set intial colors
     while (!user_gfx_info->fg_color) {
         if (gfx_mode->bits_per_pixel > 8) {
@@ -171,8 +191,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // --------------------------------------------------------------------
     // TODO: Change printing everywhere to use printf/write instead of print_types functions, 
     //   then remove kernel cursor variables
-    write(1, "\eX0Y3;\eCSROFF;", strlen("\eX0Y3;\eCSROFF;"));
-    printf("TESTING PRINTF; Char: %c, Int: %d, String: %s, Hex: %x, %: %%\r\n", 'f', 123, "Hello", 0xAB12);
+    printf("\eX0Y3;\eCSROFF;TESTING PRINTF; Char: %c, Int: %d, String: %s, Hex: %x, %: %%\r\n", 'f', 123, "Hello", 0xAB12);
     
     while (1) {
         // Reset tokens data, arrays, and variables for next input line
@@ -739,10 +758,10 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             }
 
             // Reset malloc variables after calling program
-            malloc_list_head    = 0;    // Start of linked list
-            malloc_virt_address = 0;
-            malloc_phys_address = 0;
-            total_malloc_pages  = 0;
+            malloc_list_head    = kernel_malloc_list_head;
+            malloc_virt_address = kernel_malloc_virt_address;
+            malloc_phys_address = kernel_malloc_phys_address;
+            total_malloc_pages  = kernel_total_malloc_pages;
             
             // TODO: In the future, if using a backbuffer, restore screen data from that buffer here instead
             //  of clearing

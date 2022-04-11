@@ -4,6 +4,7 @@
 #pragma once
 
 #include "C/stdint.h"
+#include "sys/syscall_numbers.h"
 
 // Convert ascii string to integer
 uint32_t atoi(const uint8_t *string)
@@ -23,10 +24,7 @@ void *malloc(const uint32_t size)
 {
     void *ptr = 0;
 
-    // TODO: Don't hardcode syscall numbers!
-    __asm__ __volatile__ ("int $0x80" : : "a"(3), "b"(size) );
-
-    __asm__ __volatile__ ("movl %%EAX, %0" : "=r"(ptr) ); 
+    __asm__ __volatile__ ("int $0x80" : "=r"(ptr) : "a"(SYSCALL_MALLOC), "b"(size) );
 
     return ptr;
 }
@@ -34,6 +32,24 @@ void *malloc(const uint32_t size)
 // Free allocated memory at a pointer, uses syscall
 void free(const void *ptr)
 {
-    // TODO: Don't hardcode syscall numbers!
-    __asm__ __volatile__ ("int $0x80" : : "a"(4), "b"(ptr) );
+    __asm__ __volatile__ ("int $0x80" : : "a"(SYSCALL_FREE), "b"(ptr) );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
