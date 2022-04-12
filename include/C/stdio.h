@@ -30,7 +30,26 @@ void puts(char *s)
     }
 }
 
-// Print a string
+// Print a hex integer
+void printf_hex(const uint32_t num)
+{
+    const uint8_t digits[] = "0123456789ABCDEF";
+    uint8_t buf[16] = {0};
+    int32_t i = 0;
+    uint32_t n = num;
+    bool pad = (n < 0x10);
+
+    do {
+        buf[i++] = digits[n % 16];
+    } while ((n /= 16) > 0);
+
+    if (pad) write_buffer[len++] = '0';  // Add padding 0
+
+    while (--i >= 0)  
+        write_buffer[len++] = buf[i];
+}
+
+// Print a decimal integer
 void printf_int(const int32_t num, const uint8_t base, const bool sign)
 {
     const uint8_t digits[] = "0123456789ABCDEF";
@@ -98,7 +117,8 @@ void printf(const char *fmt, ...)
                 // Hex integer e.g. "0xFFFF"
                 write_buffer[len++] = '0';  // Add "0x" prefix
                 write_buffer[len++] = 'x';
-                printf_int(*(unsigned int *)arg_ptr, 16, false);
+
+                printf_hex(*(unsigned int *)arg_ptr);
                 //arg_ptr += sizeof(unsigned int *); 
                 arg_ptr++;
                 break;

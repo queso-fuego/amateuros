@@ -149,9 +149,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     __asm__ __volatile__("sti");
 
     // Set up kernel malloc variables for e.g. printf() calls
-    uint32_t kernel_malloc_virt_address     = 0x300000;
-    uint32_t kernel_malloc_phys_address     = (uint32_t)allocate_blocks(1);
-    uint32_t kernel_total_malloc_pages      = 1;
+    uint32_t kernel_malloc_virt_address = 0x300000;
+    uint32_t kernel_malloc_phys_address = (uint32_t)allocate_blocks(1);
+    uint32_t kernel_total_malloc_pages  = 1;
 
     map_page((void *)kernel_malloc_phys_address, (void *)kernel_malloc_virt_address);
     pt_entry *kernel_malloc_page = get_page(kernel_malloc_virt_address);
@@ -171,27 +171,29 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // Set intial colors
     while (!user_gfx_info->fg_color) {
         if (gfx_mode->bits_per_pixel > 8) {
+            printf("\eFG%xBG%x;", convert_color(0x00EEEEEE), convert_color(0x00222222)); 
             user_gfx_info->fg_color = convert_color(0x00EEEEEE);
             user_gfx_info->bg_color = convert_color(0x00222222);
         } else {
             // Assuming VGA palette
+            printf("\eFG%xBG%x;", convert_color(0x02), convert_color(0x00)); 
             user_gfx_info->fg_color = convert_color(0x02);
             user_gfx_info->bg_color = convert_color(0x00);
         }
     }
 
     // Clear the screen
-    clear_screen(user_gfx_info->bg_color);
+    clear_screen_esc();
 
     // Print OS boot message
-    print_string(&kernel_cursor_x, &kernel_cursor_y, menuString);
+    printf("\eCSROFF;%s", menuString);
 
     // --------------------------------------------------------------------
     // Get user input, print to screen & run command/program  
     // --------------------------------------------------------------------
     // TODO: Change printing everywhere to use printf/write instead of print_types functions, 
     //   then remove kernel cursor variables
-    printf("\eX0Y3;\eCSROFF;TESTING PRINTF; Char: %c, Int: %d, String: %s, Hex: %x, %: %%\r\n", 'f', 123, "Hello", 0xAB12);
+    printf("\eX%dY%d;\eCSROFF;TESTING PRINTF; Char: %c, Int: %d, String: %s, Hex: %x, %: %%\r\n", 0, 3, 'f', 123, "Hello", 0xAB12);
     
     while (1) {
         // Reset tokens data, arrays, and variables for next input line
@@ -203,8 +205,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         memset(cmdString, 0, sizeof cmdString);
 
         // Print prompt
-        print_string(&kernel_cursor_x, &kernel_cursor_y, prompt);
-        move_cursor(kernel_cursor_x, kernel_cursor_y);
+        printf("\eCSRON;%s", prompt);
         
         input_length = 0;   // reset byte counter of input
 
@@ -212,30 +213,20 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         while (1) {
             input_char = get_key();     // Get ascii char from scancode from keyboard data port 60h
 
-            if (input_char == 0x0D) {   // enter key?
-                remove_cursor(kernel_cursor_x, kernel_cursor_y);
+            if (input_char == '\r') {   // enter key?
+                printf("\eCSROFF;");
+                //remove_cursor(kernel_cursor_x, kernel_cursor_y);
                 break;                  // go on to tokenize user input line
             }
 
             // TODO: Move all input back 1 char/byte after backspace, if applicable
-            if (input_char == 0x08) {       // backspace?
+            if (input_char == '\b') {       // backspace?
                 if (input_length > 0) {                // Did user input anything?
-                    input_length--;                     // yes, go back one char in cmdString
+                    input_length--;                    // yes, go back one char in cmdString
                     cmdString[input_length] = '\0';    // Blank out character    					
-                }
 
-                if (kernel_cursor_x > 2) {     // At start of line (at prompt)?
-                    // TODO: change to use remove_cursor, move back 1 space, print a space, move back 1 space
-                    // Move cursor back 1 space
-                    kernel_cursor_x--;
-
-                    // Print 2 spaces at cursor
-                    print_char(&kernel_cursor_x, &kernel_cursor_y, 0x20);
-                    print_char(&kernel_cursor_x, &kernel_cursor_y, 0x20);
-
-                    // Move cursor back 2 spaces
-                    kernel_cursor_x -= 2;
-                    move_cursor(kernel_cursor_x, kernel_cursor_y);
+                    // Do a "visual" backspace; Move cursor back 1 space, print 2 spaces, move back 2 spaces
+                    printf("\eBS;  \eBS;\eBS;");
                 }
 
                 continue;   // Get next character
@@ -245,14 +236,12 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             input_length++;                         // Increment byte counter of input
 
             // Print input character to screen
-            print_char(&kernel_cursor_x, &kernel_cursor_y, input_char);
-            move_cursor(kernel_cursor_x, kernel_cursor_y);
+            putc(input_char);
         }
 
         if (input_length == 0) {
             // No input or command not found! boo D:
-            print_string(&kernel_cursor_x, &kernel_cursor_y, failure);
-            move_cursor(kernel_cursor_x, kernel_cursor_y);
+            printf(failure);
 
             continue;
         }
@@ -292,7 +281,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // --------------------------------------------------------------------
             // File/Program browser & loader   
             // --------------------------------------------------------------------
-            print_fileTable(&kernel_cursor_x, &kernel_cursor_y);
+            print_fileTable(); 
             continue;
         }
 
@@ -307,8 +296,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // --------------------------------------------------------------------
             // Print Register Values
             // --------------------------------------------------------------------
-            print_registers(&kernel_cursor_x, &kernel_cursor_y); 
-
+            print_registers(); 
             continue;   
         }
 
@@ -442,9 +430,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             fill_ellipse_solid(p0, 100, 50, convert_color(0x00FFEE0F));  // I Love GOOOOOOoooolllddd
 
             input_char = get_key(); 
-            clear_screen(user_gfx_info->bg_color);  
-            kernel_cursor_x = 0;
-            kernel_cursor_y = 0;
+            clear_screen_esc();
 
             continue;
         }
@@ -453,19 +439,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // --------------------------------------------------------------------
             // End Program  
             // --------------------------------------------------------------------
-            // __asm ("cli");   // Clear interrupts
-            __asm ("hlt");   // Halt cpu
+            __asm__ ("cli;hlt");   // Clear interrupts & Halt cpu
         }
 
         if (strncmp(tokens, cmdCls, strlen(cmdCls)) == 0) {
             // --------------------------------------------------------------------
             // Clear Screen
             // --------------------------------------------------------------------
-            clear_screen(user_gfx_info->bg_color); 
-
-            // Update cursor values for new position
-            kernel_cursor_x = 0;
-            kernel_cursor_y = 0;
+            clear_screen_esc();
 
             continue;
         }
@@ -474,7 +455,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // --------------------------------------------------------------------
             // Shutdown (QEMU)
             // --------------------------------------------------------------------
-            __asm ("outw %%ax, %%dx" : : "a"(0x2000), "d"(0x604) );
+            __asm__ ("outw %%ax, %%dx" : : "a"(0x2000), "d"(0x604) );
 
             // TODO: Get shutdown command for bochs, user can uncomment which one they want to use
         }
@@ -495,8 +476,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             }
 
             // Print newline when done
-            print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0A); 
-            print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0D); 
+            printf("\r\n");
 
             continue;
         }
@@ -521,8 +501,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             }
 
             // Print newline when done
-            print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0A); 
-            print_char(&kernel_cursor_x, &kernel_cursor_y, 0x0D); 
+            printf("\r\n");
 
             continue;
         }
@@ -530,57 +509,54 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         // Print memory map command
         if (strncmp(tokens, cmdPrtmemmap, strlen(cmdPrtmemmap)) == 0) {
             // Print out physical memory map info
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n-------------------\r\nPhysical Memory Map"
-                                                             "\r\n-------------------\r\n\r\n");
+            printf("\r\n-------------------\r\nPhysical Memory Map"
+                   "\r\n-------------------\r\n\r\n");
             print_physical_memory_info();
             continue;
         }
 
         // Change colors command
+        // TODO: Change to use terminal control codes to change FG/BG color when debugged
         if (strncmp(tokens, cmdChgColors, strlen(cmdChgColors)) == 0) {
             uint32_t fg_color = 0;
             uint32_t bg_color = 0;
 
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Current colors (32bpp ARGB):");
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Foregound: ");
-            print_hex(&kernel_cursor_x, &kernel_cursor_y, user_gfx_info->fg_color);
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Backgound: ");
-            print_hex(&kernel_cursor_x, &kernel_cursor_y, user_gfx_info->bg_color);
+            printf("\eCSROFF;\r\nCurrent colors (32bpp ARGB):");
+            printf("\r\nForeground: %x", user_gfx_info->fg_color);
+            printf("\r\nBackground: %x", user_gfx_info->bg_color);
 
             // Foreground color
             if (gfx_mode->bits_per_pixel > 8)
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "New Foregound (0xRRGGBB): 0x");
+                printf("\r\nNew Foregound (0xRRGGBB): 0x");
             else
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "New Foregound (0xNN): 0x");
+                printf("\r\nNew Foregound (0xNN): 0x");
 
-            move_cursor(kernel_cursor_x, kernel_cursor_y);
+            printf("\eCSRON;");
 
-            while ((input_char = get_key()) != 0x0D) {
+            while ((input_char = get_key()) != '\r') {
                 if (input_char >= 'a' && input_char <= 'f') input_char -= 0x20; // Convert lowercase to Uppercase
 
-                print_char(&kernel_cursor_x, &kernel_cursor_y, input_char);
-                move_cursor(kernel_cursor_x, kernel_cursor_y);
+                putc(input_char);
 
                 fg_color *= 16;
                 if      (input_char >= '0' && input_char <= '9') fg_color += input_char - '0';          // Convert hex ascii 0-9 to integer
                 else if (input_char >= 'A' && input_char <= 'F') fg_color += (input_char - 'A') + 10;   // Convert hex ascii 10-15 to integer
             }
 
-            remove_cursor(kernel_cursor_x, kernel_cursor_y);
+            printf("\eCSROFF;");
 
             // Background color
             if (gfx_mode->bits_per_pixel > 8)
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "New Backgound (0xRRGGBB): 0x");
+                printf("\r\nNew Backgound (0xRRGGBB): 0x");
             else
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "New Backgound (0xNN): 0x");
+                printf("\r\nNew Backgound (0xNN): 0x");
 
-            move_cursor(kernel_cursor_x, kernel_cursor_y);
+            printf("\eCSRON;");
 
-            while ((input_char = get_key()) != 0x0D) {
+            while ((input_char = get_key()) != '\r') {
                 if (input_char >= 'a' && input_char <= 'f') input_char -= 0x20; // Convert lowercase to Uppercase
 
-                print_char(&kernel_cursor_x, &kernel_cursor_y, input_char);
-                move_cursor(kernel_cursor_x, kernel_cursor_y);
+                putc(input_char);
 
                 bg_color *= 16;
 
@@ -588,13 +564,13 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 else if (input_char >= 'A' && input_char <= 'F') bg_color += (input_char - 'A') + 10;   // Convert hex ascii 10-15 to integer
             }
 
-            remove_cursor(kernel_cursor_x, kernel_cursor_y);
+            printf("\eCSROFF;");
 
+            printf("\eFG%xBG%x;", convert_color(fg_color), convert_color(bg_color));
             user_gfx_info->fg_color = convert_color(fg_color);  // Convert colors first before setting new values
             user_gfx_info->bg_color = convert_color(bg_color);
 
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
-
+            printf("\r\n");
             continue;
         }
 
@@ -603,17 +579,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // First check if font exists - name is 2nd token
             file_ptr = check_filename(tokens+10, tokens_length[1]);
             if (*file_ptr == 0) {  
-                print_string(&kernel_cursor_x, &kernel_cursor_y, fontNotFound);  // File not found in filetable, error
-                move_cursor(kernel_cursor_x, kernel_cursor_y);
+                printf(fontNotFound);  // File not found in filetable, error
 
                 continue;
             }
 
             // Check if file has .fnt extension
             if (strncmp(file_ptr+10, "fnt", 3) != 0) {
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nError: file is not a font\r\n"); 
-                move_cursor(kernel_cursor_x, kernel_cursor_y);
-
+                printf("\r\nError: file is not a font\r\n"); 
                 continue;
             }
 
@@ -623,8 +596,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
             // File is a valid font, try to load it to memory
             if (!load_file(tokens+10, tokens_length[1], (uint32_t)FONT_ADDRESS, fileExt)) {
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nError: file could not be loaded\r\n"); 
-                move_cursor(kernel_cursor_x, kernel_cursor_y);
+                printf("\r\nError: file could not be loaded\r\n"); 
 
                 continue;
             }
@@ -632,15 +604,8 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // New font should be loaded and in use now
             font_width  = *(uint8_t *)FONT_WIDTH;
             font_height = *(uint8_t *)FONT_HEIGHT;
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nFont loaded: \r\n");
-            print_string(&kernel_cursor_x, &kernel_cursor_y, token_file_name1);
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nWidth: ");
-            print_dec(&kernel_cursor_x, &kernel_cursor_y, font_width);
-            print_string(&kernel_cursor_x, &kernel_cursor_y, " Height: ");
-            print_dec(&kernel_cursor_x, &kernel_cursor_y, font_height);
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
-
-            move_cursor(kernel_cursor_x, kernel_cursor_y);
+            printf("\r\nFont loaded: %s\r\n", token_file_name1);
+            printf("\r\nWidth: %d Height: %d\r\n", font_width, font_height);
 
             continue;
         }
@@ -649,7 +614,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         if (strncmp(tokens, cmdSleep, strlen(cmdSleep)) == 0) {
             sleep_seconds(atoi(tokens+10)); 
 
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+            printf("\r\n");
             continue;
         }
 
@@ -657,7 +622,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         if (strncmp(tokens, cmdMSleep, strlen(cmdMSleep)) == 0) {
             sleep_milliseconds(atoi(tokens+10));
 
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+            printf("\r\n");
             continue;
         }
 
@@ -667,11 +632,12 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
             if (!show_datetime) {
                 // Blank out date/time
+                // TODO: Make "save/restore" screen or terminal variables control code
                 uint16_t x = 50, y = 30;
                 print_string(&x, &y, "                   "); // Overwrite date/time with spaces
             }
 
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+            printf("\r\n");
             continue;
         }
 
@@ -679,19 +645,18 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         if (strncmp(tokens, cmdSoundTest, strlen(cmdSoundTest)) == 0) {
             enable_pc_speaker();
 
-            #include "../include/sound/italianplumberbrothers.mus"
+            /* ADD SOUND THINGS HERE */
 
             disable_pc_speaker();
 
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+            printf("\r\n");
             continue;
         }
 
         // If command not input, search file table entries for user input file
         file_ptr = check_filename(cmdString, tokens_length[0]);
         if (*file_ptr == 0) {  
-            print_string(&kernel_cursor_x, &kernel_cursor_y, failure);  // File not found in filetable, error
-            move_cursor(kernel_cursor_x, kernel_cursor_y);
+            printf(failure);  // File not found in filetable, error
 
             continue;
         }
@@ -701,9 +666,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         needed_pages = (file_ptr[15] * 512) / PAGE_SIZE;  // Convert file size in bytes to pages
         if ((file_ptr[15] * 512) % PAGE_SIZE > 0) needed_pages++;   // Allocate extra page for partial page of memory
 
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Allocating ");
-        print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_pages);
-        print_string(&kernel_cursor_x, &kernel_cursor_y, " page(s)\r\n");
+        printf("\r\nAllocating %d page(s)\r\n", needed_pages);
         
         // Load files/programs to this starting address
         const uint32_t entry_point = 0x400000;  // Put entry point right after identity mapped 4MB page table
@@ -714,12 +677,10 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             uint32_t phys_addr = (uint32_t)allocate_page(&page);
 
             if (!map_page((void *)phys_addr, (void *)(entry_point + i*PAGE_SIZE)))
-                print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nCouldn't map pages, may be out of memory :'(");
+                printf("\r\nCouldn't map pages, may be out of memory :'(");
         }
 
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Allocated to virtual address ");
-        print_hex(&kernel_cursor_x, &kernel_cursor_y, entry_point);
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+        printf("\r\nAllocated to virtual address %x\r\n", entry_point);
         
         // Call load_file function to load program/file to starting memory address
         // Input 1: File name (address)
@@ -729,8 +690,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         // Return value - 0 = Success, !0 = error
         if (!load_file(cmdString, tokens_length[0], entry_point, fileExt)) {
             // Error, program did not load correctly
-            print_string(&kernel_cursor_x, &kernel_cursor_y, pgmNotLoaded);
-            move_cursor(kernel_cursor_x, kernel_cursor_y);
+            printf(pgmNotLoaded);
 
             continue;
         }
@@ -744,6 +704,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             total_malloc_pages  = 0;
 
             // Void function pointer to jump to and execute code at specific address in C
+            // TODO: Add int argc, char **argv (or *argv[] !) as input parameters to called program
             ((void (*)(void))entry_point)();     // Execute program, this can return
 
             // If used malloc(), free remaining memory to prevent memory leaks
@@ -766,17 +727,11 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // TODO: In the future, if using a backbuffer, restore screen data from that buffer here instead
             //  of clearing
             
-            // Clear the screen before going back
-            clear_screen(user_gfx_info->bg_color);  
-
-            // Reset cursor position
-            kernel_cursor_x = 0;
-            kernel_cursor_y = 0;
+            // Clear the screen and reset cursor position before going back
+            clear_screen_esc();
 
             // Free previously allocated pages when done
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Freeing ");
-            print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_pages);
-            print_string(&kernel_cursor_x, &kernel_cursor_y, " page(s)\r\n");
+            printf("\r\n" "Freeing %d page(s)\r\n", needed_pages);
             
             for (uint32_t i = 0, virt = entry_point; i < needed_pages; i++, virt += PAGE_SIZE) {
                 pt_entry *page = get_page(virt);
@@ -788,9 +743,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 }
             }
 
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Freed at address ");
-            print_hex(&kernel_cursor_x, &kernel_cursor_y, entry_point);
-            print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+            printf("\r\nFreed at address %x\r\n", entry_point);
 
             continue;   // Loop back to prompt for next input
         }
@@ -800,7 +753,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         file_ptr = (uint8_t *)entry_point;   // File location to print from
 
         // Print newline first
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+        printf("\r\n");
         
         // Get size of filesize in bytes (512 byte per sector)
         // TODO: Change this later - currently assuming text files are only 1 sector
@@ -813,18 +766,16 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 *file_ptr = hex_to_ascii(*file_ptr);
 
             // Print file character to screen
-            print_char(&kernel_cursor_x, &kernel_cursor_y, *file_ptr);
+            putc(*file_ptr);
 
             file_ptr++;
         }
 
         // Print newline after printing file contents
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+        printf("\r\n");
 
         // Free pages when done
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Freeing ");
-        print_dec(&kernel_cursor_x, &kernel_cursor_y, needed_pages);
-        print_string(&kernel_cursor_x, &kernel_cursor_y, " page(s)\r\n");
+        printf("\r\nFreeing %d page(s)\r\n", needed_pages);
         
         for (uint32_t i = 0, virt = entry_point; i < needed_pages; i++, virt += PAGE_SIZE) {
             pt_entry *page = get_page(virt);
@@ -836,9 +787,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             }
         }
 
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Freed at address ");
-        print_hex(&kernel_cursor_x, &kernel_cursor_y, entry_point);
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+        printf("\r\nFreed at address %x\r\n", entry_point);
     }
 }
 
@@ -849,59 +798,42 @@ void print_physical_memory_info(void)
     SMAP_entry_t *SMAP_entry = (SMAP_entry_t *)0x8504;  // Memory map entries start point
 
     for (uint32_t i = 0; i < num_entries; i++) {
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "Region ");
-        print_hex(&kernel_cursor_x, &kernel_cursor_y, i);
-
-        print_string(&kernel_cursor_x, &kernel_cursor_y, ": base: ");
-        print_hex(&kernel_cursor_x, &kernel_cursor_y, SMAP_entry->base_address);
-
-        print_string(&kernel_cursor_x, &kernel_cursor_y, " length: ");
-        print_hex(&kernel_cursor_x, &kernel_cursor_y, SMAP_entry->length);
-
-        print_string(&kernel_cursor_x, &kernel_cursor_y, " type: ");
-        print_hex(&kernel_cursor_x, &kernel_cursor_y, SMAP_entry->type);
+        printf("Region: %x", i);
+        printf(" base: %x", SMAP_entry->base_address);
+        printf(" length: %x", SMAP_entry->length);
+        printf(" type: %x", SMAP_entry->type);
 
         switch(SMAP_entry->type) {
             case 1:
-                print_string(&kernel_cursor_x, &kernel_cursor_y, " (Available)");
+                printf(" (Available)");
                 break;
             case 2: 
-                print_string(&kernel_cursor_x, &kernel_cursor_y, " (Reserved)");
+                printf(" (Reserved)");
                 break;
             case 3: 
-                print_string(&kernel_cursor_x, &kernel_cursor_y, " (ACPI Reclaim)");
+                printf(" (ACPI Reclaim)");
                 break;
             case 4: 
-                print_string(&kernel_cursor_x, &kernel_cursor_y, " (ACPI NVS Memory)");
+                printf(" (ACPI NVS Memory)");
                 break;
             default: 
-                print_string(&kernel_cursor_x, &kernel_cursor_y, " (Reserved)");
+                printf(" (Reserved)");
                 break;
         }
 
-        print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
+        printf("\r\n");
         SMAP_entry++;   // Go to next entry
     }
 
     // Print total amount of memory
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n");
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "Total memory in bytes: ");
-
     SMAP_entry--;   // Get last SMAP entry
-    print_hex(&kernel_cursor_x, &kernel_cursor_y, SMAP_entry->base_address + SMAP_entry->length - 1);
-  
+    printf("\r\nTotal memory in bytes: %x", SMAP_entry->base_address + SMAP_entry->length - 1);
+
     // Print out memory manager block info:
     //   total memory in 4KB blocks, total # of used blocks, total # of free blocks
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nTotal 4KB blocks: ");
-    print_dec(&kernel_cursor_x, &kernel_cursor_y, max_blocks);
-
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\nUsed or reserved blocks: ");
-    print_dec(&kernel_cursor_x, &kernel_cursor_y, used_blocks);
-
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n" "Free or available blocks: ");
-    print_dec(&kernel_cursor_x, &kernel_cursor_y, max_blocks - used_blocks);
-
-    print_string(&kernel_cursor_x, &kernel_cursor_y, "\r\n\r\n");
+    printf("\r\nTotal 4KB blocks: %d", max_blocks);
+    printf("\r\nUsed or reserved blocks: %d", used_blocks);
+    printf("\r\nFree or available blocks: %d\r\n\r\n", max_blocks - used_blocks);
 }
 
 

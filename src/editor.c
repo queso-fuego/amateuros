@@ -4,6 +4,7 @@
 #include "../include/C/stdint.h"
 #include "../include/C/string.h"
 #include "../include/C/stdlib.h"
+#include "../include/C/stdio.h"
 #include "../include/gfx/2d_gfx.h"
 #include "../include/print/print_types.h"
 #include "../include/disk/file_ops.h"
@@ -156,7 +157,7 @@ void editor_load_file(void)
 
     // Choose file to load
     while (1) {
-        print_fileTable(&cursor_x, &cursor_y);
+        print_fileTable();
 
         // Choose file message
         print_string(&cursor_x, &cursor_y, choose_file_msg);

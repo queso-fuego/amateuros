@@ -107,7 +107,7 @@ int32_t terminal_write(void *buf, const uint32_t len)
                 }
 
                 while (str[i] != ';') {
-                    fg_color = fg_color * base + str[i] - ((str[i] >= 'A' && str[i] <= 'F') ? 'A' - 10 : '0');
+                    bg_color = bg_color * base + str[i] - ((str[i] >= 'A' && str[i] <= 'F') ? 'A' - 10 : '0');
                     i++;
                 }
             } else if (!strncmp(&str[i], "CSRON;", 6)) {

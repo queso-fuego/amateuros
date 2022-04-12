@@ -6,7 +6,9 @@
 //
 #pragma once
 
-void print_fileTable(uint16_t *cursor_x, uint16_t *cursor_y)
+#include "C/stdio.h"
+
+void print_fileTable()
 {
     uint8_t *fileTable_name = "fileTable ";
     uint8_t *filetable_ptr;
@@ -20,7 +22,7 @@ void print_fileTable(uint16_t *cursor_x, uint16_t *cursor_y)
         "\0";
 
     // Print file table heading
-    print_string(cursor_x, cursor_y, heading); 
+    printf(heading); 
 
     // Load file table string from its memory location (1000h), print file
     //   and program names & sector numbers to screen
@@ -34,52 +36,47 @@ void print_fileTable(uint16_t *cursor_x, uint16_t *cursor_y)
     while (*filetable_ptr != 0) {
         // Print file name
         for (uint8_t i = 0; i < 10; i++) {
-            print_char(cursor_x, cursor_y, *filetable_ptr);
+            putc(*filetable_ptr);
             filetable_ptr++;             // Get next byte at file table
         }
 
         // 2 blanks before file extension
-        print_char(cursor_x, cursor_y, 0x20);
-        print_char(cursor_x, cursor_y, 0x20);
+        printf("  ");
 
         // Print file ext bytes
         for (uint8_t i = 0; i < 3; i++) {
-            print_char(cursor_x, cursor_y, *filetable_ptr);
+            putc(*filetable_ptr);
             filetable_ptr++;
         }
 
         // Directory entry # section
         // 9 blanks before entry #
-        for (uint8_t i = 0; i < 9; i++)
-            print_char(cursor_x, cursor_y, 0x20);
+        printf("         ");
         
         // Print hex value
         hex_num = (uint16_t)*filetable_ptr;
-        print_hex(cursor_x, cursor_y, hex_num);
+        printf("%x", hex_num);
         filetable_ptr++;
 
         // Starting sector section
         // 6 blanks before starting sector
-        for (uint8_t i = 0; i < 6; i++)
-            print_char(cursor_x, cursor_y, 0x20);
+        printf("      ");
         
         // Print hex value
         hex_num = (uint16_t)*filetable_ptr;
-        print_hex(cursor_x, cursor_y, hex_num);
+        printf("%x", hex_num);
         filetable_ptr++;
 
         // File size section
         // 11 blanks before file size
-        for (uint8_t i = 0; i < 11; i++)
-            print_char(cursor_x, cursor_y, 0x20);
+        printf("           ");
         
         // Print hex value
         hex_num = (uint16_t)*filetable_ptr;
-        print_hex(cursor_x, cursor_y, hex_num);
+        printf("%x", hex_num);
         filetable_ptr++;
 
         // Print newline bewtween file table entries
-        print_char(cursor_x, cursor_y, 0x0A);
-        print_char(cursor_x, cursor_y, 0x0D);
+        printf("\r\n");
     }
 }
