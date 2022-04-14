@@ -37,7 +37,7 @@ enum file_modes {
     UPDATE = 2      // Updating an existing file
 };
  
-void editor_load_file(void);    // Function declarations
+void editor_load_file(char *filename);    // Function declarations
 void text_editor(void);
 void hex_editor(void);
 void save_hex_program(void);
@@ -61,13 +61,13 @@ static const uint8_t *filename_string = "Enter file name: \0";
 uint8_t hex_count = 0;
 uint8_t blank_line[80];
 static const uint8_t *choose_file_msg = "File to load: \0";
-static const uint8_t *load_file_error_msg = "Load file error occurred";
+static const uint8_t *load_file_error_msg = "Load file error occurred, press any key to go back...";
 static const uint8_t *save_file_error_msg = "Save file error occurred";
 uint8_t hex_byte = 0;   // 1 byte/2 hex digits
 uint8_t bottom_msg[80];
 uint8_t file_mode;     
 
-__attribute__ ((section ("editor_entry"))) void editor_main(void)
+__attribute__ ((section ("editor_entry"))) int editor_main(int argc, char *argv[])
 {
     uint8_t *new_or_current_string = "(C)reate new file or (L)oad existing file?\0";
     uint8_t *choose_filetype_string = "(B)inary/hex file or (O)ther file type (.txt, etc)?\0";
@@ -77,18 +77,8 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
     memset(blank_line, ' ', 79);
     blank_line[79] = '\0';
 
-	clear_screen(user_gfx_info->bg_color); // Initial screen clear
-
-	// Print options string
-    print_string(&cursor_x, &cursor_y, new_or_current_string);
-    move_cursor(cursor_x, cursor_y); 
-
-    // Choose option
-    input_char = get_key();
-    while (input_char != CREATENEW && input_char != LOADCURR)
-        input_char = get_key();
-
-    if (input_char == CREATENEW) {
+    // If did not pass any arguments to editor, edit new file
+    if (argc < 2) {
         clear_screen(user_gfx_info->bg_color);
 
         file_mode = NEW;    // Creating a new file
@@ -145,42 +135,46 @@ __attribute__ ((section ("editor_entry"))) void editor_main(void)
     } else {
         // Otherwise load file
         file_mode = UPDATE;   // Updating an existing file
-        editor_load_file();
+        editor_load_file(argv[1]); 
     }
+
+    return 0;
 }
 
-void editor_load_file(void)
+void editor_load_file(char *filename)
 {
     uint8_t idx;
     uint8_t *keybinds_text_editor = " Ctrl-R = Return to kernel Ctrl-S = Save file to disk\0";
     uint32_t file_size = 0;
 
-    // Choose file to load
-    while (1) {
-        print_fileTable();
+    // Save filename
+    strcpy(editor_filename, filename);
 
-        // Choose file message
-        print_string(&cursor_x, &cursor_y, choose_file_msg);
-        move_cursor(cursor_x, cursor_y); 
+    file_ptr = check_filename(filename, strlen(filename));
 
-        // Have user input file name to load
-        input_file_name();
+    if (*file_ptr > 0) {
+        file_size = file_ptr[15]*512; // File size in bytes, from sector size
 
-        // TODO: Change to variable length (strlen?), don't always use/need 10 length
-        file_ptr = check_filename(editor_filename, 10);
+        file_ptr     = malloc(file_size);    // Allocate memory for file buffer
+        file_address = (uint32_t)file_ptr;
 
-        if (*file_ptr > 0) {
-            file_size = file_ptr[15]*512; // File size in bytes, from sector size
+        // Load file: filename, filename length, memory to load file to, file extension
+        if (!load_file(filename, strlen(filename), file_address, editor_filetype)) {
+            // Loading file error
+            write_bottom_screen_message(load_file_error_msg);
 
-            file_ptr     = (uint8_t *)malloc(file_size);    // Allocate memory for file buffer
-            file_address = (uint32_t)file_ptr;
+            input_char = get_key();
 
-            // Load file: filename, filename length, memory to load file to, file extension
-            if (load_file(editor_filename, 10, file_address, editor_filetype))
-                break;  // Success
+            clear_screen(user_gfx_info->bg_color);
+
+            // Initialize cursor pos
+            cursor_x = 0;
+            cursor_y = 0;
+
+            return; // Return to caller after failure :(
         }
-
-        // Loading file error
+    } else {
+        // Loading file error - file does not exist or could not be found
         write_bottom_screen_message(load_file_error_msg);
 
         input_char = get_key();
@@ -190,6 +184,8 @@ void editor_load_file(void)
         // Initialize cursor pos
         cursor_x = 0;
         cursor_y = 0;
+
+        return; // Return to caller after failure :(
     }
 
     // Load file success
@@ -238,11 +234,10 @@ void editor_load_file(void)
         current_line_length = 0;
         file_length_lines = 0;
         file_length_bytes = 0;
-        file_ptr = (uint8_t *)file_address;  // File location
 
         // Load file bytes to screen - stop at EOF if less than file size
-        for (uint32_t i = 0; i < file_size && *file_ptr != 0x00; i++) { 
-            if (*file_ptr == 0x0A) {
+        for (uint32_t i = 0; i < file_size && file_ptr[i] != '\0'; i++) { 
+            if (file_ptr[i] == '\n') {  
                 print_char(&cursor_x, &cursor_y, SPACE);  // Newline = space visually
 
                 // Go down 1 row
@@ -250,15 +245,14 @@ void editor_load_file(void)
                 cursor_y++;
                 file_length_lines++;
 
-            } else if (*file_ptr <= 0x0F) {
-                input_char = hex_to_ascii(*file_ptr);
+            } else if (file_ptr[i] <= 0x0F) {  
+                input_char = hex_to_ascii(file_ptr[i]); 
                 print_char(&cursor_x, &cursor_y, input_char);
 
             } else {
-                print_char(&cursor_x, &cursor_y, *file_ptr);
+                print_char(&cursor_x, &cursor_y, file_ptr[i]);
             }
 
-            file_ptr++;
             file_offset++;
             file_length_bytes++;
         }
@@ -266,7 +260,6 @@ void editor_load_file(void)
         // Write keybinds at bottom of screen
         fill_out_bottom_editor_message(keybinds_text_editor);
 
-        file_ptr   -= file_offset;  // Reset file location
         file_offset = 0;
         cursor_x = 0;                   // Reset cursor position
         cursor_y = 0;
@@ -275,15 +268,14 @@ void editor_load_file(void)
 
         // Get length of first line
         current_line_length = 0;
-        while (*file_ptr != 0x0A && file_offset != file_length_bytes) {
-            file_ptr++;
+
+        for (uint32_t i = 0; file_ptr[i] != '\n' && file_offset != file_length_bytes; i++) { 
             file_offset++;
             current_line_length++;
         }
 
-        current_line_length++;  // Include newline or last byte in file
+        current_line_length++;  // Include newline or last byte in file 
 
-        file_ptr   -= file_offset;  // Reset file location
         file_offset = 0;
 
         text_editor();

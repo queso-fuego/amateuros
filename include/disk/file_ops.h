@@ -3,6 +3,9 @@
 //
 #pragma once
 
+#include "C/stdio.h"
+#include "C/string.h"
+
 #define MAX_FILENAME_LENGTH 10
 
 enum {
@@ -152,6 +155,9 @@ uint16_t delete_file(uint8_t *filename, uint16_t filename_length)
     // Get file size and starting sector for file table
     file_ptr = check_filename(filetable, 10);  
 
+    if (*file_ptr == 0)  // Didn't find file
+        return 0;
+
     ft_start_sector = file_ptr[14];  // Starting sector
     ft_size         = file_ptr[15];  // File size
 
@@ -159,7 +165,7 @@ uint16_t delete_file(uint8_t *filename, uint16_t filename_length)
     file_ptr = check_filename(filename, filename_length);  
 
     if (*file_ptr == 0)  // Didn't find file
-        return 1;
+        return 0;
 
     starting_sector = file_ptr[14];  // Starting sector
     file_size       = file_ptr[15];  // File size
@@ -170,21 +176,11 @@ uint16_t delete_file(uint8_t *filename, uint16_t filename_length)
 
     for (uint8_t i = 0; i < 3; i++)
         *file_ptr++ = ' ';              // File type
-    
+
     // Write changed filetable to disk 
     rw_sectors(ft_size, ft_start_sector, 0x1000, WRITE_WITH_RETRY);
 
-    // Memory location to write NULL data to
-    file_ptr = (uint8_t *)0x20000;
-
-	// Write nulls to memory location
-    for (uint16_t i = 0; i < file_size*512; i++) 
-        file_ptr[i] = 0;
-		
-	// Write zeroed-out data to disk
-    rw_sectors(file_size, starting_sector, 0x20000, WRITE_WITH_RETRY);
-
-    return 0;   // Success, normal return
+    return 1;   // Success, normal return
 }
 
 // load_file: Read a file from filetable and its sectors into a memory location

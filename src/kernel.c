@@ -6,10 +6,10 @@
 #include "C/string.h"
 #include "C/stdio.h"
 #include "C/time.h"
+#include "C/ctype.h"
 #include "global/global_addresses.h"
 #include "gfx/2d_gfx.h"
 #include "screen/clear_screen.h"
-#include "print/print_types.h"
 #include "screen/cursor.h"
 #include "print/print_registers.h"
 #include "memory/physical_memory_manager.h"
@@ -30,28 +30,10 @@
 
 void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
 
-// Physical memory map entry from Bios Int 15h EAX E820h
-typedef struct SMAP_entry {
-    uint64_t base_address;
-    uint64_t length;
-    uint32_t type;
-    uint32_t acpi;
-} __attribute__ ((packed)) SMAP_entry_t;
-
-uint16_t kernel_cursor_x = 0;   // Text cursor X position
-uint16_t kernel_cursor_y = 0;   // Text cursor Y position
-
 __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 {
-    uint8_t tokens[50];             // tokens array, equivalent-ish to tokens[5][10]
-    uint8_t *tokens_ptr = tokens;
-    uint16_t tokens_length[5];      // length of each token in tokens array (0-10)
-    uint16_t *tokens_length_ptr = tokens_length;
-    uint8_t token_count;            // How many tokens did the user enter?
-    uint8_t token_file_name1[11] = {0};   // Filename 1 for commands
-    uint8_t token_file_name2[11] = {0};   // Filename 2 for commands
-    uint8_t cmdString[256];         // User input string
-    uint8_t *cmdString_ptr = cmdString;
+    char cmdString[256] = {0};         // User input string  
+    char *cmdString_ptr = cmdString;
     uint8_t input_char   = 0;       // User input character
     uint8_t input_length;           // Length of user input
     uint16_t idx         = 0;
@@ -92,6 +74,8 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint32_t *allocated_address;
     uint8_t font_width  = *(uint8_t *)FONT_WIDTH;
     uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
+    int argc = 0;
+    char *argv[10] = {0};
 
     // --------------------------------------------------------------------
     // Initial hardware, interrupts, etc. setup
@@ -197,11 +181,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     
     while (1) {
         // Reset tokens data, arrays, and variables for next input line
-        memset(tokens, 0, sizeof tokens);
-        memset(tokens_length, 0, sizeof tokens_length);
-        token_count = 0;
-        memset(token_file_name1, 0, sizeof token_file_name1);
-        memset(token_file_name2, 0, sizeof token_file_name2);
         memset(cmdString, 0, sizeof cmdString);
 
         // Print prompt
@@ -215,7 +194,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
             if (input_char == '\r') {   // enter key?
                 printf("\eCSROFF;");
-                //remove_cursor(kernel_cursor_x, kernel_cursor_y);
                 break;                  // go on to tokenize user input line
             }
 
@@ -249,35 +227,26 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         cmdString[input_length] = '\0';     // else null terminate cmdString from si
 
         // Tokenize input string "cmdString" into separate tokens
-        cmdString_ptr     = cmdString;      // Reset pointers...
-        tokens_ptr        = tokens;
-        tokens_length_ptr = tokens_length;
+        cmdString_ptr = cmdString;      // Reset pointers...
+        argc = 0;   // Reset argument count
+        memset(argv, 0, sizeof argv);
 
         // Get token loop
         while (*cmdString_ptr != '\0') { 
-
             // Skip whitespace between tokens
-            while (*cmdString_ptr == ' ') cmdString_ptr++;
+            while (isspace(*cmdString_ptr)) *cmdString_ptr++ = '\0';
 
-            // If alphanumeric or underscore, add to current token
-            while ((*cmdString_ptr >= '0' && *cmdString_ptr <= '9') || 
-                  (*cmdString_ptr >= 'A' && *cmdString_ptr <= 'Z')  ||
-                  (*cmdString_ptr == '_')                           ||
-                  (*cmdString_ptr >= 'a' && *cmdString_ptr <= 'z')) {
+            // Found next non space character, start of next input token/argument
+            argv[argc++] = cmdString_ptr; 
 
-                *tokens_ptr++ = *cmdString_ptr++;
-                (*tokens_length_ptr)++;     // increment length of current token
-            } 
-
-            // Go to next token
-            token_count++;                              // Next token
-            tokens_ptr = tokens + (token_count * 10);   // Next position in tokens array
-            tokens_length_ptr++;                        // Next position in tokens_length array
+            // Go to next space or end of string
+            while (!isspace(*cmdString_ptr) && *cmdString_ptr != '\0') 
+                cmdString_ptr++;
         }
 
         // Check commands 
         // Get first token (command to run) & second token (if applicable e.g. file name)
-        if (strncmp(tokens, cmdDir, strlen(cmdDir)) == 0) {
+        if (strncmp(argv[0], cmdDir, strlen(cmdDir)) == 0) {
             // --------------------------------------------------------------------
             // File/Program browser & loader   
             // --------------------------------------------------------------------
@@ -285,14 +254,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        if (strncmp(tokens, cmdReboot, strlen(cmdReboot)) == 0) {
+        if (strncmp(argv[0], cmdReboot, strlen(cmdReboot)) == 0) {
             // --------------------------------------------------------------------
             // Reboot: Reboot the PC
             // --------------------------------------------------------------------
             outb(0x64, 0xFE);  // Send "Reset CPU" command to PS/2 keyboard controller port
         }
 
-        if (strncmp(tokens, cmdPrtreg, strlen(cmdPrtreg)) == 0) {
+        if (strncmp(argv[0], cmdPrtreg, strlen(cmdPrtreg)) == 0) {
             // --------------------------------------------------------------------
             // Print Register Values
             // --------------------------------------------------------------------
@@ -300,7 +269,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;   
         }
 
-        if (strncmp(tokens, cmdGfxtst, strlen(cmdGfxtst)) == 0) {
+        if (strncmp(argv[0], cmdGfxtst, strlen(cmdGfxtst)) == 0) {
             // --------------------------------------------------------------------
             // Graphics Mode Test(s)
             // --------------------------------------------------------------------
@@ -435,14 +404,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        if (strncmp(tokens, cmdHlt, strlen(cmdHlt)) == 0) {
+        if (strncmp(argv[0], cmdHlt, strlen(cmdHlt)) == 0) {
             // --------------------------------------------------------------------
             // End Program  
             // --------------------------------------------------------------------
             __asm__ ("cli;hlt");   // Clear interrupts & Halt cpu
         }
 
-        if (strncmp(tokens, cmdCls, strlen(cmdCls)) == 0) {
+        if (strncmp(argv[0], cmdCls, strlen(cmdCls)) == 0) {
             // --------------------------------------------------------------------
             // Clear Screen
             // --------------------------------------------------------------------
@@ -451,7 +420,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        if (strncmp(tokens, cmdShutdown, strlen(cmdShutdown)) == 0) {
+        if (strncmp(argv[0], cmdShutdown, strlen(cmdShutdown)) == 0) {
             // --------------------------------------------------------------------
             // Shutdown (QEMU)
             // --------------------------------------------------------------------
@@ -460,19 +429,16 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // TODO: Get shutdown command for bochs, user can uncomment which one they want to use
         }
 
-        if (strncmp(tokens, cmdDelFile, strlen(cmdDelFile)) == 0) {
+        if (strncmp(argv[0], cmdDelFile, strlen(cmdDelFile)) == 0) {
+            // TODO: Fix deleting erasing filetable from "dir" command until reboot
             // --------------------------------------------------------------------
             // Delete a file from the disk
             // --------------------------------------------------------------------
             //	Input 1 - File name to delete
             //	      2 - Length of file name
-            // File name is 2nd token in array, each token is 10 char max
-            tokens_ptr = tokens + 10;
-            for (idx = 0; idx < tokens_length[1]; idx++)
-                token_file_name1[idx] = *tokens_ptr++; 
-
-            if (delete_file(token_file_name1, tokens_length[1]) != 0) {
+            if (!delete_file(argv[1], strlen(argv[1]))) {
                 //	;; TODO: Add error message or code here
+                printf("ERROR: Delete file failed!");
             }
 
             // Print newline when done
@@ -481,22 +447,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        if (strncmp(tokens, cmdRenFile, strlen(cmdRenFile)) == 0) {
+        if (strncmp(argv[0], cmdRenFile, strlen(cmdRenFile)) == 0) {
             // --------------------------------------------------------------------
             // Rename a file in the file table
             // --------------------------------------------------------------------
             // 1 - File to rename
             // 2 - Length of name to rename
             // 3 - New file name // 4 - New file name length
-            // File name is 2nd token in array, each token is 10 char max
-            for (idx = 0; idx < tokens_length[1]; idx++)
-                token_file_name1[idx] = tokens[10+idx]; 
-
-            // New file name is 3rd token in array, each token is 10 char max
-            for (idx = 0; idx < tokens_length[2]; idx++)
-                token_file_name2[idx] = tokens[20+idx];
-
-            if (rename_file(token_file_name1, tokens_length[1], token_file_name2, tokens_length[2]) != 0) {
+            if (rename_file(argv[1], strlen(argv[1]), argv[2], strlen(argv[2])) != 0) {
                 //	;; TODO: Add error message or code here
             }
 
@@ -507,7 +465,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         }
 
         // Print memory map command
-        if (strncmp(tokens, cmdPrtmemmap, strlen(cmdPrtmemmap)) == 0) {
+        if (strncmp(argv[0], cmdPrtmemmap, strlen(cmdPrtmemmap)) == 0) {
             // Print out physical memory map info
             printf("\r\n-------------------\r\nPhysical Memory Map"
                    "\r\n-------------------\r\n\r\n");
@@ -517,7 +475,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
         // Change colors command
         // TODO: Change to use terminal control codes to change FG/BG color when debugged
-        if (strncmp(tokens, cmdChgColors, strlen(cmdChgColors)) == 0) {
+        if (strncmp(argv[0], cmdChgColors, strlen(cmdChgColors)) == 0) {
             uint32_t fg_color = 0;
             uint32_t bg_color = 0;
 
@@ -575,9 +533,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         }
 
         // Change font command; Usage: chgFont <name of font>
-        if (strncmp(tokens, cmdChgFont, strlen(cmdChgFont)) == 0) {
+        if (strncmp(argv[0], cmdChgFont, strlen(cmdChgFont)) == 0) {
             // First check if font exists - name is 2nd token
-            file_ptr = check_filename(tokens+10, tokens_length[1]);
+            file_ptr = check_filename(argv[1], strlen(argv[1]));
             if (*file_ptr == 0) {  
                 printf(fontNotFound);  // File not found in filetable, error
 
@@ -590,12 +548,8 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 continue;
             }
 
-            // Save file name
-            strncpy(token_file_name1, file_ptr, 10);
-            token_file_name1[10] = '\0';
-
             // File is a valid font, try to load it to memory
-            if (!load_file(tokens+10, tokens_length[1], (uint32_t)FONT_ADDRESS, fileExt)) {
+            if (!load_file(argv[1], strlen(argv[1]), (uint32_t)FONT_ADDRESS, fileExt)) {
                 printf("\r\nError: file could not be loaded\r\n"); 
 
                 continue;
@@ -604,30 +558,30 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             // New font should be loaded and in use now
             font_width  = *(uint8_t *)FONT_WIDTH;
             font_height = *(uint8_t *)FONT_HEIGHT;
-            printf("\r\nFont loaded: %s\r\n", token_file_name1);
+            printf("\r\nFont loaded: %s\r\n", argv[1]);
             printf("\r\nWidth: %d Height: %d\r\n", font_width, font_height);
 
             continue;
         }
 
         // Sleep command - sleep for given number of seconds
-        if (strncmp(tokens, cmdSleep, strlen(cmdSleep)) == 0) {
-            sleep_seconds(atoi(tokens+10)); 
+        if (strncmp(argv[0], cmdSleep, strlen(cmdSleep)) == 0) {
+            sleep_seconds(atoi(argv[1]));  
 
             printf("\r\n");
             continue;
         }
 
         // MSleep command - sleep for given number of milliseconds
-        if (strncmp(tokens, cmdMSleep, strlen(cmdMSleep)) == 0) {
-            sleep_milliseconds(atoi(tokens+10));
+        if (strncmp(argv[0], cmdMSleep, strlen(cmdMSleep)) == 0) {
+            sleep_milliseconds(atoi(argv[1]));
 
             printf("\r\n");
             continue;
         }
 
         // Show CMOS RTC date/time values
-        if (strncmp(tokens, cmdShowDateTime, strlen(cmdShowDateTime)) == 0) {
+        if (strncmp(argv[0], cmdShowDateTime, strlen(cmdShowDateTime)) == 0) {
             show_datetime = !show_datetime;  
 
             if (!show_datetime) {
@@ -642,7 +596,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         }
 
         // Test Sound
-        if (strncmp(tokens, cmdSoundTest, strlen(cmdSoundTest)) == 0) {
+        if (strncmp(argv[0], cmdSoundTest, strlen(cmdSoundTest)) == 0) {
             enable_pc_speaker();
 
             /* ADD SOUND THINGS HERE */
@@ -654,7 +608,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         }
 
         // If command not input, search file table entries for user input file
-        file_ptr = check_filename(cmdString, tokens_length[0]);
+        file_ptr = check_filename(argv[0], strlen(argv[0]));
         if (*file_ptr == 0) {  
             printf(failure);  // File not found in filetable, error
 
@@ -688,7 +642,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         //       3: Memory offset to load file to
         //       4: File extension variable
         // Return value - 0 = Success, !0 = error
-        if (!load_file(cmdString, tokens_length[0], entry_point, fileExt)) {
+        if (!load_file(argv[0], strlen(argv[0]), entry_point, fileExt)) {
             // Error, program did not load correctly
             printf(pgmNotLoaded);
 
@@ -704,8 +658,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             total_malloc_pages  = 0;
 
             // Void function pointer to jump to and execute code at specific address in C
-            // TODO: Add int argc, char **argv (or *argv[] !) as input parameters to called program
-            ((void (*)(void))entry_point)();     // Execute program, this can return
+            ((int (*)(int argc, char *argv[]))entry_point)(argc, argv);     // Execute program, this can return
 
             // If used malloc(), free remaining memory to prevent memory leaks
             for (uint32_t i = 0, virt = malloc_virt_address; i < total_malloc_pages; i++, virt += PAGE_SIZE) {
@@ -794,6 +747,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 // Print information from the physical memory map (SMAP)
 void print_physical_memory_info(void)  
 {
+    // Physical memory map entry from Bios Int 15h EAX E820h
+    typedef struct SMAP_entry {
+        uint64_t base_address;
+        uint64_t length;
+        uint32_t type;
+        uint32_t acpi;
+    } __attribute__ ((packed)) SMAP_entry_t;
+
     uint32_t num_entries = *(uint32_t *)0x8500;         // Number of SMAP entries
     SMAP_entry_t *SMAP_entry = (SMAP_entry_t *)0x8504;  // Memory map entries start point
 
