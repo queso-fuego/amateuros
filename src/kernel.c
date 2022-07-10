@@ -56,7 +56,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdCls	     = "cls\0";         // Clear screen by scrolling
     uint8_t *cmdShutdown = "shutdown\0";    // Close QEMU emulator
     uint8_t *cmdDelFile  = "del";		    // Delete a file from disk
-    uint8_t *cmdRenFile  = "ren\0";         // Rename a file in the file table
+    uint8_t *cmdRenFile  = "ren";           // Rename a file in the file table
     uint8_t *cmdPrtmemmap = "prtmemmap\0";  // Print physical memory map info
     uint8_t *cmdChgColors = "chgcolors\0";  // Change current fg/bg colors
     uint8_t *cmdChgFont   = "chgfont\0";    // Change current font
@@ -68,6 +68,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdChdir     = "chdir";        // Change current directory
     uint8_t *cmdMkdir     = "mkdir";        // Make a new directory
     uint8_t *cmdRmdir     = "rmdir";        // Remove a directory and all of its subfiles/directories
+    uint8_t *cmdMov       = "mov";          // Move a file from one directory to another
     uint8_t *file_ptr;
     uint8_t *windowsMsg     = "\r\n" "Oops! Something went wrong :(" "\r\n\0";
     uint8_t *notFoundString = "\r\n" "Program/file not found!, Try again? (Y)" "\r\n\0";
@@ -171,7 +172,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     open_inode_table_curr_size = 0;  // No files open currently
 
     // TODO: Use calloc()?
-    if (open_file_table) 
+    if (open_inode_table) 
         memset(open_inode_table, 0, open_inode_table_max_size);
 
     // Set intial colors
@@ -291,12 +292,13 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                  "gfxtst                      | Test drawing 2D graphics primitives. WIP: Only for 1920x1080 resolution for now.\r\n"
                  "mkdir   <name>              | Make a new directory.\r\n"
                  "msleep  <mseconds>          | Sleep for a number of milliseconds. 1000ms = 1s.\r\n"
+                 "mov     <oldpath> <newpath> | Move a file from one directory to another directory\r\n"
                  "help                        | Print this help message.\r\n"
                  "hlt                         | Clear interrupt flag and halt cpu. This will make your machine hang indefinitely.\r\n"
                  "prtreg                      | Print register contents. WIP: These are not guarenteed to be useful at all.\r\n"
                  "prtmemmap                   | Print the system memory map SMAP entries and current memory use\r\n"
                  "reboot                      | Reboot the machine, should also work on hardware\r\n"
-                 "ren     [oldpath] [newpath] | Rename a file or directory\r\n"
+                 "ren     <oldpath> <newpath> | Rename a file or directory\r\n"
                  "rmdir   <path>              | Remove/delete a directory and all of its contents\r\n"
                  "showdatetime                | Print current date & time as MM/DD/YY HH:MM:SS\r\n"
                  "shutdown                    | Turn off the QEMU virtual machine, does not work on bochs or hardware\r\n"
@@ -474,6 +476,136 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 print_dir(current_dir_inode); 
             }
 
+            continue;
+        }
+
+        if (strncmp(argv[0], cmdMov, strlen(cmdMov)) == 0) {
+            if (argc < 3) {
+                kputs("\r\nUsage: mov <oldpath> <newpath>\r\n");
+                continue;
+            }
+
+            // Get inode and parent dir of file to move
+            inode_t inode = *get_inode_from_path(argv[1], current_dir_inode);
+            inode_t parent_inode = *get_parent_inode_from_path(argv[1], current_dir_inode);
+
+            // Get dir_entry of argv[1] path
+            dir_entry_sector_t dir_entry_sector = find_dir_entry(inode.id, parent_inode);
+            dir_entry_t dir_entry = *dir_entry_sector.dir_entry;
+
+            // Delete from current path
+            memset(dir_entry_sector.dir_entry, 0, sizeof(dir_entry_t));
+
+            // Write changes to disk
+            rw_sectors(1, 
+                       dir_entry_sector.disk_sector, 
+                       (uint32_t)dir_entry_sector.sector_in_memory,
+                       WRITE_WITH_RETRY);
+
+            // Update dir inode for path
+            parent_inode.size_bytes -= sizeof(dir_entry_t);
+            parent_inode.size_sectors = bytes_to_sectors(inode.size_bytes);
+
+            rw_sectors(1, 
+                       (superblock->first_inode_block * 8) + (parent_inode.id / 8),
+                       (uint32_t)tmp_sector,
+                       READ_WITH_RETRY);
+
+            inode_t *temp = (inode_t *)tmp_sector + (parent_inode.id % 8);
+            *temp = parent_inode;
+
+            rw_sectors(1, 
+                       (superblock->first_inode_block * 8) + (parent_inode.id / 8),
+                       (uint32_t)tmp_sector,
+                       WRITE_WITH_RETRY);
+
+            // Get parent dir of new path
+            parent_inode = *get_parent_inode_from_path(argv[2], current_dir_inode);
+
+            // Update dir inode for new path
+            parent_inode.size_bytes += sizeof(dir_entry_t);
+            parent_inode.size_sectors = bytes_to_sectors(inode.size_bytes);
+
+            rw_sectors(1, 
+                       (superblock->first_inode_block * 8) + (parent_inode.id / 8),
+                       (uint32_t)tmp_sector,
+                       READ_WITH_RETRY);
+
+            temp = (inode_t *)tmp_sector + (parent_inode.id % 8);
+            *temp = parent_inode;
+
+            rw_sectors(1, 
+                       (superblock->first_inode_block * 8) + (parent_inode.id / 8),
+                       (uint32_t)tmp_sector,
+                       WRITE_WITH_RETRY);
+
+            // Write new dir_entry in directory's data blocks
+            //   Load dir's last data block 
+            const uint32_t total_blocks = bytes_to_blocks(parent_inode.size_bytes);
+
+            uint32_t last_block = 0;
+            uint32_t blocks = 0;
+
+            for (uint32_t i = 0; i < 4; i++) { 
+                blocks += parent_inode.extent[i].length_blocks; 
+                if (blocks == total_blocks) {
+                    last_block = (parent_inode.extent[i].first_block + parent_inode.extent[i].length_blocks) - 1;
+                    break;
+                }
+            }
+
+            // TODO: Check first indirect block & double indirect block extents
+
+            rw_sectors(8, last_block * 8, (uint32_t)tmp_block, READ_WITH_RETRY);
+
+            // Find next free spot or end of entries
+            dir_entry_t *new_entry = (dir_entry_t *)tmp_block;
+            uint32_t offset = 0;
+
+            while (new_entry->id != 0 && offset < parent_inode.size_bytes - sizeof(dir_entry_t)) {
+                new_entry++; 
+                offset += sizeof(dir_entry_t);
+            }
+
+            // Add new dir entry
+            new_entry->id = dir_entry.id;
+            strcpy(new_entry->name, dir_entry.name);
+
+            // Write changed sector
+            offset /= FS_SECTOR_SIZE;   // Convert offset in bytes to # of sectors from start of block (0-7)
+
+            rw_sectors(1, 
+                       (last_block * 8) + offset, 
+                       (uint32_t)(tmp_block + (offset * FS_SECTOR_SIZE)),
+                       WRITE_WITH_RETRY);
+
+            // Update file name if user input different name in new path
+            if (argv[2][strlen(argv[2])] != '/') {
+                // Only change to new name if last name in path is not a dir
+                char old_name[60], new_name[60];
+                strcpy(old_name, get_last_name_in_path(old_name, argv[1]));
+                strcpy(new_name, get_last_name_in_path(new_name, argv[2]));
+                
+                if (strcmp(old_name, new_name) != 0) {
+                    // Construct "old" path at new directory
+                    char *last_name_pos = strrchr(argv[2], '/');
+                    *++last_name_pos = '\0';
+                    strcat(last_name_pos, old_name);
+
+                    // Rename file to new name
+                    fs_rename_file(argv[2], new_name);
+                }
+            }
+            
+            // Update current directory to get any changes
+            rw_sectors(1, 
+                       (superblock->first_inode_block * 8) + (current_dir_inode->id / 8),
+                       (uint32_t)tmp_sector,
+                       READ_WITH_RETRY);
+
+            *current_dir_inode = *((inode_t *)tmp_sector + (current_dir_inode->id % 8));
+
+            kprintf("\r\n");
             continue;
         }
 
@@ -774,14 +906,19 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             }
 
             // Check if file has .fnt extension
-            dir_entry_sector_t font_entry = find_dir_entry(font_inode->id, *current_dir_inode);
-            if (!strstr(font_entry.dir_entry->name, ".fnt")) {
+            char *name_pos = strrchr(argv[1], '/');
+            if (!name_pos) 
+                name_pos = argv[1];
+            else
+                name_pos++;
+
+            if (!strstr(name_pos, ".fnt")) {
                 kprintf("\r\nError: file is not a font\r\n"); 
                 continue;
             }
 
             // File is a valid font, try to load it to memory
-            if (!fs_load_file(font_inode, (uint32_t)FONT_ADDRESS)) {
+            if (!fs_load_file(font_inode, FONT_ADDRESS)) {
                 kprintf("\r\nError: file could not be loaded\r\n"); 
                 continue;
             }

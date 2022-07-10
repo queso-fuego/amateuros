@@ -534,8 +534,8 @@ uint32_t fs_create_file(char *path, const uint8_t file_type) {
     const uint32_t curr_dir_blocks = bytes_to_blocks(parent_inode.size_bytes);
 
     if (curr_dir_blocks > prev_block_size) {
-        // Add another data block to current directory's inode
-        uint32_t data_bit = superblock->first_free_bit_in_data_bitmap; // Next free data bit/block
+        // Get Next free data bit/block
+        uint32_t data_bit = superblock->first_free_bit_in_data_bitmap; 
 
         // Mark data bit as in use in data bitmap
         const uint32_t data_bit_sector = (data_bit / 8) / FS_SECTOR_SIZE; // Bit -> byte -> sector
@@ -556,6 +556,9 @@ uint32_t fs_create_file(char *path, const uint8_t file_type) {
             get_next_free_bit(superblock->first_data_bitmap_block, 
                               (superblock->first_data_bitmap_block + 
                                superblock->number_of_data_bitmap_blocks));
+
+        // Add another data block to current directory's inode
+        // TODO:
     }
 
     // Change inode in sector
@@ -768,6 +771,8 @@ dir_entry_sector_t find_dir_entry(const uint32_t id, inode_t inode) {
             }
         }
     }
+
+    // TODO: Check single indirect block and double indirect blocks
 
     return result;   // Did not find entry
 }

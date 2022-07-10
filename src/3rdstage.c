@@ -8,7 +8,7 @@
 #include "memory/physical_memory_manager.h"
 #include "memory/virtual_memory_manager.h"
 #include "gfx/2d_gfx.h"
-#include "fs/fs.h"
+#include "fs/fs_impl.h"
 
 __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
 {
@@ -65,10 +65,7 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
         inode++;
     
     // Load kernel from disk 
-    rw_sectors(inode->extent[0].length_blocks*8, 
-               inode->extent[0].first_block*8, 
-               KERNEL_ADDRESS, 
-               READ_WITH_RETRY);
+    fs_load_file(inode, KERNEL_ADDRESS);
 
     // Find font id from root dir
     dir_entry = (dir_entry_t *)CURRENT_DIR_ADDRESS; 
@@ -81,10 +78,7 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
         inode++;
 
     // Load font from disk
-    rw_sectors(inode->extent[0].length_blocks*8, 
-               inode->extent[0].first_block*8, 
-               FONT_ADDRESS, 
-               READ_WITH_RETRY);
+    fs_load_file(inode, FONT_ADDRESS);
 
     // Mark font memory as in use 
     deinitialize_memory_region(FONT_ADDRESS, inode->extent[0].length_blocks * FS_BLOCK_SIZE);
