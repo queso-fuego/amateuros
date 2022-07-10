@@ -1,5 +1,6 @@
 SECTIONS
 {
+    . = 0;
     .text :
     {
         *(editor_entry); 

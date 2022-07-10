@@ -10,9 +10,9 @@ use16
     ;; Get physical memory map BIOS int 15h EAX E820h
     ;; ES:DI points to buffer of 24 byte entries
     ;; BP will = number of total entries
-    memmap_entries equ 0x8500       ; Store number of memory map entries here
+    memmap_entries equ 0xA500       ; Store number of memory map entries here
     get_memory_map:
-        mov di, 0x8504              ; Memory map entries start here
+        mov di, 0xA504              ; Memory map entries start here
         xor ebx, ebx                ; EBX = 0 to start, will contain continuation values
         xor bp, bp                  ; BP will store the number of entries
         mov edx, 'PAMS'             ; EDX = 'SMAP' but little endian
@@ -304,7 +304,7 @@ use32                    ; We are officially in 32 bit mode now
 
     ;; Set up VBE mode info block in memory to be easier to work with
     mov esi, mode_info_block
-    mov edi, 9000h
+    mov edi, 0xA000
     mov ecx, 64                 ; Mode info block is 256 bytes / 4 = # of dbl words
     rep movsd
 

@@ -12,6 +12,24 @@
 #define stdout 1
 #define stderr 2
 
+enum {
+    STDIN_FILENO  = 0,
+    STDOUT_FILENO = 1,
+    STDERR_FILENO = 2,
+};
+
+enum {
+    SEEK_SET = 0,
+    SEEK_CUR = 1,
+    SEEK_END = 2,
+};
+
+typedef struct {
+    uint32_t fd;    // File descriptor
+    uint32_t pos;   // File position
+    int flags;      // File access flags
+} FILE;
+
 uint8_t *write_buffer = 0;
 uint32_t len = 0;
 
@@ -159,9 +177,109 @@ void printf(const char *fmt, ...)
     free(write_buffer);
 }
 
+// Open a file
+FILE *fopen(char *path, char *mode) {
+    FILE *fp = malloc(sizeof(FILE));
+    if (!fp) return 0;
 
+    // Set file access flags
+    for (int i = 0; mode[i] != '\0'; i++) {
+        switch (mode[i]) {
+            case 'r':
+              if (fp->flags & O_WRONLY)
+                  fp->flags = O_RDWR;
+              else
+                  fp->flags = O_RDONLY;
+              break;
+            case 'w':
+              if (fp->flags & O_RDONLY)
+                  fp->flags = O_RDWR;
+              else
+                  fp->flags = O_WRONLY;
+              break;
+            case 'a':
+              fp->flags |= O_APPEND;
+              break;
+            case '+':
+              fp->flags = O_RDWR;
+              break;
+            default:
+              return 0; // Invalid/unsupported mode
+              break;
+        }
+    }
 
+    // In case this is a new file, add create flag
+    fp->flags |= O_CREAT;
 
+    // Get file descriptor 
+    fp->fd = open(path, fp->flags);
 
+    // Set initial file position
+    fp->pos = 0; 
 
+    return fp;
+} 
 
+// Close a file
+int fclose(FILE *fp) {
+    close(fp->fd);
+
+    return 0;
+}
+
+// Read nmemb objects, each size bytes long, from the file pointed to
+//   by fp, to the pointer ptr
+uint32_t fread(void *ptr, uint32_t size, uint32_t nmemb, FILE *fp) {
+    uint32_t num_read = 0;
+
+    for (uint32_t i = 0; i < nmemb; i++) { 
+        uint32_t bytes_read = read(fp->fd, ptr, size);
+        fp->pos += bytes_read;
+        if (bytes_read != size) break; // Only count read as full size read
+        num_read++;
+    }
+
+    return num_read;
+}
+
+// Write nmemb objects, each size bytes long, to the file pointed to
+//   by fp, from the pointer ptr
+uint32_t fwrite(void *ptr, uint32_t size, uint32_t nmemb, FILE *fp) {
+    uint32_t num_written = 0;
+
+    for (uint32_t i = 0; i < nmemb; i++) { 
+        uint32_t bytes_written = write(fp->fd, ptr, size);
+        fp->pos += bytes_written;
+        if (bytes_written != size) break; // Only count read as full size read
+        num_written++;
+    }
+
+    return num_written;
+}
+
+// Change file position
+int fseek(FILE *fp, uint32_t offset, int whence) {
+    int position = seek(fp->fd, offset, whence);
+
+    if (position >= 0) {
+        // Set fp->pos value
+        fp->pos = position;
+        return 0;   // Success
+    } else {
+      return -1;    // Error
+    }
+}
+
+// Reset file to starting offset/position
+void rewind(FILE *fp) {
+    fseek(fp, 0, SEEK_SET);
+}
+
+// Return value of current file position
+int ftell(FILE *fp) {
+    if (!fp) return -1;
+    if (fp->fd == 0) return -1;
+
+    return fp->pos;
+}
