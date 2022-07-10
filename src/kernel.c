@@ -88,6 +88,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     int argc = 0;
     char *argv[10] = {0};
     char *working_dir = (char *)CURRENT_DIR_NAME;
+    static bool first_boot = true;
 
     // TODO: !!! Clean up, simplify, and refactor code for new filesystem !!!
     
@@ -204,9 +205,12 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     strcpy(working_dir, "/");   // Currently at root '/'
 
     // Initial file setup, rename font files to have .fnt extension
-    fs_rename_file("termu16n.bin", "termu16n.fnt");
-    fs_rename_file("termu18n.bin", "termu18n.fnt");
-    fs_rename_file("testfont.bin", "testfont.fnt");
+    if (first_boot) {
+        fs_rename_file("termu16n.bin", "termu16n.fnt");
+        fs_rename_file("termu18n.bin", "termu18n.fnt");
+        fs_rename_file("testfont.bin", "testfont.fnt");
+        first_boot = false;
+    }
 
     while (true) {
         // Reset tokens data, arrays, and variables for next input line
@@ -580,7 +584,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                        WRITE_WITH_RETRY);
 
             // Update file name if user input different name in new path
-            if (argv[2][strlen(argv[2])] != '/') {
+            if (argv[2][strlen(argv[2]) - 1] != '/') {
                 // Only change to new name if last name in path is not a dir
                 char old_name[60], new_name[60];
                 strcpy(old_name, get_last_name_in_path(old_name, argv[1]));

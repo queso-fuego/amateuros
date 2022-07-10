@@ -412,7 +412,7 @@ inode_t *get_parent_inode_from_path(const char *path, inode_t *curr_dir) {
 
     if (!parent_dir) {
         // No slashes in file path, file is in current directory that was passed in 
-        parent_inode = curr_dir; 
+        return curr_dir; 
 
     } else if (path[0] == '/' && path[1] == '\0') {
         // Path is root dir
@@ -422,6 +422,10 @@ inode_t *get_parent_inode_from_path(const char *path, inode_t *curr_dir) {
         // Find parent directory 
         *parent_dir = '\0';
         parent_inode = get_inode_from_path(path, curr_dir); 
+        if (!parent_inode) {
+            // File does not exist, use current dir as parent
+            return curr_dir; 
+        }
         *parent_dir = '/';  // Restore file path
     }
 

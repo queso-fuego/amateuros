@@ -69,7 +69,7 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
 
     // Find font id from root dir
     dir_entry = (dir_entry_t *)CURRENT_DIR_ADDRESS; 
-    while (dir_entry->name[0] != '\0' && strncmp(dir_entry->name, "termu18n.bin", 12) != 0) 
+    while (dir_entry->name[0] != '\0' && strncmp(dir_entry->name, "termu18n", 8) != 0) 
         dir_entry++;
 
     // Find font inode
