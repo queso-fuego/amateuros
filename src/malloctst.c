@@ -7,7 +7,7 @@
 #include "screen/clear_screen.h"
 #include "keyboard/keyboard.h"
 
-__attribute__ ((section ("test_entry"))) void test_main(void)
+__attribute__ ((section ("test_entry"))) int test_main(int argc, char *argv[])
 {
     uint16_t x = 0, y = 5;
 
@@ -62,4 +62,6 @@ __attribute__ ((section ("test_entry"))) void test_main(void)
     // Get a key before returning
     print_string(&x, &y, "\r\nTest successful, press any key to return...");
     get_key();
+
+    return 0;
 }

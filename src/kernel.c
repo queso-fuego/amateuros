@@ -1027,11 +1027,8 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         }
 
         // Check file extension, if 'bin'/binary or 'exe'/executable, execute as a program
-        dir_entry_t file_entry = {0};
-        strcpy(file_entry.name, get_last_name_in_path(file_entry.name, argv[0]));
-
-        if (!strcmp(&file_entry.name[strlen(file_entry.name) - 4], ".bin") || 
-            !strcmp(&file_entry.name[strlen(file_entry.name) - 4], ".exe")) {
+        if (!strcmp(&argv[0][strlen(argv[0]) - 4], ".bin") || 
+            !strcmp(&argv[0][strlen(argv[0]) - 4], ".exe")) {
             // Reset malloc variables before calling program
             malloc_list_head    = 0;    // Start of linked list
             malloc_virt_address = entry_point + (needed_pages * PAGE_SIZE);

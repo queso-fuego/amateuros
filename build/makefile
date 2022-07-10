@@ -14,7 +14,7 @@ BINFILES = $(TMPFILES:%=$(BINDIR)%.bin)
 # Make final OS.bin binary - padding out to full 1.44MB "floppy" bochs img
 OS: $(ASM_FILES) $(C_FILES)
 	@$(CC) ./make_disk.c -o ./make_disk -I../include 
-	@./make_disk
+	@./make_disk 5
 
 # Assemble assembly source files into binary files
 $(ASM_FILES):

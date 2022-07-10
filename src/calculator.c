@@ -36,7 +36,7 @@ uint16_t scan;
 static uint8_t *error_msg = "Syntax Error\0";
 int32_t parse_num = 0;
 
-__attribute__ ((section ("calc_entry"))) void calc_main(void)
+__attribute__ ((section ("calc_entry"))) int calc_main(int argc, char *argv[])
 {
     uint8_t input_char;
     const uint8_t valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
@@ -69,7 +69,7 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
         }
 
         if (input_char == 0x1B || (key_info->ctrl && input_char == 'r'))    // Escape key or ctrl-R
-           return;  // Return to caller
+           return 0;  // Return to caller
 
         buffer[scan] = input_char;
         scan++;
@@ -77,6 +77,8 @@ __attribute__ ((section ("calc_entry"))) void calc_main(void)
         // Print char to screen
         putc(input_char);
     }
+
+    return 0;
 }
 
 void parse_buffer(void)

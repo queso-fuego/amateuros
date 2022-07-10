@@ -49,8 +49,6 @@ void write_bottom_screen_message(const uint8_t *msg);
 // Global variables
 uint32_t editor_filesize = 0;
 uint8_t input_char = 0;
-uint16_t cursor_x = 0;
-uint16_t cursor_y = 0;
 uint32_t current_line_length;
 uint32_t file_length_lines;
 uint32_t file_length_bytes;
@@ -99,23 +97,26 @@ __attribute__ ((section ("editor_entry"))) int editor_main(int argc, char *argv[
 
             text_editor(editor_filename, file_buf, file_ptr);
         }
+
+        // File cleanup
+        fclose(file_ptr);
     
     } else {
         // Otherwise load file
-        strcpy(editor_filename, argv[1]);
         editor_load_file(argv[1]); 
     }
-
-    // File cleanup
-    fclose(file_ptr);
 
     return 0;
 }
 
-void editor_load_file(char *filename)
+void editor_load_file(char *load_file)
 {
     const uint8_t keybinds_text_editor[] = " Ctrl-R = Return to kernel Ctrl-S = Save file to disk";
     uint32_t file_size = 0;
+    uint16_t cursor_x, cursor_y;
+    uint8_t filename[60] = {0};
+
+    strcpy(filename, load_file);
 
     FILE *file_ptr = fopen(filename, "rw");
 
@@ -126,10 +127,6 @@ void editor_load_file(char *filename)
         input_char = get_key();
 
         clear_screen(user_gfx_info->bg_color);
-
-        // Initialize cursor pos
-        cursor_x = 0;
-        cursor_y = 0;
 
         return; 
     } 
@@ -222,6 +219,9 @@ void editor_load_file(char *filename)
 
         text_editor(filename, file_buf, file_ptr);
     }
+
+    // File cleanup
+    fclose(file_ptr);
 }
 
 void text_editor(char *editor_filename, uint8_t *file_buf, FILE *file_ptr)
@@ -229,7 +229,7 @@ void text_editor(char *editor_filename, uint8_t *file_buf, FILE *file_ptr)
     const char keybinds_text_editor[] = " Ctrl-R: Return | Ctrl-S: Save | Ctrl-C: Chg name/ext | Ctrl-D: Del line";
     const char blank_line[] = "                                                                                ";
     const char file_ext_string[] = "Enter file extension: "; 
-    uint16_t save_x, save_y;
+    uint16_t cursor_x, cursor_y, save_x, save_y;
     uint8_t save_file_offset;
     uint8_t changed_filename[10];
     uint8_t unsaved = 0;
@@ -253,18 +253,18 @@ void text_editor(char *editor_filename, uint8_t *file_buf, FILE *file_ptr)
     cursor_y = 0;
     move_cursor(cursor_x, cursor_y);
 
-    while (1) {
+    while (true) {
         // Print cursor X/Y position and current line length
-        printf("\eCSROFF;");
-        printf("\eX%dY%d;", 1, (gfx_mode->y_resolution / font_height) - 2); // Above last line
+        printf("\eCSROFF;\eX%dY%d;", 1, (gfx_mode->y_resolution / font_height) - 2); // Above last line
 
         printf("X:%d Y:%d LEN:%d SIZE:%d ", 
                cursor_x, cursor_y, current_line_length, file_length_bytes);
 
         // Print filename & extension
         putc('[');
-        for (uint8_t i = 0; editor_filename[i] != '\0'; i++)
+        for (uint8_t i = 0; editor_filename[i] != '\0'; i++) {
             putc(editor_filename[i]);   
+        }
 
         puts("] ");
 
@@ -311,15 +311,14 @@ void text_editor(char *editor_filename, uint8_t *file_buf, FILE *file_ptr)
                         fs_rename_file("temp.txt", editor_filename);
 
                         file_mode = UPDATE;
-                        write_bottom_screen_message(blank_line);
-                        fill_out_bottom_editor_message(keybinds_text_editor);
                     }
 
                     printf("\eX%dY%d;", cursor_x, cursor_y); // Restore cursor position
 
                     unsaved = 0;    // User saved file, no more unsaved changes
 
-                    write_bottom_screen_message(keybinds_text_editor);  // Write keybinds at bottom
+                    fill_out_bottom_editor_message(blank_line);
+                    fill_out_bottom_editor_message(keybinds_text_editor); // Write keybinds at bottom
 
                     cursor_x = save_x;
                     cursor_y = save_y;
@@ -714,6 +713,7 @@ void hex_editor(char *filename, uint8_t *file_buf, FILE *file_ptr)
     uint32_t file_offset = 0;
     uint8_t hex_count = 0;
     uint8_t hex_byte = 0;   // 1 byte/2 hex digits
+    uint16_t cursor_x, cursor_y;
 
     fill_out_bottom_editor_message(keybinds_hex_editor);  // Write keybinds to screen
     cursor_x = 0;   // Initialize cursor
@@ -904,6 +904,7 @@ void save_hex_program(char *filename, uint8_t *file_buf, FILE *file_ptr)
 {
     uint8_t *keybinds_hex_editor = " $ = Run code ? = Return to kernel S = Save file to disk\0";
     char blank_line[80];
+    uint16_t cursor_x, cursor_y;
 
     memset(blank_line, ' ', sizeof blank_line);
     blank_line[79] = '\0';

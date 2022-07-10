@@ -290,8 +290,7 @@ void syscall_close(void) {
 
             // Remove from inode table 
             inode_t *temp = open_inode_table;
-
-            for (uint32_t i = 0; i < open_inode_table_curr_size && temp->id != 0; i++, temp++) 
+            for (uint32_t i = 0; i < open_inode_table_curr_size && temp->id != fd; i++, temp++) 
                 ;
 
             memset(temp, 0, sizeof(inode_t));
@@ -338,7 +337,7 @@ void syscall_read(void)
 
     // Get file inode from open inode table
     inode_t *inode = open_inode_table;
-    for (uint32_t i = 0; i < open_inode_table_curr_size && inode->id != 0; i++, inode++) 
+    for (uint32_t i = 0; i < open_inode_table_curr_size && inode->id != ft_ptr->id; i++, inode++) 
         ;
 
     // Read bytes from file at file address into buffer 
@@ -507,7 +506,7 @@ void syscall_seek(void) {
 
     // Get file inode from open inode table
     inode_t *inode = open_inode_table;
-    for (uint32_t i = 0; i < open_inode_table_curr_size && inode->id != 0; i++, inode++) 
+    for (uint32_t i = 0; i < open_inode_table_curr_size && inode->id != ft_ptr->id; i++, inode++) 
         ;
 
     switch(whence) {

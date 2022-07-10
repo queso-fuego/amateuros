@@ -38,7 +38,7 @@ int num_padding_bytes(const int current_size, const int boundary) {
     return (current_size - (current_size % boundary) + boundary) - current_size;
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
     const char BOOT_SECTOR_NAME[] = "../bin/bootSect.bin";
     const char SECOND_STAGE_NAME[] = "../bin/2ndstage.bin";
     const char OS_BIN[] = "../bin/OS.bin";
@@ -60,7 +60,7 @@ int main(void) {
     };
     const int num_files = sizeof files / sizeof files[0];
 
-    long total_blocks = 0;
+    int file_blocks = 0;
     uint8_t sector[FS_SECTOR_SIZE] = {0};
     uint8_t null_block[FS_BLOCK_SIZE] = {0};
     long file_size = 0;
@@ -71,6 +71,16 @@ int main(void) {
     int num_sectors = 0;
     int padding_bytes = 0;
     long bytes_written = 0;
+    int disk_size = 0;
+    uint16_t num_data_bits = 0;
+    int disk_blocks = 0;
+
+    // Set disk size from optional input argument
+    if (argc < 2) {
+        disk_size = 512*2880;   // Default size is 1.44MB 
+    } else {
+        disk_size = 1024 * 1024 * atoi(argv[1]);    // Size in MB
+    }
 
     printf("\nCreating disk image %s:\n", &OS_BIN[7]);
 
@@ -84,13 +94,15 @@ int main(void) {
 
         fseek(tmp, 0, SEEK_END);
         files[i].size = ftell(tmp);
-        total_blocks += bytes_to_blocks(files[i].size);
+        file_blocks += bytes_to_blocks(files[i].size);
         fclose(tmp);
     }
 
-    printf("Disk size: 1.44MB, Block size: 4096\n"
-           "Disk blocks: %d\nTotal file blocks: %ld\n", 
-           (512*2880) / FS_BLOCK_SIZE, total_blocks);
+    disk_blocks = disk_size / FS_BLOCK_SIZE;
+
+    printf("Disk size: %0.2fMB, Block size: 4096\n"
+           "Disk blocks: %d\nTotal file blocks: %d\n", 
+           disk_size / (1024.0*1024.0), disk_blocks, file_blocks);
 
     // Write boot block ------------------------
     fp = fopen(BOOT_SECTOR_NAME, "rb");
@@ -131,27 +143,29 @@ int main(void) {
         assert(fwrite(boot_block.sectors[i], 1, FS_SECTOR_SIZE , disk_image) == FS_SECTOR_SIZE);
 
     // Write file system info block ("Superblock")
-    superblock_t superblock = {
-        .number_of_inodes = 10,             // Will change 
-        .number_of_inode_bitmap_blocks = 1,
-        .number_of_data_bitmap_blocks = 1,
-        .first_inode_bitmap_block = 2,      // 0-based
-        .first_data_bitmap_block = 3,       // 0-based
-        .first_inode_block = 4,             // 0-based
-        .first_data_block = 5,              // 0-based
-        .block_size_bytes = FS_BLOCK_SIZE,
-        .max_file_size_bytes = 0xFFFFFFFF,
-        .inode_size_bytes = sizeof(inode_t),
-        .number_of_data_blocks = total_blocks,
-        .root_inode_pointer = 0,                // Pointer to RAM address, not LBA; Kernel sets this at runtime
-        .inodes_per_block = FS_BLOCK_SIZE / sizeof(inode_t),
-        .direct_extents_per_inode = 4,
-        .number_of_extents_per_indirect_block = FS_BLOCK_SIZE / sizeof(extent_t),
-        .first_free_bit_in_inode_bitmap = 11,   // 0-based
-        .first_free_bit_in_data_bitmap = total_blocks + 1,
-        .device_number = 0x01,
-        .first_non_reserved_inode = 3,          // 0 = invalid inode, 1 = root inode, 2 = bootloader inode
-    };
+    superblock_t superblock = {0};
+    superblock.number_of_inodes              = num_files + 2;   // Files + invalid inode 0 + root directory
+    superblock.first_inode_bitmap_block      = 2;               // 0-based; block 0 = boot block, block 1 = superblock
+    superblock.number_of_inode_bitmap_blocks = num_files / (FS_BLOCK_SIZE * 8) + ((num_files % (FS_BLOCK_SIZE * 8) > 0) ? 1 : 0);
+    superblock.first_data_bitmap_block       = superblock.first_inode_bitmap_block + superblock.number_of_inode_bitmap_blocks; 
+
+    num_data_bits = (disk_blocks - superblock.first_data_bitmap_block);
+
+    superblock.number_of_data_bitmap_blocks         = num_data_bits / (FS_BLOCK_SIZE * 8) + ((num_data_bits % (FS_BLOCK_SIZE * 8) > 0) ? 1 : 0);
+    superblock.first_inode_block                    = superblock.first_data_bitmap_block + superblock.number_of_data_bitmap_blocks; 
+    superblock.first_data_block                     = superblock.first_inode_block + bytes_to_blocks(superblock.number_of_inodes * sizeof(inode_t));
+    superblock.block_size_bytes                     = FS_BLOCK_SIZE;
+    superblock.max_file_size_bytes                  = 0xFFFFFFFF;
+    superblock.inode_size_bytes                     = sizeof(inode_t);
+    superblock.number_of_data_blocks                = file_blocks;
+    superblock.root_inode_pointer                   = 0;                // Pointer to RAM address, not LBA; Kernel sets this at runtime
+    superblock.inodes_per_block                     = FS_BLOCK_SIZE / sizeof(inode_t);
+    superblock.direct_extents_per_inode             = 4;
+    superblock.number_of_extents_per_indirect_block = FS_BLOCK_SIZE / sizeof(extent_t);
+    superblock.first_free_bit_in_inode_bitmap       = superblock.number_of_inodes;  // 0-based
+    superblock.first_free_bit_in_data_bitmap        = file_blocks + 1;  // All files + root dir data 
+    superblock.device_number                        = 0x01;
+    superblock.first_non_reserved_inode             = 3;                // 0 = invalid inode, 1 = root inode, 2 = bootloader inode
 
     assert(fwrite(&superblock, 1, sizeof superblock, disk_image) == sizeof superblock);
 
@@ -285,8 +299,7 @@ int main(void) {
     // Pad out image file to requested size e.g. 1.44MB
     // 1.44MB = 512*2880 bytes
     // Write full blocks
-    const int disk_blocks = (512*2880) / FS_BLOCK_SIZE;
-    const int blocks_written = 6 + total_blocks;    // boot block, superblock, inode bitmap, data bitmap, inodes, root dir data
+    const int blocks_written = 6 + file_blocks;    // boot block, superblock, inode bitmap, data bitmap, inodes, root dir data
     for (int i = 0; i < disk_blocks - blocks_written; i++)
         fwrite(null_block, FS_BLOCK_SIZE, 1, disk_image);
 }

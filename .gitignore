@@ -1,1 +1,3 @@
 *.bin
+build/make_disk
+
