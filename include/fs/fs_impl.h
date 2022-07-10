@@ -422,11 +422,10 @@ inode_t *get_parent_inode_from_path(const char *path, inode_t *curr_dir) {
         // Find parent directory 
         *parent_dir = '\0';
         parent_inode = get_inode_from_path(path, curr_dir); 
-        if (!parent_inode) {
-            // File does not exist, use current dir as parent
-            return curr_dir; 
-        }
         *parent_dir = '/';  // Restore file path
+
+        if (!parent_inode) 
+            return 0; // Parent does not exist
     }
 
     return parent_inode; 
@@ -485,6 +484,10 @@ void set_name_from_path(char *name, char *path) {
 }
 
 // Return last file/dir name from a given path
+// TODO: Rewrite this and change name of 'set_name_from_path' to
+//   'resolve_path' or similar.
+//   This function should not need an input name, and should
+//   return a pointer to the start of the last name in the path.
 char *get_last_name_in_path(char *name, char *path) {
     // Resolve name first
     set_name_from_path(name, path);

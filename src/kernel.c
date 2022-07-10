@@ -354,7 +354,12 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 // Did not find parent directory, create each missing directory in given path,
                 //   cut path short at next directory boundary to search for next level up parent dir
                 char *next_dir = strrchr(initial_path, '/');
-                *next_dir = '\0';       
+                if (!next_dir) {
+                    // No more levels up to go, at current dir
+                    temp = current_dir_inode;
+                } else {
+                    *next_dir = '\0';       
+                }
                 path_stack_ptr++;
                 path_stack[path_stack_ptr] = next_dir;  // Add next boundary marker to stack
 
@@ -525,6 +530,11 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
             // Get parent dir of new path
             parent_inode = *get_parent_inode_from_path(argv[2], current_dir_inode);
+
+            if (parent_inode.id == current_dir_inode->id) {
+                // New dir path does not have a slash, get dir directly
+                parent_inode = *get_inode_from_path(argv[2], current_dir_inode);
+            }
 
             // Update dir inode for new path
             parent_inode.size_bytes += sizeof(dir_entry_t);
