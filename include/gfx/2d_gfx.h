@@ -3,8 +3,8 @@
  */
 #pragma once
 
-#define VBE_MODE_INFO_ADDRESS 0x9000
-#define USER_GFX_INFO_ADDRESS 0x9200
+#define VBE_MODE_INFO_ADDRESS 0xA000
+#define USER_GFX_INFO_ADDRESS 0xA200
 
 // 32 bit ARGB colors
 #define BLACK      0x00000000 

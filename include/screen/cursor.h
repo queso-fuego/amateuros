@@ -6,9 +6,7 @@
 // input 2: row to move to
 #pragma once
 
-#define FONT_ADDRESS  0xA000    
-#define FONT_WIDTH    0xA000   
-#define FONT_HEIGHT (FONT_WIDTH+1)
+#include "global/global_addresses.h"
 
 void move_cursor(uint16_t cursor_x, uint16_t cursor_y)
 {

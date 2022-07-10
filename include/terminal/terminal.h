@@ -150,7 +150,7 @@ int32_t terminal_write(void *buf, const uint32_t len)
         } else if (str[i] == '\r') { // Carriage return
             X = 0;                   // New cursor X position = 0 / start of line
             continue;
-        }
+        }     
 
         // Font memory address = FONT_ADDRESS, offset from start of font,
         // multiply char by FONT_H (length in bytes per char),
