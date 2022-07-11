@@ -431,19 +431,14 @@ inode_t *get_parent_inode_from_path(const char *path, inode_t *curr_dir) {
     return parent_inode; 
 }
 
-// Set input name to resolved path
-void set_name_from_path(char *name, char *path) {
+// Set input path to resolved path
+char *resolve_path(char *start_path, char *rel_to_path) {
     int i = 0;
-    char *path_ptr = path;
+    char *path_ptr = rel_to_path;
+    char *result_path = start_path;
     
-    // Start index at end of current name
-    while (name[i]) i++;
-
-    if (path[0] == '/') {
-        // Absolute path from root
-        strcpy(name, path); 
-        return;
-    }
+    // Start at end of starting path
+    while (result_path[i]) i++;
 
     while (*path_ptr) {
         if (*path_ptr == '/') { 
@@ -465,22 +460,24 @@ void set_name_from_path(char *name, char *path) {
             if (*path_ptr) path_ptr++;   // Handle only .. and not ../
 
             // End name one level up
-            while (name[i] != '/') i--;
+            while (result_path[i] != '/') i--;
 
             if (i == 0) i++;    // Don't erase root
-            name[i] = '\0';  
+            result_path[i] = '\0';  
 
             continue;
         } 
 
         // Copy next dir name from path
-        if (name[i-1] != '/') name[i++] = '/';  // Add divider
+        if (result_path[i-1] != '/') result_path[i++] = '/';  // Add divider
 
         while (*path_ptr != '/' && *path_ptr != '\0')
-            name[i++] = *path_ptr++;
+            result_path[i++] = *path_ptr++;
 
-        name[i] = '\0'; // Stop in case this is last dir in path
+        result_path[i] = '\0'; // Stop in case this is last dir in path
     }
+
+    return result_path;
 }
 
 // Return last file/dir name from a given path
@@ -610,7 +607,7 @@ uint32_t fs_create_file(char *path, const uint8_t file_type) {
     new_entry->id = inode_bit;          
 
     // New file name
-    set_name_from_path(new_entry->name, path);
+    resolve_path(new_entry->name, path);
     strcpy(new_entry->name, get_last_name_in_path(new_entry->name));
 
     // Write changed sector
