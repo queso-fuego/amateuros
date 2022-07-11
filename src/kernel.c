@@ -322,6 +322,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             } else {
                 // Update current_dir to point to new current directory inode
                 *current_dir_inode = *inode;
+
                 set_name_from_path(working_dir, argv[1]); 
             }
 
@@ -598,8 +599,11 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             if (argv[2][strlen(argv[2]) - 1] != '/') {
                 // Only change to new name if last name in path is not a dir
                 char old_name[60], new_name[60];
-                strcpy(old_name, get_last_name_in_path(old_name, argv[1]));
-                strcpy(new_name, get_last_name_in_path(new_name, argv[2]));
+                set_name_from_path(old_name, argv[1]);
+                set_name_from_path(new_name, argv[2]);
+
+                strcpy(old_name, get_last_name_in_path(old_name));
+                strcpy(new_name, get_last_name_in_path(new_name));
                 
                 if (strcmp(old_name, new_name) != 0) {
                     // Construct "old" path at new directory

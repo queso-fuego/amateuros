@@ -484,19 +484,12 @@ void set_name_from_path(char *name, char *path) {
 }
 
 // Return last file/dir name from a given path
-// TODO: Rewrite this and change name of 'set_name_from_path' to
-//   'resolve_path' or similar.
-//   This function should not need an input name, and should
-//   return a pointer to the start of the last name in the path.
-char *get_last_name_in_path(char *name, char *path) {
-    // Resolve name first
-    set_name_from_path(name, path);
-
+char *get_last_name_in_path(char *path) {
     // Find last directory
-    char *last_name = strrchr(name, '/');
+    char *last_name = strrchr(path, '/');
 
     // If no slashes, use input name 
-    if (!last_name) return name;
+    if (!last_name) return path;
     
     // Else last name starts after final slash
     return last_name+1;
@@ -617,7 +610,8 @@ uint32_t fs_create_file(char *path, const uint8_t file_type) {
     new_entry->id = inode_bit;          
 
     // New file name
-    strcpy(new_entry->name, get_last_name_in_path(new_entry->name, path));
+    set_name_from_path(new_entry->name, path);
+    strcpy(new_entry->name, get_last_name_in_path(new_entry->name));
 
     // Write changed sector
     offset /= FS_SECTOR_SIZE;   // Convert offset in bytes to # of sectors from start of block (0-7)
