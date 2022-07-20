@@ -1,1 +1,4 @@
-*.bin
+.vscode
+
+bin/*.bin
+bin/sector_num.txt

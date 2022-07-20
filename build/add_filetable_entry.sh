@@ -2,8 +2,9 @@
 
 # add_fileetable_entry.sh: auto build fileTable.bin 1 entry at a time
 # Inputs:
-#  1) Filename
-#  2) File size in sectors
+#  1) The directory to operate in
+#  2) Filename
+#  3) File size in sectors
 
 # ---------------------------------
 # 16 Byte Entries for File Table
@@ -18,10 +19,11 @@
 # 			  sectors. Max file size for 1 file table entry = 130560 bytes or
 # 			  127.5KB; Max file size overall = 255*512*255 bytes or ~32MB
 # ---------------------------------
-filename="$1"
-filesize="$2"
+workdir="$1"
+filename="$2"
+filesize="$3"
 
-filetable=../bin/fileTable.bin # Output file name to build
+filetable="${workdir}/fileTable.bin" # Output file name to build
 
 # Filename
 printf "%s" "$filename" >> $filetable
@@ -51,13 +53,13 @@ esac
 dd if=/dev/zero bs=1 count=1 status=none >> $filetable
 
 # Starting sector
-sector=$(cat sector_num.txt)    # Get decimal string
+sector=$(cat ${workdir}/sector_num.txt)    # Get decimal string
 sector=$(printf "%o" $sector)   # Convert decimal to octal string
 printf "%b" "\0$sector" >> $filetable # Output octal string as numeric bytes
 
 sector=$(printf "%d" 0$sector) # Convert octal string to decimal string
 sector=$((sector + filesize))   # Set next starting sector (current sector + filesize)
-printf "%d" $sector > sector_num.txt
+printf "%d" $sector > "${workdir}/sector_num.txt"
 
 # File size
 filesize=$(printf "%o" $filesize) # Convert decimal to octal string
