@@ -3,8 +3,7 @@
  */
 #pragma once
 
-#define VBE_MODE_INFO_ADDRESS 0x9000
-#define USER_GFX_INFO_ADDRESS 0x9200
+#include "global/global_addresses.h"
 
 // 32 bit ARGB colors
 #define BLACK      0x00000000 
@@ -374,7 +373,7 @@ void fill_ellipse_solid(Point center, uint16_t radiusX, uint16_t radiusY, uint32
 
 // Convert given 32bit 888ARGB color to set bpp value 
 // 0x00RRGGBB
-uint32_t convert_color(uint32_t color)
+uint32_t convert_color(const uint32_t color)
 {
     uint8_t orig_r, orig_g, orig_b;
     uint8_t convert_r, convert_g, convert_b;

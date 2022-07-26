@@ -6,6 +6,9 @@
 #include "C/stdint.h"
 #include "sys/syscall_numbers.h"
 
+#define EXIT_SUCCESS 0
+#define EXIT_FAILURE 1
+
 // Convert ascii string to integer
 uint32_t atoi(const uint8_t *string)
 {
@@ -24,7 +27,7 @@ void *malloc(const uint32_t size)
 {
     void *ptr = 0;
 
-    __asm__ __volatile__ ("int $0x80" : "=r"(ptr) : "a"(SYSCALL_MALLOC), "b"(size) );
+    __asm__ __volatile__ ("int $0x80" : "=a"(ptr) : "a"(SYSCALL_MALLOC), "b"(size) );
 
     return ptr;
 }
@@ -34,22 +37,4 @@ void free(const void *ptr)
 {
     __asm__ __volatile__ ("int $0x80" : : "a"(SYSCALL_FREE), "b"(ptr) );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

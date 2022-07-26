@@ -8,6 +8,7 @@
 #include "memory/physical_memory_manager.h"
 #include "memory/virtual_memory_manager.h"
 #include "gfx/2d_gfx.h"
+#include "fs/fs_impl.h"
 
 __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
 {
@@ -25,8 +26,8 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
     uint8_t ext[3];
 
     // Set up physical memory manager
-    num_SMAP_entries = *(uint32_t *)0x8500;
-    SMAP_entry       = (SMAP_entry_t *)0x8504;
+    num_SMAP_entries = *(uint32_t *)SMAP_NUMBER_ADDRESS;        
+    SMAP_entry       = (SMAP_entry_t *)SMAP_ENTRIES_ADDRESS;   
     SMAP_entry += num_SMAP_entries - 1;
 
     total_memory = SMAP_entry->base_address + SMAP_entry->length - 1;
@@ -36,7 +37,7 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
     initialize_memory_manager(MEMMAP_AREA, total_memory);
 
     // Initialize memory regions for the available memory regions in the SMAP (type = 1)
-    SMAP_entry = (SMAP_entry_t *)0x8504;
+    SMAP_entry = (SMAP_entry_t *)SMAP_ENTRIES_ADDRESS; 
     for (uint32_t i = 0; i < num_SMAP_entries; i++) {
         if (SMAP_entry->type == 1)
             initialize_memory_region(SMAP_entry->base_address, SMAP_entry->length);
@@ -45,12 +46,40 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
     }
 
     // Set memory regions/blocks for the kernel and "OS" memory map areas as used/reserved
-    deinitialize_memory_region(0x1000, 0xB000);                            // Reserve all memory below C000h for the kernel/OS
+    deinitialize_memory_region(0x1000, 0x11000);                           // Reserve all memory below 12000h for the kernel/OS
     deinitialize_memory_region(MEMMAP_AREA, max_blocks / BLOCKS_PER_BYTE); // Reserve physical memory map area 
 
-    // Load kernel from disk so that virtual memory manager works
-    // TODO: Add error handling later
-    load_file("kernel", 6, KERNEL_ADDRESS, ext);
+    // Load root dir
+    superblock_t *superblock = (superblock_t *)SUPERBLOCK_ADDRESS;
+    superblock->root_inode_pointer = BOOTLOADER_FIRST_INODE_ADDRESS + sizeof(inode_t);  // Root inode = inode 1
+    rw_sectors(8, superblock->first_data_block*8, SCRATCH_BLOCK_ADDRESS, READ_WITH_RETRY);
+
+    // Find kernel id
+    dir_entry_t *dir_entry = (dir_entry_t *)SCRATCH_BLOCK_ADDRESS;
+    while (dir_entry->name[0] != '\0' && strncmp(dir_entry->name, "kernel", strlen("kernel")) != 0)
+        dir_entry++;
+
+    // Find kernel inode
+    inode_t *inode = (inode_t *)BOOTLOADER_FIRST_INODE_ADDRESS;
+    while (inode->id != dir_entry->id) inode++;
+
+    // Load kernel from disk
+    fs_load_file(inode, KERNEL_ADDRESS);
+    
+    // Find a font id
+    dir_entry = (dir_entry_t *)SCRATCH_BLOCK_ADDRESS;
+    while (dir_entry->name[0] != '\0' && strncmp(dir_entry->name, "termu18n", strlen("termu18n")) != 0)
+        dir_entry++;
+
+    // Find font inode
+    inode = (inode_t *)BOOTLOADER_FIRST_INODE_ADDRESS;
+    while (inode->id != dir_entry->id) inode++;
+
+    // Load font from disk
+    fs_load_file(inode, FONT_ADDRESS);
+
+    // Mark font memory as in use
+    deinitialize_memory_region(FONT_ADDRESS, inode->extent[0].length_blocks * FS_BLOCK_SIZE);
 
     // Set up virtual memory & paging - TODO: Check if return value is true/false
     initialize_virtual_memory_manager();

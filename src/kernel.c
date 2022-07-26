@@ -27,6 +27,7 @@
 #include "sound/pc_speaker.h"
 #include "sys/syscall_numbers.h"
 #include "sys/syscall_wrappers.h"
+#include "fs/fs_impl.h"
 
 void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
 
@@ -755,8 +756,8 @@ void print_physical_memory_info(void)
         uint32_t acpi;
     } __attribute__ ((packed)) SMAP_entry_t;
 
-    uint32_t num_entries = *(uint32_t *)0x8500;         // Number of SMAP entries
-    SMAP_entry_t *SMAP_entry = (SMAP_entry_t *)0x8504;  // Memory map entries start point
+    uint32_t num_entries = *(uint32_t *)SMAP_NUMBER_ADDRESS;          // Number of SMAP entries
+    SMAP_entry_t *SMAP_entry = (SMAP_entry_t *)SMAP_ENTRIES_ADDRESS;  // Memory map entries start point
 
     for (uint32_t i = 0; i < num_entries; i++) {
         printf("Region: %x", i);

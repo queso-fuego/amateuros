@@ -159,9 +159,3 @@ void printf(const char *fmt, ...)
     free(write_buffer);
 }
 
-
-
-
-
-
-
