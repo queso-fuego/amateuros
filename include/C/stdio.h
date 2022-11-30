@@ -15,21 +15,6 @@
 uint8_t *write_buffer = 0;
 uint32_t len = 0;
 
-// Print single character
-void putc(char c)
-{
-    write(stdout, &c, 1);
-}
-
-// Print a string
-void puts(char *s)
-{
-    while (*s) {
-        putc(*s);
-        s++;
-    }
-}
-
 // Print a hex integer
 void printf_hex(const uint32_t num)
 {
@@ -158,4 +143,17 @@ void printf(const char *fmt, ...)
     write(stdout, write_buffer, len);    // Call write system call
     free(write_buffer);
 }
+
+// Print single character
+void putc(char c)
+{
+    printf("%c", c);
+}
+
+// Print a string
+void puts(char *s)
+{
+    printf("%s", s);
+}
+
 

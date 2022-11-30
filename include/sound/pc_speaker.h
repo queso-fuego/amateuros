@@ -148,6 +148,8 @@ void set_bpm(const uint32_t bpm)
 // TODO: Use beats per measure value later?
 void set_time_signature(const uint8_t beats_per_measure, const beat_type_t beat_type)
 {
+    (void)beats_per_measure;    // Silence compiler warnings
+
     switch(beat_type) {
         case WHOLE:
             whole_note_duration     = bpm_ms;

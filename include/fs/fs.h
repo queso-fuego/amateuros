@@ -74,7 +74,7 @@ typedef struct {
     uint32_t id;                            // This will match the inode id
     char name[60];
 } __attribute__ ((packed)) dir_entry_t;     // sizeof(dir_entry_t)
-
+                                            
 // Convert bytes to blocks
 uint32_t bytes_to_blocks(const uint32_t bytes) {
     if (bytes == 0) return 0;

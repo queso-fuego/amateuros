@@ -212,62 +212,63 @@ void draw_circle(Point center, uint16_t radius, uint32_t color)
 }
 
 // Draw an ellipse
+// TODO: Put this back in later, using non-floating point values/ROUND if possible
 //  Adapted from "Computer Graphics Principles and Practice in C 2nd Edition"
-void draw_ellipse(Point center, uint16_t radiusX, uint16_t radiusY, uint32_t color)
-{
-    int32_t rx2 = radiusX * radiusX;
-    int32_t ry2 = radiusY * radiusY;
-    int32_t twoRx2 = 2*rx2;
-    int32_t twoRy2 = 2*ry2;
-    int32_t p;
-    int32_t x = 0;
-    int32_t y = radiusY;
-    int32_t px = 0;
-    int32_t py = twoRx2 * y;
-
-    // Draw initial 4 quadrant points
-    draw_pixel(center.X + x, center.Y + y, color);
-    draw_pixel(center.X - x, center.Y + y, color);
-    draw_pixel(center.X + x, center.Y - y, color);
-    draw_pixel(center.X - x, center.Y - y, color);
-
-    // Region 1
-    p = ROUND(ry2 - (rx2 * radiusY) + (0.25 * rx2));
-    while (px < py) {
-        x++;
-        px += twoRy2;
-        if (p < 0) p += ry2 + px;
-        else {
-            y--;
-            py -= twoRx2;
-            p += ry2 + px - py;
-        }
-
-        // Draw 4 quadrant points
-        draw_pixel(center.X + x, center.Y + y, color);
-        draw_pixel(center.X - x, center.Y + y, color);
-        draw_pixel(center.X + x, center.Y - y, color);
-        draw_pixel(center.X - x, center.Y - y, color);
-    }
-
-    // Region 2
-    p = ROUND(ry2 * (x + 0.5)*(x + 0.5) + rx2 * (y - 1) * (y - 1) - rx2*ry2);
-    while (y > 0) {
-        y--;
-        py -= twoRx2; if (p > 0) p += rx2 - py;
-        else {
-            x++;
-            px += twoRy2;
-            p += rx2 - py + px;
-        }
-
-        // Draw 4 quadrant points
-        draw_pixel(center.X + x, center.Y + y, color);
-        draw_pixel(center.X - x, center.Y + y, color);
-        draw_pixel(center.X + x, center.Y - y, color);
-        draw_pixel(center.X - x, center.Y - y, color);
-    }
-}
+//void draw_ellipse(Point center, uint16_t radiusX, uint16_t radiusY, uint32_t color)
+//{
+//    int32_t rx2 = radiusX * radiusX;
+//    int32_t ry2 = radiusY * radiusY;
+//    int32_t twoRx2 = 2*rx2;
+//    int32_t twoRy2 = 2*ry2;
+//    int32_t p;
+//    int32_t x = 0;
+//    int32_t y = radiusY;
+//    int32_t px = 0;
+//    int32_t py = twoRx2 * y;
+//
+//    // Draw initial 4 quadrant points
+//    draw_pixel(center.X + x, center.Y + y, color);
+//    draw_pixel(center.X - x, center.Y + y, color);
+//    draw_pixel(center.X + x, center.Y - y, color);
+//    draw_pixel(center.X - x, center.Y - y, color);
+//
+//    // Region 1
+//    p = ROUND(ry2 - (rx2 * radiusY) + (0.25 * rx2));
+//    while (px < py) {
+//        x++;
+//        px += twoRy2;
+//        if (p < 0) p += ry2 + px;
+//        else {
+//            y--;
+//            py -= twoRx2;
+//            p += ry2 + px - py;
+//        }
+//
+//        // Draw 4 quadrant points
+//        draw_pixel(center.X + x, center.Y + y, color);
+//        draw_pixel(center.X - x, center.Y + y, color);
+//        draw_pixel(center.X + x, center.Y - y, color);
+//        draw_pixel(center.X - x, center.Y - y, color);
+//    }
+//
+//    // Region 2
+//    p = ROUND(ry2 * (x + 0.5)*(x + 0.5) + rx2 * (y - 1) * (y - 1) - rx2*ry2);
+//    while (y > 0) {
+//        y--;
+//        py -= twoRx2; if (p > 0) p += rx2 - py;
+//        else {
+//            x++;
+//            px += twoRy2;
+//            p += rx2 - py + px;
+//        }
+//
+//        // Draw 4 quadrant points
+//        draw_pixel(center.X + x, center.Y + y, color);
+//        draw_pixel(center.X - x, center.Y + y, color);
+//        draw_pixel(center.X + x, center.Y - y, color);
+//        draw_pixel(center.X - x, center.Y - y, color);
+//    }
+//}
 
 // Fill an area with a solid color
 void boundary_fill(uint16_t X, uint16_t Y, uint32_t fill_color, uint32_t boundary_color)
@@ -359,17 +360,18 @@ void fill_circle_solid(Point center, uint16_t radius, uint32_t color)
 }
 
 // Fill an ellipse with a solid color
-void fill_ellipse_solid(Point center, uint16_t radiusX, uint16_t radiusY, uint32_t color)
-{
-    // First draw boundaries a different color
-    draw_ellipse(center, radiusX, radiusY, color - 1);
-
-    // Then fill in the boundaries
-    boundary_fill(center.X, center.Y, color, color - 1);
-
-    // Then redraw boundaries as the correct color
-    draw_ellipse(center, radiusX, radiusY, color);
-}
+// TODO: Put this back in later, using non-floating point values/ROUND if possible
+//void fill_ellipse_solid(Point center, uint16_t radiusX, uint16_t radiusY, uint32_t color)
+//{
+//    // First draw boundaries a different color
+//    draw_ellipse(center, radiusX, radiusY, color - 1);
+//
+//    // Then fill in the boundaries
+//    boundary_fill(center.X, center.Y, color, color - 1);
+//
+//    // Then redraw boundaries as the correct color
+//    draw_ellipse(center, radiusX, radiusY, color);
+//}
 
 // Convert given 32bit 888ARGB color to set bpp value 
 // 0x00RRGGBB
@@ -392,9 +394,9 @@ uint32_t convert_color(const uint32_t color)
         convert_b = orig_b;
     } else {
         // Convert to new color portions by getting ratio of bit sizes of color compared to "full" 8 bit colors
-        convert_r = orig_r * (((1 << gfx_mode->linear_red_mask_size) - 1) / 255.0);
-        convert_g = orig_g * (((1 << gfx_mode->linear_green_mask_size) - 1) / 255.0);
-        convert_b = orig_b * (((1 << gfx_mode->linear_blue_mask_size) - 1) / 255.0);
+        convert_r = orig_r * (((1 << gfx_mode->linear_red_mask_size) - 1) / 255);
+        convert_g = orig_g * (((1 << gfx_mode->linear_green_mask_size) - 1) / 255);
+        convert_b = orig_b * (((1 << gfx_mode->linear_blue_mask_size) - 1) / 255);
     }
 
     // Put new color portions into new color

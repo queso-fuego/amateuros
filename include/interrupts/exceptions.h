@@ -24,6 +24,8 @@ __attribute__ ((interrupt)) void div_by_0_handler(int_frame_32_t *frame)
 
 __attribute__ ((interrupt)) void page_fault_handler(int_frame_32_t *frame, const uint32_t error_code)
 {
+    (void)frame;    // Silence compiler warnings
+                    
     uint16_t x = 0, y = 0;
     uint32_t color = user_gfx_info->fg_color;   // Save current text color
     uint32_t bad_address = 0;

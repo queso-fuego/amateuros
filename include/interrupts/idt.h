@@ -39,6 +39,8 @@ typedef struct {
 // Default exception handler (no error code)
 __attribute__ ((interrupt)) void default_excp_handler(int_frame_32_t *int_frame_32)
 {
+    (void)int_frame_32; // Silence compiler warnings
+
     uint16_t x = 0, y = 0; 
     print_string(&x, &y, "DEFAULT EXCEPTION HANDLER - NO ERROR CODE");
 }
@@ -46,8 +48,9 @@ __attribute__ ((interrupt)) void default_excp_handler(int_frame_32_t *int_frame_
 // Default exception handler (includes error code)
 __attribute__ ((interrupt)) void default_excp_handler_err_code(int_frame_32_t *int_frame_32, uint32_t error_code)
 {
+    (void)int_frame_32; // Silence compiler warnings
+                        
     uint16_t x = 0, y = 0; 
-
     print_string(&x, &y, "DEFAULT EXCEPTION HANDLER - ERROR CODE: ");
     print_hex(&x, &y, error_code);
 }
@@ -55,6 +58,8 @@ __attribute__ ((interrupt)) void default_excp_handler_err_code(int_frame_32_t *i
 // Default interrupt handler
 __attribute__ ((interrupt)) void default_int_handler(int_frame_32_t *int_frame_32)
 {
+    (void)int_frame_32; // Silence compiler warnings
+                        //
     uint16_t x = 0, y = 0; 
     print_string(&x, &y, "DEFAULT INTERRUPT HANDLER");
 }

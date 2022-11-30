@@ -45,7 +45,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdHlt      = "hlt\0";         // E(n)d current program by halting cpu
     uint8_t *cmdCls	     = "cls\0";         // Clear screen by scrolling
     uint8_t *cmdShutdown = "shutdown\0";    // Close QEMU emulator
-    uint8_t *cmdEditor   = "editor\0";	    // Launch editor program
     uint8_t *cmdDelFile  = "del\0";		    // Delete a file from disk
     uint8_t *cmdRenFile  = "ren\0";         // Rename a file in the file table
     uint8_t *cmdPrtmemmap = "prtmemmap\0";  // Print physical memory map info
@@ -57,22 +56,17 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdSoundTest = "soundtest\0";  // Test pc speaker square wave sound
     uint8_t fileExt[3];
     uint8_t *fileBin = "bin\0";
-    uint8_t *fileTxt = "txt\0";
-    uint8_t fileSize = 0;
     uint8_t *file_ptr;
-    uint8_t *windowsMsg     = "\r\n" "Oops! Something went wrong :(" "\r\n\0";
-    uint8_t *notFoundString = "\r\n" "Program/file not found!, Try again? (Y)" "\r\n\0";
-    uint8_t *sectNotFound   = "\r\n" "Sector not found!, Try again? (Y)" "\r\n\0";
+    //uint8_t *windowsMsg     = "\r\n" "Oops! Something went wrong :(" "\r\n\0";
     uint8_t *menuString     = "------------------------------------------------------\r\n"
                               "Kernel Booted, Welcome to QuesOS - 32 Bit 'C' Edition!\r\n"
                               "------------------------------------------------------\r\n\r\n\0";
     uint8_t *failure        = "\r\n" "Command/Program not found, Try again" "\r\n\0";
     uint8_t *prompt         = ">:\0";
-    uint8_t *pgmNotLoaded   = "\r\n" "Program found but not loaded, Try Again" "\r\n\0";
+    uint8_t *pgmNotLoaded   = "\r\n" "Program/file found but not loaded, Try Again" "\r\n\0";
     uint8_t *fontNotFound   = "\r\n" "Font not found!" "\r\n\0";
 
-    uint32_t needed_blocks, needed_pages;
-    uint32_t *allocated_address;
+    uint32_t needed_pages;
     uint8_t font_width  = *(uint8_t *)FONT_WIDTH;
     uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
     int argc = 0;
@@ -354,9 +348,10 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             draw_circle(p0, 50, convert_color(BLUE));
             
             // Draw ellipse test
-            p0.X = 1920/2 - 600;
-            p0.Y = 1080/2 + 350;
-            draw_ellipse(p0, 100, 50, convert_color(GREEN - 0x00005500));
+            // TODO: Add back in later when no floating point
+            //p0.X = 1920/2 - 600;
+            //p0.Y = 1080/2 + 350;
+            //draw_ellipse(p0, 100, 50, convert_color(GREEN - 0x00005500));
 
             // Fill triangle test
             p0.X = 1920/2 - 400;
@@ -395,9 +390,10 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             fill_circle_solid(p0, 50, convert_color(0x00FF0FE6));  // Magentish fuschish
 
             // Fill ellipse test
-            p0.X = 1920/2 + 400;
-            p0.Y = 1080/2 + 350;
-            fill_ellipse_solid(p0, 100, 50, convert_color(0x00FFEE0F));  // I Love GOOOOOOoooolllddd
+            // TODO: Add back in later when no floating point
+            //p0.X = 1920/2 + 400;
+            //p0.Y = 1080/2 + 350;
+            //fill_ellipse_solid(p0, 100, 50, convert_color(0x00FFEE0F));  // I Love GOOOOOOoooolllddd
 
             input_char = get_key(); 
             clear_screen_esc();

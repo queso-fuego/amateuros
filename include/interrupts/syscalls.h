@@ -111,7 +111,7 @@ void (*syscalls[MAX_SYSCALLS])(void) = {
 
 // Syscall dispatcher
 // naked attribute means no function prologue/epilogue, and only allows inline asm
-__attribute__ ((naked, interrupt)) void syscall_dispatcher(int_frame_32_t *frame)
+__attribute__ ((naked)) void syscall_dispatcher(void)
 {
     // "basic" syscall handler, push everything we want to save, call the syscall by
     //   offsetting into syscalls table with value in eax, then pop everything back 

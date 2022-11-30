@@ -133,7 +133,7 @@ int32_t terminal_write(void *buf, const uint32_t len)
 
         if (str[i] == '\n') {     // Line feed
             // Increment cursor Y, go down 1 row
-            if (++Y >= (gfx_mode->y_resolution / FONT_H) - 1) {    // At bottom of screen? 
+            if (++Y >= (uint32_t)(gfx_mode->y_resolution / FONT_H) - 1) {    // At bottom of screen? 
                 // Copy screen lines 1-<last line> into lines 0-<last line - 1>,
                 //   then clear out last line and continue printing
                 scroll = (uint8_t *)gfx_mode->physical_base_pointer;
@@ -193,7 +193,7 @@ int32_t terminal_write(void *buf, const uint32_t len)
         X = 0;      // New cursor X position = 0 / start of line
 
         // LF
-        if (++Y >= (gfx_mode->y_resolution / FONT_H) - 1) {    // At bottom of screen? 
+        if (++Y >= Y_LIMIT - 1) {    // At bottom of screen? 
             // Copy screen lines 1-<last line> into lines 0-<last line - 1>,
             //   then clear out last line and continue printing
             scroll = (uint8_t *)gfx_mode->physical_base_pointer;

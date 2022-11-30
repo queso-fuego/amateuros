@@ -220,6 +220,8 @@ bool write_data_blocks() {
     assert(fwrite(&dir_entry, sizeof dir_entry, 1, IMAGE_PTR) == 1);
 
     for (uint32_t i = 2; i < num_files; i++) {
+        memset(dir_entry.name, 0, sizeof dir_entry.name);   // Clear out name first
+                                                            
         dir_entry.id = i;
         strcpy(dir_entry.name, &files[i].name[7]);  // Copy file name, skipping over "../bin/" prefix
         assert(fwrite(&dir_entry, sizeof dir_entry, 1, IMAGE_PTR) == 1);

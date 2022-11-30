@@ -23,7 +23,6 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
     uint32_t num_SMAP_entries; 
     uint32_t total_memory; 
     SMAP_entry_t *SMAP_entry;
-    uint8_t ext[3];
 
     // Set up physical memory manager
     num_SMAP_entries = *(uint32_t *)SMAP_NUMBER_ADDRESS;        

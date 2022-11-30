@@ -123,6 +123,8 @@ void remap_pic(void)
 // PIT Timer Channel 0 PIC IRQ0 interrupt handler
 __attribute__ ((interrupt)) void timer_irq0_handler(int_frame_32_t *frame)
 {
+    (void)frame;    // Silence compiler warnings
+                    
     if (*sleep_timer_ticks > 0) (*sleep_timer_ticks)--;
 
     send_pic_eoi(0);
@@ -180,6 +182,8 @@ void set_pit_channel_mode_frequency(const uint8_t channel, const uint8_t operati
 // Keyboard IRQ1 handler
 __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame)
 {
+    (void)frame;    // Silence compiler warnings
+                    
     enum {
         LSHIFT_MAKE  = 0x2A,
         LSHIFT_BREAK = 0xAA,
@@ -191,7 +195,7 @@ __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame)
 
     uint8_t key;
     static bool e0 = false; 
-    static bool e1 = false;
+    //static bool e1 = false;
 
     // TODO: Add keyboard initialization & scancode functions, 
     //   do not assume scancode set 1
@@ -316,6 +320,8 @@ void disable_rtc(void)
 // CMOS RTC IRQ8 Handler
 __attribute__ ((interrupt)) void cmos_rtc_irq8_handler (int_frame_32_t *frame)
 {
+    (void)frame;    // Silence compiler warnings
+                    
     datetime_t new_datetime, old_datetime; 
     static uint16_t rtc_ticks = 0;
     uint8_t regB_value;

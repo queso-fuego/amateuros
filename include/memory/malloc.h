@@ -66,7 +66,7 @@ void malloc_split(malloc_block_t *node, const uint32_t size)
 // Find & allocate next block of memory
 void *malloc_next_block(const uint32_t size)
 {
-    malloc_block_t *cur = 0, *prev = 0; 
+    malloc_block_t *cur = 0;
 
     // Nothing to malloc
     if (size == 0) return 0;
@@ -77,7 +77,6 @@ void *malloc_next_block(const uint32_t size)
     // Find first available block in list
     cur = malloc_list_head;
     while (((cur->size < size) || !cur->free) && cur->next) {
-        prev = cur;
         cur = cur->next;
     }
 
@@ -120,14 +119,13 @@ void *malloc_next_block(const uint32_t size)
 // Merge consecutive free list nodes to prevent (some) memory fragmentation
 void merge_free_blocks(void)
 {
-    malloc_block_t *cur = malloc_list_head, *prev = 0;
+    malloc_block_t *cur = malloc_list_head;
 
     while (cur && cur->next) {
         if (cur->free && cur->next->free) {
             cur->size += (cur->next->size) + sizeof(malloc_block_t);
             cur->next = cur->next->next;
         }
-        prev = cur;
         cur = cur->next;
     }
 }

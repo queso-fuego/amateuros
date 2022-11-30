@@ -12,7 +12,6 @@ void print_fileTable()
 {
     uint8_t *fileTable_name = "fileTable ";
     uint8_t *filetable_ptr;
-    uint16_t blanks_num = 0;
     uint8_t *file_ext = "   ";
     uint16_t hex_num = 0;
     uint8_t *heading = "\x0A\x0D"

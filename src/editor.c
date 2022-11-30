@@ -60,7 +60,6 @@ uint32_t file_length_bytes;
 static const uint8_t *filename_string = "Enter file name: \0";
 uint8_t hex_count = 0;
 uint8_t blank_line[80];
-static const uint8_t *choose_file_msg = "File to load: \0";
 static const uint8_t *load_file_error_msg = "Load file error occurred, press any key to go back...";
 static const uint8_t *save_file_error_msg = "Save file error occurred";
 uint8_t hex_byte = 0;   // 1 byte/2 hex digits
@@ -69,7 +68,6 @@ uint8_t file_mode;
 
 __attribute__ ((section ("editor_entry"))) int editor_main(int argc, char *argv[])
 {
-    uint8_t *new_or_current_string = "(C)reate new file or (L)oad existing file?\0";
     uint8_t *choose_filetype_string = "(B)inary/hex file or (O)ther file type (.txt, etc)?\0";
     uint8_t *keybinds_text_editor = " Ctrl-R = Return to kernel Ctrl-S = Save file to disk\0";
 
@@ -143,7 +141,6 @@ __attribute__ ((section ("editor_entry"))) int editor_main(int argc, char *argv[
 
 void editor_load_file(char *filename)
 {
-    uint8_t idx;
     uint8_t *keybinds_text_editor = " Ctrl-R = Return to kernel Ctrl-S = Save file to disk\0";
     uint32_t file_size = 0;
 
@@ -598,7 +595,7 @@ void text_editor(void)
 
         if (input_char == RIGHTARROW) {    // Right arrow key
             // Move 1 byte right (till end of line)
-            if (cursor_x+1 < current_line_length) { 
+            if ((uint32_t)cursor_x+1 < current_line_length) { 
                 remove_cursor(cursor_x, cursor_y);
 
                 file_ptr++;
@@ -650,7 +647,7 @@ void text_editor(void)
             }
 
             // If line is shorter than where cursor is, move cursor to end of shorter line
-            if (current_line_length < cursor_x + 1)  // Cursor is 0-based
+            if (current_line_length < (uint32_t)cursor_x + 1)  // Cursor is 0-based
                 cursor_x = current_line_length - 1;
 
             file_ptr    += cursor_x;      // offset into line
@@ -694,7 +691,7 @@ void text_editor(void)
             current_line_length++;
 
             // If line is shorter than where cursor is, move cursor to end of shorter line
-            if (current_line_length < cursor_x + 1)  // Cursor is 0-based
+            if (current_line_length < (uint32_t)cursor_x + 1)  // Cursor is 0-based
                 cursor_x = current_line_length - 1;
 
             // Move to start of current line

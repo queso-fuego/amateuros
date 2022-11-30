@@ -114,6 +114,8 @@ int32_t parse_sum(void)
 
         } else return num;
     }
+
+    return ERROR;   // Should be unreachable?
 }
 
 int32_t parse_product(void)
@@ -135,6 +137,8 @@ int32_t parse_product(void)
 
         } else return num;
     }
+
+    return ERROR;   // Should be unreachable?
 }
 
 int32_t parse_term(void)

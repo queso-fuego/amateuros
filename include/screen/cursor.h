@@ -63,9 +63,7 @@ void remove_cursor(uint16_t cursor_x, uint16_t cursor_y)
     uint8_t font_height     = *(uint8_t *)FONT_HEIGHT;
     uint32_t row            = (cursor_y * font_height * gfx_mode->x_resolution) * bytes_per_pixel;           // Row to print to in pixels
     uint32_t col            = (cursor_x * font_width) * bytes_per_pixel;                   // Col to print to in pixels
-    uint8_t *font_char;
     uint8_t bytes_per_char_line;
-    uint8_t char_size;
 
     // Text Cursor Position in screen in pixels to print to
     framebuffer += (row + col);
