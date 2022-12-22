@@ -33,8 +33,9 @@ file_name_size_pointer files[] = {
     {"../bin/2ndstage.bin", 0, NULL},
     {"../bin/3rdstage.bin", 0, NULL},
     {"../bin/testfont.bin", 0, NULL},
-    {"../bin/termu16n.bin", 0, NULL},
-    {"../bin/termu18n.bin", 0, NULL},
+    {"../bin/ter-u16n.bin", 0, NULL},
+    {"../bin/ter-u18n.bin", 0, NULL},
+    {"../bin/ter-u32n.bin", 0, NULL},   
     {"../bin/calculator.bin", 0, NULL},
     {"../bin/editor.bin", 0, NULL},
     {"../bin/malloctst.bin", 0, NULL},
@@ -212,7 +213,7 @@ bool write_data_blocks() {
     // Root directory dir_entrys will be first data at disk blocks
     dir_entry_t dir_entry = {
         .id = 1,
-        .name = ".",  
+        .name = ".", 
     };
 
     assert(fwrite(&dir_entry, sizeof dir_entry, 1, IMAGE_PTR) == 1);

@@ -9,6 +9,7 @@
 #include "interrupts/pic.h"
 #include "memory/malloc.h"
 #include "terminal/terminal.h"
+#include "fs/fs_impl.h"
 
 // Test syscall 0
 void syscall_test0(void)
@@ -99,6 +100,180 @@ void syscall_write(void)
     }
 }
 
+// Open system call: open a file
+void syscall_open(void) {
+    int32_t fd = -1;
+    char *filepath = 0;
+    int flags = 0;
+
+    // These extern vars are from kernel.c
+    extern open_file_table_t *open_file_table;  
+    extern uint32_t max_open_files;
+    extern uint32_t current_open_files;         // FD 0/1/2 reserved for stdin/out/err
+    
+    extern inode_t *open_inode_table;
+    extern uint32_t max_open_inodes;
+    extern uint32_t current_open_inodes;
+    extern uint32_t next_available_file_virtual_address;
+
+    __asm__ __volatile__ ("mov %%EBX, %0;"
+                          "mov %%ECX, %1;"
+                          : "=b"(filepath), "=c"(flags));
+
+    // Grab inode for given file path
+    inode_t file_inode = inode_from_path(filepath);
+
+    // If file does not exist
+    if (file_inode.id == 0) {
+
+        if (!(flags & O_CREAT)) {
+            // User did not say to create, error
+            __asm__ __volatile__ ("mov %0, %%EAX" : : "r"(fd) );
+            return;
+        }
+
+        // File doesn't exist, and flags does have O_CREAT,
+        //   create file (incl. new inode, and update inode bitmap/data bitmap,
+        //   write to inode blocks, data blocks for new data (dir data would be . and ..)
+        file_inode = fs_create_file(filepath);
+
+        if (file_inode.id == 0) {
+            // Error, could not create file at path
+            __asm__ __volatile__ ("mov %0, %%EAX" : : "r"(fd) );
+            return;
+        }
+    }
+
+    // Search for file inode in open inode table 
+    inode_t *tmp_inode = open_inode_table;
+    uint32_t inode_tbl_idx = 0;
+    while (inode_tbl_idx < max_open_inodes &&
+           tmp_inode->id != file_inode.id) {
+
+        inode_tbl_idx++;
+        tmp_inode++;
+    }
+
+    if (file_inode.id == tmp_inode->id) {
+        // If already exists in inode table, increment ref_count in inode
+        tmp_inode->ref_count++;
+    } else {
+        // File is not in inode table, add it
+        // Find first open spot in inode table
+        tmp_inode = open_inode_table;
+        inode_tbl_idx = 0;
+        while (inode_tbl_idx < max_open_inodes &&
+               tmp_inode->id != 0) {
+
+            inode_tbl_idx++;
+            tmp_inode++;
+        }
+
+        if (inode_tbl_idx == max_open_inodes) {
+            // Reached current end of open inode table,
+            //   realloc() or expand table size and add a new entry for file
+            void *malloc_ptr = malloc(sizeof(inode_t) * (max_open_inodes*2));
+            memcpy(malloc_ptr, open_inode_table, sizeof(inode_t) * max_open_inodes);
+            free(open_inode_table);
+            open_inode_table = malloc_ptr;
+
+            tmp_inode = open_inode_table + max_open_inodes; // Go to original max + 1
+            *tmp_inode = file_inode;                        // Fill new inode table element
+
+            inode_tbl_idx = max_open_inodes+1;
+            max_open_inodes *= 2;
+
+        } else {
+            // Reached open position in inode table, add data to this position
+            *tmp_inode = file_inode; 
+        }
+        current_open_inodes++;   
+    }
+
+    // Search for open spot in open file table
+    open_file_table_t *tmp_ft_entry = open_file_table;
+    uint32_t file_tbl_idx = 3;  // fd 0/1/2 are reserved for stdin/out/err
+    tmp_ft_entry += 3;          // ""
+
+    while (file_tbl_idx < max_open_files &&
+           tmp_ft_entry->address != 0) {
+
+        file_tbl_idx++; 
+        tmp_ft_entry++;
+    }
+
+    if (file_tbl_idx == max_open_files) {
+        // Reached current end of open inode table,
+        //   realloc() or expand table size and add a new entry for file
+        void *malloc_ptr = malloc(sizeof(open_file_table_t) * (max_open_files*2));
+        memcpy(malloc_ptr, open_file_table, sizeof(open_file_table_t) * max_open_files);
+        free(open_file_table);
+        open_file_table = malloc_ptr;
+
+        tmp_ft_entry = open_file_table + max_open_files;    // Go to original max + 1
+        
+        file_tbl_idx = max_open_files+1;
+        max_open_files *= 2;
+
+    } 
+    current_open_files++;   
+
+    // Fill out file table entry data
+    tmp_ft_entry->address   = 0;
+    tmp_ft_entry->offset    = 0;
+    tmp_ft_entry->inode     = tmp_inode;
+    tmp_ft_entry->ref_count = 1;
+    tmp_ft_entry->flags     = flags;
+
+    // Return FD, which is index of open file table position/entry
+    fd = file_tbl_idx;
+
+    tmp_ft_entry->address = (uint8_t *)next_available_file_virtual_address;
+
+    // Load file from disk to memory to fill out address of file table entry
+    uint32_t size_in_pages = bytes_to_blocks(tmp_ft_entry->inode->size_bytes);
+    if (size_in_pages == 0) size_in_pages = 1;  // Reserve 1 page by default for new/empty files
+
+    // Allocate enough pages/blocks for file
+    for (uint32_t i = 0; i < size_in_pages; i++) {
+        pt_entry page = 0;
+        uint32_t phys_addr = (uint32_t)allocate_page(&page);
+
+        if (!map_page((void *)phys_addr, (void *)(next_available_file_virtual_address))) {
+            fd = -1;
+            break;
+        }
+        next_available_file_virtual_address += PAGE_SIZE;
+    }
+
+    if (flags & O_APPEND) {
+        // File will be written to at end of file every time
+        tmp_ft_entry->offset = tmp_ft_entry->inode->size_bytes;
+    }
+
+    // Load file to allocated addresses
+    if (!fs_load_file(tmp_ft_entry->inode, (uint32_t)tmp_ft_entry->address)) {
+      fd = -1; // Error, could not load file
+    }
+
+    __asm__ __volatile__ ("mov %0, %%EAX" : : "r"(fd) );
+}
+
+// Close system call: close an open file
+void syscall_close(void) {
+    // TODO:
+}
+
+// Read system call: read bytes from an open file to a buffer
+void syscall_read(void) {
+    // TODO:
+}
+
+// Seek system call: update an open file's position 
+void syscall_seek(void) {
+    // TODO:
+}
+
 // Syscall table
 void (*syscalls[MAX_SYSCALLS])(void) = {
     [SYSCALL_TEST1]  = syscall_test1,
@@ -106,7 +281,11 @@ void (*syscalls[MAX_SYSCALLS])(void) = {
     [SYSCALL_SLEEP]  = syscall_sleep,
     [SYSCALL_MALLOC] = syscall_malloc,
     [SYSCALL_FREE]   = syscall_free,
+    [SYSCALL_OPEN]   = syscall_open,
+    [SYSCALL_CLOSE]  = syscall_close,
+    [SYSCALL_READ]   = syscall_read,
     [SYSCALL_WRITE]  = syscall_write,
+    [SYSCALL_SEEK]   = syscall_seek,
 };
 
 // Syscall dispatcher
@@ -124,7 +303,7 @@ __attribute__ ((naked)) void syscall_dispatcher(void)
     // NOTE: Easier to do call in intel syntax, I'm not sure how to do it in att syntax
     __asm__ __volatile__ (".intel_syntax noprefix\n"
 
-                          ".equ MAX_SYSCALLS, 6\n"  // Have to define again, inline asm does not see the #define
+                          ".equ MAX_SYSCALLS, 10\n"     // Have to define again, inline asm does not see the #define
 
                           "cmp eax, MAX_SYSCALLS-1\n"   // syscalls table is 0-based
                           "ja invalid_syscall\n"        // invalid syscall number, skip and return

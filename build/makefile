@@ -4,27 +4,32 @@
 # Make variables
 CC = gcc
 #CC = clang
+
+# TODO: Add flag -Wshadow to check for shadowed variables
+# TODO: Add -pedantic or -Wpedantic for extra warnings for non C std compliance
 CFLAGS = -std=c17 -m32 -march=i386 -mgeneral-regs-only -ffreestanding -fno-stack-protector -fno-builtin -nostdinc -fno-pie \
 	-Wall -Wextra -Wno-pointer-sign -Wno-interrupt-service-routine -I../include/
 	
 SRCDIR = ../src/
 BINDIR = ../bin/
-C_FILES != find $(SRCDIR) -name "*.c" -exec basename -s ".c" {} \;
-ASM_FILES != find $(SRCDIR) -name "*.asm" -exec basename -s ".asm" {} \;
-TMPFILES = $(ASM_FILES) $(C_FILES)
-BINFILES = $(TMPFILES:%=$(BINDIR)%.bin)
+FONTDIR = ../src/fonts/
+C_FILES != find $(SRCDIR) -maxdepth 1 -name "*.c" -exec basename -s ".c" {} \;
+FONTS_BDF != find $(FONTDIR) -name "*.bdf" -exec basename -s ".bdf" {} \;
 
-# Make final OS.bin binary - padding out to full 1.44MB "floppy" bochs img
-# TODO: How to send list of files to make_disk? Does sending $(BINFILES) work as 1 argv value, or multiple?
-OS: $(ASM_FILES) $(C_FILES)
+# Make final OS.bin binary - padding out to full 1.44MB "floppy" img
+# TODO: Send list of files to make_disk.bin
+OS: $(FONTS_BDF) asm_files $(C_FILES) 
 	@$(CC) ./make_disk.c -o ./make_disk.bin -I../include	
-	@./make_disk.bin 
+	@./make_disk.bin
 
-# Assemble assembly source files into binary files
-$(ASM_FILES):
-	@nasm -f bin -o $(BINDIR)$@.bin $(SRCDIR)$@.asm 1>/dev/null
-	@size=$$(($$(wc -c < $(BINDIR)$@.bin)));\
-	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors)";\
+# Assemble assembly source files into binary files,
+#   as fonts or other targets can make additional .asm files, need to process at runtime
+asm_files: 
+	@for file in `find $(SRCDIR) -maxdepth 1 -name "*.asm" -exec basename -s ".asm" {} \;`; do \
+		nasm -f bin -o $(BINDIR)$$file.bin $(SRCDIR)$$file.asm 1>/dev/null;\
+		size=$$(($$(wc -c < $(BINDIR)$$file.bin)));\
+		echo "$$file" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors)";\
+	done
 
 # Compile C source files into binary files, and pad out their size to next 512 byte sector size
 $(C_FILES):
@@ -34,22 +39,34 @@ $(C_FILES):
 	@size=$$(($$(wc -c < $(BINDIR)$@.bin)));\
 	newsize=$$((size - $$((size % 512)) + 512));\
 	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors) ->" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
-	dd if=/dev/zero of=$(BINDIR)$@.bin bs=1 seek=$$size count=$$((newsize - size)) status=none;\
+	dd if=/dev/zero of=$(BINDIR)$@.bin bs=1 seek=$$size count=$$((newsize - size)) status=none;
 
 # Launch OS through qemu 
 # NOTE: Remove driftfix=slew if not needed
-# TODO: Find replacement/alternative for -soundhw
+# NOTE: -enable-kvm makes RTC and disk accesses slow for me, but can be better accuracy
 run:
 	qemu-system-i386 \
 	-monitor stdio \
+	-m 128M \
 	-drive format=raw,file=$(BINDIR)OS.bin,if=ide,index=0,media=disk \
 	-rtc base=localtime,clock=host,driftfix=slew \
-	#-soundhw pcspk
+	-audiodev id=alsa,driver=alsa \
+	-machine pcspk-audiodev=alsa
+	#-enable-kvm \
 
 # Launch OS through bochs
 bochs:
 	bochs -qf $(BINDIR).bochsrc
 
 clean:
-	rm -f $(BINDIR)*.bin
-	rm -f ./sector_num.txt
+	rm -f $(BINDIR)*.bin ./*.o ./sector_num.txt
+
+# Make program to convert fonts
+make_font_pgm:
+	@make -C $(FONTDIR) 1>/dev/null
+
+# Convert bdf fonts to OS asm font files
+$(FONTS_BDF): make_font_pgm
+	@$(FONTDIR)bdf_to_asm.bin $(FONTDIR)$@.bdf
+	@mv $(FONTDIR)$@.asm $(SRCDIR)
+

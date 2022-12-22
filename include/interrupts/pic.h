@@ -4,6 +4,7 @@
 #pragma once
 
 #include "../C/stdbool.h"
+#include "../fs/fs.h" 
 #include "../global/global_addresses.h"
 #include "../ports/io.h"
 #include "../interrupts/idt.h"
@@ -253,19 +254,7 @@ __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame)
 }
 
 // Show date time info or not
-static bool show_datetime = false;
-
-// Date time info
-typedef struct {
-    uint8_t second;
-    uint8_t minute;
-    uint8_t hour;
-    uint8_t day;
-    uint8_t month;
-    uint16_t year;
-} __attribute__ ((packed)) datetime_t;
-
-datetime_t *datetime = (datetime_t *)RTC_DATETIME_AREA;
+fs_datetime_t *datetime = (fs_datetime_t *)RTC_DATETIME_AREA;
 
 // CMOS registers
 enum {
@@ -322,7 +311,7 @@ __attribute__ ((interrupt)) void cmos_rtc_irq8_handler (int_frame_32_t *frame)
 {
     (void)frame;    // Silence compiler warnings
                     
-    datetime_t new_datetime, old_datetime; 
+    fs_datetime_t new_datetime, old_datetime;  
     static uint16_t rtc_ticks = 0;
     uint8_t regB_value;
 
@@ -384,35 +373,6 @@ __attribute__ ((interrupt)) void cmos_rtc_irq8_handler (int_frame_32_t *frame)
 
         // Set datetime values in memory
         *datetime = new_datetime;
-
-        // Print date/time on screen
-        if (show_datetime) {
-            uint16_t x = 50, y = 30; // TODO: Change later to fit exactly in lower right corner of screen
-
-            // ISO Formatted date/time - YYYY-MM-DD HH:MM:SS
-            print_dec(&x, &y, datetime->year);
-            print_char(&x, &y, '-');
-
-            if (datetime->month < 10) print_char(&x, &y, '0');
-            print_dec(&x, &y, datetime->month);
-            print_char(&x, &y, '-');
-
-            if (datetime->day < 10) print_char(&x, &y, '0');
-            print_dec(&x, &y, datetime->day);
-
-            print_char(&x, &y, ' ');
-
-            if (datetime->hour < 10) print_char(&x, &y, '0');
-            print_dec(&x, &y, datetime->hour);
-            print_char(&x, &y, ':');
-
-            if (datetime->minute < 10) print_char(&x, &y, '0');
-            print_dec(&x, &y, datetime->minute);
-            print_char(&x, &y, ':');
-
-            if (datetime->second < 10) print_char(&x, &y, '0');
-            print_dec(&x, &y, datetime->second);
-        }
     }
 
     // Read register C so that future IRQ8s can occur

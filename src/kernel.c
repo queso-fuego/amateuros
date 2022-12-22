@@ -1,5 +1,5 @@
 // =========================================================================== 
-// Kernel.c: basic 'kernel' loaded from 2nd stage bootloader
+// Kernel.c: basic 'kernel' loaded from 3rd stage bootloader
 // ===========================================================================
 #include "C/stdint.h"
 #include "C/stdlib.h"
@@ -29,7 +29,22 @@
 #include "sys/syscall_wrappers.h"
 #include "fs/fs_impl.h"
 
+// Open file table & inode table pointers
+open_file_table_t *open_file_table;
+uint32_t max_open_files;
+uint32_t current_open_files;
+
+inode_t *open_inode_table;
+uint32_t max_open_inodes;
+uint32_t current_open_inodes;
+
+uint32_t next_available_file_virtual_address;
+
+// Forward function declarations
 void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
+void init_open_file_table(void);                                        
+void init_open_inode_table(void);                                        
+void init_fs_vars(void);
 
 __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 {
@@ -38,31 +53,32 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t input_char   = 0;       // User input character
     uint8_t input_length;           // Length of user input
     uint16_t idx         = 0;
-    uint8_t *cmdDir      = "dir\0";         // Directory command; list all files/pgms on disk
-    uint8_t *cmdReboot   = "reboot\0";      // 'warm' reboot option
-    uint8_t *cmdPrtreg   = "prtreg\0";      // Print register values
-    uint8_t *cmdGfxtst   = "gfxtst\0";      // Graphics mode test
-    uint8_t *cmdHlt      = "hlt\0";         // E(n)d current program by halting cpu
-    uint8_t *cmdCls	     = "cls\0";         // Clear screen by scrolling
-    uint8_t *cmdShutdown = "shutdown\0";    // Close QEMU emulator
-    uint8_t *cmdDelFile  = "del\0";		    // Delete a file from disk
-    uint8_t *cmdRenFile  = "ren\0";         // Rename a file in the file table
-    uint8_t *cmdPrtmemmap = "prtmemmap\0";  // Print physical memory map info
-    uint8_t *cmdChgColors = "chgcolors\0";  // Change current fg/bg colors
-    uint8_t *cmdChgFont   = "chgfont\0";    // Change current font
-    uint8_t *cmdSleep     = "sleep\0";      // Sleep for a # of seconds
-    uint8_t *cmdMSleep    = "msleep\0";     // Sleep for a # of milliseconds
-    uint8_t *cmdShowDateTime = "showdatetime\0";  // Show CMOS RTC date/time values
-    uint8_t *cmdSoundTest = "soundtest\0";  // Test pc speaker square wave sound
+    uint8_t *cmdDir      = "dir";         // Directory command; list all files/pgms on disk
+    uint8_t *cmdReboot   = "reboot";      // 'warm' reboot option
+    uint8_t *cmdPrtreg   = "prtreg";      // Print register values
+    uint8_t *cmdGfxtst   = "gfxtst";      // Graphics mode test
+    uint8_t *cmdHlt      = "hlt";         // E(n)d current program by halting cpu
+    uint8_t *cmdCls	     = "cls";         // Clear screen by scrolling
+    uint8_t *cmdShutdown = "shutdown";    // Close QEMU emulator
+    uint8_t *cmdDelFile  = "del";		    // Delete a file from disk
+    uint8_t *cmdRenFile  = "ren";         // Rename a file in the file table
+    uint8_t *cmdPrtmemmap = "prtmemmap";  // Print physical memory map info
+    uint8_t *cmdChgColors = "chgcolors";  // Change current fg/bg colors
+    uint8_t *cmdChgFont   = "chgfont";    // Change current font
+    uint8_t *cmdSleep     = "sleep";      // Sleep for a # of seconds
+    uint8_t *cmdMSleep    = "msleep";     // Sleep for a # of milliseconds
+    uint8_t *cmdShowDateTime = "datetime";  // Show CMOS RTC date/time values
+    uint8_t *cmdSoundTest = "soundtest";  // Test pc speaker square wave sound
+    uint8_t *cmdOpenTest = "opentest";  // DEBUGGING, but may keep
     uint8_t fileExt[3];
-    uint8_t *fileBin = "bin\0";
+    uint8_t *fileBin = "bin";
     uint8_t *file_ptr;
     //uint8_t *windowsMsg     = "\r\n" "Oops! Something went wrong :(" "\r\n\0";
     uint8_t *menuString     = "------------------------------------------------------\r\n"
                               "Kernel Booted, Welcome to QuesOS - 32 Bit 'C' Edition!\r\n"
                               "------------------------------------------------------\r\n\r\n\0";
     uint8_t *failure        = "\r\n" "Command/Program not found, Try again" "\r\n\0";
-    uint8_t *prompt         = ">:\0";
+    uint8_t *prompt         = ">";
     uint8_t *pgmNotLoaded   = "\r\n" "Program/file found but not loaded, Try Again" "\r\n\0";
     uint8_t *fontNotFound   = "\r\n" "Font not found!" "\r\n\0";
 
@@ -116,7 +132,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     clear_irq_mask(8); // Enable CMOS RTC IRQ8
     
     // Enable CMOS RTC
-    show_datetime = false;  // Don't show date/time on boot 
     enable_rtc();
 
     // Set default PIT Timer IRQ0 rate - ~1000hz
@@ -147,6 +162,13 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     malloc_phys_address = kernel_malloc_phys_address;
     total_malloc_pages  = kernel_total_malloc_pages;
 
+    // Set up initial file system variables
+    init_fs_vars();
+
+    // Set up kernel/system open file table and open inode table
+    init_open_file_table();
+    init_open_inode_table();
+
     // Set intial colors
     while (!user_gfx_info->fg_color) {
         if (gfx_mode->bits_per_pixel > 8) {
@@ -173,13 +195,13 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // TODO: Change printing everywhere to use printf/write instead of print_types functions, 
     //   then remove kernel cursor variables
     printf("\eX%dY%d;\eCSROFF;TESTING PRINTF; Char: %c, Int: %d, String: %s, Hex: %x, %: %%\r\n", 0, 3, 'f', 123, "Hello", 0xAB12);
-    
+
     while (1) {
         // Reset tokens data, arrays, and variables for next input line
         memset(cmdString, 0, sizeof cmdString);
 
         // Print prompt
-        printf("\eCSRON;%s", prompt);
+        printf("\eCSRON;%s%s", current_dir, prompt);
         
         input_length = 0;   // reset byte counter of input
 
@@ -188,7 +210,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             input_char = get_key();     // Get ascii char from scancode from keyboard data port 60h
 
             if (input_char == '\r') {   // enter key?
-                printf("\eCSROFF;");
+                printf("\eCSROFF; ");
                 break;                  // go on to tokenize user input line
             }
 
@@ -223,7 +245,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
         // Tokenize input string "cmdString" into separate tokens
         cmdString_ptr = cmdString;      // Reset pointers...
-        argc = 0;   // Reset argument count
+        argc = 0;                       // Reset argument count
         memset(argv, 0, sizeof argv);
 
         // Get token loop
@@ -242,10 +264,25 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
         // Check commands 
         // Get first token (command to run) & second token (if applicable e.g. file name)
         if (strncmp(argv[0], cmdDir, strlen(cmdDir)) == 0) {
-            // --------------------------------------------------------------------
-            // File/Program browser & loader   
-            // --------------------------------------------------------------------
-            print_fileTable(); 
+            if (!argv[1]) {
+                if (!print_dir(current_dir))
+                    printf("\r\nError printing dir %s\r\n", current_dir);
+            } else {
+                if (!print_dir(argv[1])) 
+                    printf("\r\nError printing dir %s\r\n", argv[1]);
+            }
+
+            continue;
+        }
+
+        // Test Open() syscall
+        if (strncmp(argv[0], cmdOpenTest, strlen(cmdOpenTest)) == 0) {
+            if (open("newfile.txt", O_CREAT) != -1) {
+                printf("\r\nCreated file %s\r\n", "newfile.txt");
+            } else {
+                printf("\r\nError: could not create file %s\r\n", "newfile.txt");
+            }
+
             continue;
         }
 
@@ -579,16 +616,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
         // Show CMOS RTC date/time values
         if (strncmp(argv[0], cmdShowDateTime, strlen(cmdShowDateTime)) == 0) {
-            show_datetime = !show_datetime;  
-
-            if (!show_datetime) {
-                // Blank out date/time
-                // TODO: Make "save/restore" screen or terminal variables control code
-                uint16_t x = 50, y = 30;
-                print_string(&x, &y, "                   "); // Overwrite date/time with spaces
-            }
-
-            printf("\r\n");
+            fs_datetime_t now = current_timestamp();
+            printf("\r\n%d-%d-%d %d:%d:%d\r\n",
+                    now.year, now.month, now.day, now.hour, now.minute, now.second);
             continue;
         }
 
@@ -597,6 +627,13 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             enable_pc_speaker();
 
             /* ADD SOUND THINGS HERE */
+            play_note(A4, 500);
+            play_note(B4, 500);
+            play_note(C5, 500);
+            play_note(D5, 500);
+            play_note(C5, 500);
+            play_note(B4, 500);
+            play_note(A4, 500);
 
             disable_pc_speaker();
 
@@ -794,4 +831,49 @@ void print_physical_memory_info(void)
     printf("\r\nFree or available blocks: %d\r\n\r\n", max_blocks - used_blocks);
 }
 
+// Initialize file system variables
+void init_fs_vars(void) {
+    // Load initial superblock state
+    superblock = *(superblock_t *)SUPERBLOCK_ADDRESS;
+
+    // Load root inode, root is always inode 1 
+    rw_sectors(1, 
+               (superblock.first_inode_block*8),   // 1 block = 8 sectors
+               (uint32_t)temp_sector,
+               READ_WITH_RETRY);
+
+    root_inode = *((inode_t *)temp_sector + 1);
+    superblock.root_inode_pointer = (uint32_t)&root_inode;
+
+    // Set filesystem starting point
+    current_dir = malloc(1024); // Set starting size of current working directory string
+    strcpy(current_dir, "/");   // Start in 'root' directory by default
+    current_dir_inode = root_inode;
+    current_parent_inode = root_inode;  // Root's parent is itself
+                                        //
+    next_available_file_virtual_address = 0x40000000; // Default to ~1GB
+}
+
+// Initialize open file table
+void init_open_file_table(void) {
+    max_open_files = 256;
+
+    open_file_table = malloc(sizeof(open_file_table_t) * max_open_files);
+    memset(open_file_table, 0, sizeof(open_file_table_t) * max_open_files);
+
+    *open_file_table = (open_file_table_t){0};
+
+    current_open_files = 3;    // FD 0/1/2 reserved for stdin/out/err
+}
+
+// Initialize open inode table
+void init_open_inode_table(void) {
+    max_open_inodes = 256;
+    current_open_inodes = 0;
+
+    open_inode_table = malloc(sizeof(inode_t) * max_open_inodes);
+    memset(open_inode_table, 0, sizeof(open_file_table_t) * max_open_files);
+
+    *open_inode_table = (inode_t){0};
+}
 

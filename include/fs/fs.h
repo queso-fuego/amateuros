@@ -5,9 +5,16 @@
 
 #include "C/stdint.h"
 
+// File system sizes/bounds/limits
 #define FS_BLOCK_SIZE 4096  // 1 disk block = 4KB, same as page size
 #define FS_SECTOR_SIZE 512  // 1 disk sector/LBA = 512 bytes
+                            
+#define SUPERBLOCK_DISK_SECTOR 8    // Sectors 0-7 are for boot block
 
+const uint8_t SECTORS_PER_BLOCK = FS_BLOCK_SIZE / FS_SECTOR_SIZE; 
+const uint32_t BITS_PER_BLOCK  = 8 * FS_BLOCK_SIZE; // 1 byte = 8 bits
+
+// File types
 #define FILETYPE_FILE 0
 #define FILETYPE_DIR  1
 
@@ -68,13 +75,27 @@ typedef struct {
     uint8_t ref_count;
 
     uint8_t padding[2];                     // Unused
-} __attribute__ ((packed)) inode_t;
+} __attribute__ ((packed)) inode_t;         // sizeof(inode_t) should = 64
+                                            
+const uint8_t INODES_PER_SECTOR = FS_SECTOR_SIZE / sizeof(inode_t);
 
 typedef struct {
     uint32_t id;                            // This will match the inode id
     char name[60];
-} __attribute__ ((packed)) dir_entry_t;     // sizeof(dir_entry_t)
+} __attribute__ ((packed)) dir_entry_t;     // sizeof(dir_entry_t) = 64 bytes
                                             
+const uint8_t DIR_ENTRIES_PER_BLOCK = FS_BLOCK_SIZE / sizeof(dir_entry_t);
+
+typedef struct {
+    uint8_t *address;       // Base virtual address file is loaded to
+    uint32_t offset;        // Current file position; used with seek()
+    inode_t *inode;         // The underlying inode for the file, element in the open inode table
+    uint32_t ref_count;     // Reference count, used for dup() or similar syscalls
+    uint32_t flags;         // Open flags e.g. O_CREAT, O_RDONLY, O_WRONLY, O_RDWR, ...
+                            
+    uint8_t padding[12];     // Unused
+} __attribute__ ((packed)) open_file_table_t;       // sizeof(open_file_table_t) should = 32 bytes
+                                                    
 // Convert bytes to blocks
 uint32_t bytes_to_blocks(const uint32_t bytes) {
     if (bytes == 0) return 0;

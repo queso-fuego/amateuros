@@ -20,6 +20,8 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
         uint32_t acpi;
     } __attribute__ ((packed)) SMAP_entry_t;
 
+    const char *font = "ter-u32n";  // Set initial font
+
     uint32_t num_SMAP_entries; 
     uint32_t total_memory; 
     SMAP_entry_t *SMAP_entry;
@@ -49,9 +51,14 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
     deinitialize_memory_region(MEMMAP_AREA, max_blocks / BLOCKS_PER_BYTE); // Reserve physical memory map area 
 
     // Load root dir
-    superblock_t *superblock = (superblock_t *)SUPERBLOCK_ADDRESS;
-    superblock->root_inode_pointer = BOOTLOADER_FIRST_INODE_ADDRESS + sizeof(inode_t);  // Root inode = inode 1
-    rw_sectors(8, superblock->first_data_block*8, SCRATCH_BLOCK_ADDRESS, READ_WITH_RETRY);
+    superblock = *(superblock_t *)SUPERBLOCK_ADDRESS;
+    
+    //TODO: Not needed here? Can set in kernel; 
+    //superblock->root_inode_pointer = BOOTLOADER_FIRST_INODE_ADDRESS + sizeof(inode_t);  // Root inode = inode 1
+    rw_sectors(SECTORS_PER_BLOCK, 
+               superblock.first_data_block*SECTORS_PER_BLOCK, 
+               SCRATCH_BLOCK_ADDRESS, 
+               READ_WITH_RETRY);
 
     // Find kernel id
     dir_entry_t *dir_entry = (dir_entry_t *)SCRATCH_BLOCK_ADDRESS;
@@ -67,7 +74,8 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
     
     // Find a font id
     dir_entry = (dir_entry_t *)SCRATCH_BLOCK_ADDRESS;
-    while (dir_entry->name[0] != '\0' && strncmp(dir_entry->name, "termu18n", strlen("termu18n")) != 0)
+    while (dir_entry->name[0] != '\0' && 
+           strncmp(dir_entry->name, font, strlen(font)) != 0)
         dir_entry++;
 
     // Find font inode

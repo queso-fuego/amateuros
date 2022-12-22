@@ -66,6 +66,27 @@ uint8_t *strcpy(uint8_t *dst, const uint8_t *src)
     return dst;
 }
 
+// strchr: return pointer to first occurrence of char in string
+char *strchr(const char *str, const char c) {
+    char *p = (char *)str;
+    while (*p != '\0' && *p != c) p++;
+
+    return p;
+}
+
+// strrchr: return pointer to last occurrence of char in string
+char *strrchr(const char *str, const char c) {
+    char *p = (char *)str;
+    char *result = 0;
+
+    while (*p != '\0') {
+        if (*p == c) result = p;
+        p++;
+    }
+
+    return result;
+}
+
 // strncpy: Copy at most len characters from src string to dst string
 //
 // Returns:

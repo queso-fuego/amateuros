@@ -208,26 +208,28 @@ int32_t terminal_write(void *buf, const uint32_t len)
     }
 
     // Draw cursor
-    font_char = (uint8_t *)(FONT_ADDRESS + ((127 * char_size) - bytes_per_char_line));
+    if (show_cursor) {
+        font_char = (uint8_t *)(FONT_ADDRESS + ((127 * char_size) - bytes_per_char_line));
 
-    // Go to last row of cursor character 
-    framebuffer = (uint8_t *)gfx_mode->physical_base_pointer +
-    ((Y * FONT_H * gfx_mode->x_resolution) * bytes_per_pixel) + 
-    ((X * FONT_W) * bytes_per_pixel);
+        // Go to last row of cursor character 
+        framebuffer = (uint8_t *)gfx_mode->physical_base_pointer +
+        ((Y * FONT_H * gfx_mode->x_resolution) * bytes_per_pixel) + 
+        ((X * FONT_W) * bytes_per_pixel);
 
-    framebuffer += (gfx_mode->x_resolution * (FONT_H - 1)) * bytes_per_pixel;   // Last line of character data
+        framebuffer += (gfx_mode->x_resolution * (FONT_H - 1)) * bytes_per_pixel;   // Last line of character data
 
-    uint8_t px_drawn = 0;
-    for (int8_t byte = bytes_per_char_line - 1; byte >= 0; byte--) {
-        for (int8_t bit = 7; bit >= 0 && px_drawn < FONT_W; bit--, px_drawn++) {
-            // If bit is set draw text color pixel, if not draw background color
-            if (font_char[byte] & (1 << bit) && show_cursor) { 
-                *((uint32_t *)framebuffer) = user_gfx_info->fg_color;
-            } else {
-                *((uint32_t *)framebuffer) = user_gfx_info->bg_color;
+        uint8_t px_drawn = 0;
+        for (int8_t byte = bytes_per_char_line - 1; byte >= 0; byte--) {
+            for (int8_t bit = 7; bit >= 0 && px_drawn < FONT_W; bit--, px_drawn++) {
+                // If bit is set draw text color pixel, if not draw background color
+                if (font_char[byte] & (1 << bit)) { 
+                    *((uint32_t *)framebuffer) = user_gfx_info->fg_color;
+                } else {
+                    *((uint32_t *)framebuffer) = user_gfx_info->bg_color;
+                }
+
+                framebuffer += bytes_per_pixel;  // Next pixel position
             }
-
-            framebuffer += bytes_per_pixel;  // Next pixel position
         }
     }
 
