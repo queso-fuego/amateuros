@@ -27,3 +27,34 @@ int32_t open(const char *filepath, int flags) {
 
     return result;
 }
+
+// Close an open file
+int32_t close(const int32_t fd) {
+    int32_t result = -1;
+
+    __asm__ __volatile__ ("int $0x80" : "=a"(result) : "a"(SYSCALL_CLOSE), "b"(fd) );
+
+    return result;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

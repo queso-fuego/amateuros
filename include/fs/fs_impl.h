@@ -65,7 +65,7 @@ inode_t inode_for_name_in_directory(const inode_t directory_inode, const char *f
                  dir_entry++, count++)
                 ;
 
-            if (dir_entry->id == 0 || strncmp(dir_entry->name, file_name, strlen(file_name) != 0)) {
+            if (dir_entry->id == 0 || strncmp(dir_entry->name, file_name, strlen(file_name)) != 0) {
                 // Did not find the file in this block, keep checking
                 continue;
             }
@@ -208,7 +208,7 @@ void set_bit_in_disk_block(const uint32_t block, uint32_t bit) {
     chunk[bit / 32] |= 1 << (bit % 32);
 
     // Write updated block back to disk
-    rw_sectors(SECTORS_PER_BLOCK, block, (uint32_t)temp_block, WRITE_WITH_RETRY);
+    rw_sectors(SECTORS_PER_BLOCK, block * SECTORS_PER_BLOCK, (uint32_t)temp_block, WRITE_WITH_RETRY);
 }
 
 // Generic helper function to find the first unset bit within
@@ -343,12 +343,11 @@ inode_t fs_create_file(const char *path) {
                    (superblock.first_data_bitmap_block * SECTORS_PER_BLOCK) + data_bitmap_sector,
                    (uint32_t)temp_sector,
                    READ_WITH_RETRY);
-        // TODO: Check rw_sectors() return code for read error
         
-        if (temp_sector[(bit_to_check) / 8] & (1 << (bit_to_check % 8))) {
-            //  If so, use that bit and expand inode's extent length in blocks
+        // Set new bit/data block if NOT in use
+        if (!(temp_sector[bit_to_check / 8] & (1 << (bit_to_check % 8)))) {
             parent_inode.extent[last_used_extent].length_blocks++;
-            temp_sector[(bit_to_check) / 8] |= (1 << (bit_to_check % 8));
+            temp_sector[bit_to_check / 8] |= (1 << (bit_to_check % 8));
 
             rw_sectors(1, 
                        (superblock.first_data_bitmap_block * SECTORS_PER_BLOCK) + data_bitmap_sector,
@@ -418,6 +417,7 @@ inode_t fs_create_file(const char *path) {
     const uint32_t total_entries = parent_inode.size_bytes / sizeof(dir_entry_t);
     uint32_t num_entries = 0;
     dir_entry_t *tmp_dir_entry = 0;
+    bool wrote_data = false;  
 
     for (uint8_t i = 0; i < superblock.direct_extents_per_inode && num_entries < total_entries; i++) {
         extent_t tmp_extent = parent_inode.extent[i];
@@ -442,9 +442,17 @@ inode_t fs_create_file(const char *path) {
                                j * SECTORS_PER_BLOCK,
                                (uint32_t)temp_block,
                                WRITE_WITH_RETRY);
+
+                    wrote_data = true;
+                    goto done;          // End loops early
                 }
             }
         } 
+    }
+
+done:   
+    if (!wrote_data) {  
+        // TODO: Check single and double indirect extents
     }
 
     // Update current dir inode and root dir inode, in case new file 

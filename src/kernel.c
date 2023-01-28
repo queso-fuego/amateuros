@@ -67,9 +67,10 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdChgFont   = "chgfont";    // Change current font
     uint8_t *cmdSleep     = "sleep";      // Sleep for a # of seconds
     uint8_t *cmdMSleep    = "msleep";     // Sleep for a # of milliseconds
-    uint8_t *cmdShowDateTime = "datetime";  // Show CMOS RTC date/time values
-    uint8_t *cmdSoundTest = "soundtest";  // Test pc speaker square wave sound
-    uint8_t *cmdOpenTest = "opentest";  // DEBUGGING, but may keep
+    uint8_t *cmdShowDateTime = "datetime"; // Show CMOS RTC date/time values
+    uint8_t *cmdSoundTest = "soundtest";   // Test pc speaker square wave sound
+    uint8_t *cmdOpenTest = "opentest";     // DEBUGGING, but may keep
+    uint8_t *cmdCloseTest = "closetest";   // DEBUGGING, but may keep
     uint8_t fileExt[3];
     uint8_t *fileBin = "bin";
     uint8_t *file_ptr;
@@ -277,10 +278,31 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
         // Test Open() syscall
         if (strncmp(argv[0], cmdOpenTest, strlen(cmdOpenTest)) == 0) {
-            if (open("newfile.txt", O_CREAT) != -1) {
-                printf("\r\nCreated file %s\r\n", "newfile.txt");
+            const char file[] = "opentest.txt";
+
+            if (open(file, O_CREAT) != -1) {
+                printf("\r\nCreated file %s\r\n", file);
             } else {
-                printf("\r\nError: could not create file %s\r\n", "newfile.txt");
+                printf("\r\nError: could not create file %s\r\n", file);
+            }
+
+            continue;
+        }
+
+        // Test close() syscall
+        if (strncmp(argv[0], cmdCloseTest, strlen(cmdCloseTest)) == 0) {
+            const char file[] = "closetest.txt";
+
+            int32_t fd = open(file, O_CREAT);
+            if (fd == -1)
+                printf("\r\nError: could not create file %s\r\n", file);
+            else
+                printf("\r\nCreated file %s\r\n", file);
+
+            if (close(fd) == 0) {
+                printf("Closed file %s\r\n", file);
+            } else {
+                printf("Error: could not close file %s\r\n", file);
             }
 
             continue;

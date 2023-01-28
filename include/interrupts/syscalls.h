@@ -11,6 +11,16 @@
 #include "terminal/terminal.h"
 #include "fs/fs_impl.h"
 
+// These extern vars are from kernel.c
+extern open_file_table_t *open_file_table;  
+extern uint32_t max_open_files;
+extern uint32_t current_open_files;         // FD 0/1/2 reserved for stdin/out/err
+
+extern inode_t *open_inode_table;
+extern uint32_t max_open_inodes;
+extern uint32_t current_open_inodes;
+extern uint32_t next_available_file_virtual_address;
+
 // Test syscall 0
 void syscall_test0(void)
 {
@@ -106,16 +116,6 @@ void syscall_open(void) {
     char *filepath = 0;
     int flags = 0;
 
-    // These extern vars are from kernel.c
-    extern open_file_table_t *open_file_table;  
-    extern uint32_t max_open_files;
-    extern uint32_t current_open_files;         // FD 0/1/2 reserved for stdin/out/err
-    
-    extern inode_t *open_inode_table;
-    extern uint32_t max_open_inodes;
-    extern uint32_t current_open_inodes;
-    extern uint32_t next_available_file_virtual_address;
-
     __asm__ __volatile__ ("mov %%EBX, %0;"
                           "mov %%ECX, %1;"
                           : "=b"(filepath), "=c"(flags));
@@ -196,7 +196,8 @@ void syscall_open(void) {
     tmp_ft_entry += 3;          // ""
 
     while (file_tbl_idx < max_open_files &&
-           tmp_ft_entry->address != 0) {
+           tmp_ft_entry->address   != 0  && 
+           tmp_ft_entry->ref_count != 0) {
 
         file_tbl_idx++; 
         tmp_ft_entry++;
@@ -261,7 +262,37 @@ void syscall_open(void) {
 
 // Close system call: close an open file
 void syscall_close(void) {
-    // TODO:
+    int32_t fd = -1;
+    int32_t result = -1;
+
+    __asm__ __volatile__ ("mov %%EBX, %0;"
+                          : "=b"(fd));
+
+    // Get open file table entry corresponding to given file descriptor/fd
+    open_file_table_t *oft = open_file_table + fd;
+
+    // Error if file not found or is not open
+    if (oft->inode == 0 || oft->ref_count == 0) {
+        __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
+        return;
+    }
+
+    // Found fd in table, decrement ref count for file in file table and inode table
+    oft->ref_count--;
+    oft->inode->ref_count--;
+
+    // If inode ref count = 0, clear open inode table entry as file is no longer open/in use
+    if (oft->inode->ref_count == 0) {
+        memset(oft->inode, 0, sizeof(inode_t));
+    }
+
+    // NEW: Clear open file table entry if no longer in use from e.g. dup()?
+    if (oft->ref_count == 0) {
+        memset(oft, 0, sizeof(open_file_table_t));
+    }
+
+    result = 0; // Success
+    __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
 }
 
 // Read system call: read bytes from an open file to a buffer
