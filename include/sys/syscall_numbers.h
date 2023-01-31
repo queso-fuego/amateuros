@@ -25,7 +25,7 @@ typedef enum {
     O_CREAT  = 0x4,     // Create if not exist
     O_APPEND = 0x8,     // Always write at end of file position
     O_TRUNC  = 0x10,    // Truncate file size and pos to 0 on open
-} open_flags;
+} open_flag_t;
 
 // Seek whence values: used in seek() as seek(<fd>, <offset>, <whence>)
 // 
@@ -46,7 +46,7 @@ typedef enum {
     SEEK_SET, 
     SEEK_CUR,
     SEEK_END,
-} whence_values;
+} whence_value_t;
 
 
 

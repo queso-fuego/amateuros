@@ -20,7 +20,7 @@ int32_t write(int32_t fd, const void *buf, const uint32_t len)
 // Open()
 // RETURNS:
 //   fd of 3+, or -1 on error
-int32_t open(const char *filepath, int flags) {
+int32_t open(const char *filepath, open_flag_t flags) {
     int32_t result = -1;
 
     __asm__ __volatile__ ("int $0x80" : "=a"(result) : "a"(SYSCALL_OPEN), "b"(filepath), "c"(flags) );
@@ -37,7 +37,15 @@ int32_t close(const int32_t fd) {
     return result;
 }
 
+// Seek a file, updating it's offset in the open file table
+int32_t seek(const int32_t fd, const int32_t offset, const whence_value_t whence) {
+    int32_t result = -1;
 
+    __asm__ __volatile__ ("int $0x80" : "=a"(result) : 
+                          "a"(SYSCALL_SEEK), "b"(fd), "c"(offset), "d"(whence) );
+
+    return result;
+}
 
 
 

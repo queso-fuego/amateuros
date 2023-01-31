@@ -110,6 +110,10 @@ int32_t terminal_write(void *buf, const uint32_t len)
                     bg_color = bg_color * base + str[i] - ((str[i] >= 'A' && str[i] <= 'F') ? 'A' - 10 : '0');
                     i++;
                 }
+
+                user_gfx_info->fg_color = convert_color(fg_color);
+                user_gfx_info->bg_color = convert_color(bg_color);
+
             } else if (!strncmp(&str[i], "CSRON;", 6)) {
                 // Turn cursor on
                 show_cursor = true;

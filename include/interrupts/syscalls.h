@@ -8,6 +8,7 @@
 #include "print/print_types.h"
 #include "interrupts/pic.h"
 #include "memory/malloc.h"
+#include "memory/virtual_memory_manager.h" 
 #include "terminal/terminal.h"
 #include "fs/fs_impl.h"
 
@@ -268,6 +269,12 @@ void syscall_close(void) {
     __asm__ __volatile__ ("mov %%EBX, %0;"
                           : "=b"(fd));
 
+    // Error for invalid file descriptor
+    if (fd < 0) {
+        __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
+        return;
+    }
+
     // Get open file table entry corresponding to given file descriptor/fd
     open_file_table_t *oft = open_file_table + fd;
 
@@ -281,14 +288,26 @@ void syscall_close(void) {
     oft->ref_count--;
     oft->inode->ref_count--;
 
-    // If inode ref count = 0, clear open inode table entry as file is no longer open/in use
-    if (oft->inode->ref_count == 0) {
-        memset(oft->inode, 0, sizeof(inode_t));
-    }
-
-    // NEW: Clear open file table entry if no longer in use from e.g. dup()?
+    // Clear open file table entry if no longer in use and free memory used
+    //   for file
     if (oft->ref_count == 0) {
-        memset(oft, 0, sizeof(open_file_table_t));
+        uint32_t size_in_pages = bytes_to_blocks(oft->inode->size_bytes);
+        if (size_in_pages == 0) size_in_pages = 1;  // Files use 1 page by default 
+
+        uint32_t file_address = (uint32_t)oft->address;
+
+        while (size_in_pages > 0) {
+            free_page(get_page(file_address));
+            size_in_pages--;
+            file_address += PAGE_SIZE;
+        }
+
+        // If inode ref count = 0, clear open inode table entry as file is no longer open/in use
+        if (oft->inode->ref_count == 0) {
+            memset(oft->inode, 0, sizeof(inode_t));
+        }
+
+        memset(oft, 0, sizeof(open_file_table_t));  // Clear file table entry
     }
 
     result = 0; // Success
@@ -302,7 +321,64 @@ void syscall_read(void) {
 
 // Seek system call: update an open file's position 
 void syscall_seek(void) {
-    // TODO:
+    int32_t result = -1;
+    int32_t fd = -1;
+    int32_t offset = 0;
+    whence_value_t whence = 0;
+
+    __asm__ __volatile__ ("mov %%EBX, %0;"
+                          "mov %%ECX, %1;"
+                          "mov %%EDX, %2;"
+                          : "=b"(fd), "=c"(offset), "=d"(whence) );
+
+    // Error for invalid file descriptor
+    if (fd < 0) {
+        __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
+        return;
+    }
+
+    // Get open file table entry corresponding to given file descriptor/fd
+    open_file_table_t *oft = open_file_table + fd;
+
+    // Error if file not found or is not open
+    if (oft->inode == 0 || oft->ref_count == 0) {
+        __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
+        return;
+    }
+
+    switch(whence) {
+        // Set file offset to function arg offset
+        case SEEK_SET:
+            if (offset < 0) {
+                oft->offset = 0; // Prevent further errors, just go to the start
+                // ERROR: Can not seek before start of file
+                __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
+                return;
+            }
+            oft->offset = offset;
+            break;
+
+        // Set file offset += function arg offset
+        case SEEK_CUR:
+            oft->offset += offset;
+            if (oft->offset < 0) oft->offset = 0;   // Don't go before start of file
+            break;
+
+        // Set file offset to end of file, then add function arg offset
+        case SEEK_END:
+            oft->offset = oft->inode->size_bytes + offset;
+            if (oft->offset < 0) oft->offset = 0;   // Don't go before start of file
+            break;
+
+        default: 
+            // ERROR: Did not pass valid whence value
+            __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
+            return;
+            break;
+    }
+
+    // Return file offset
+    __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(oft->offset) );
 }
 
 // Syscall table

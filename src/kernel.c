@@ -46,6 +46,9 @@ void init_open_file_table(void);
 void init_open_inode_table(void);                                        
 void init_fs_vars(void);
 
+bool test_open_close(void); // Test functions...
+bool test_seek(void);
+
 __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 {
     char cmdString[256] = {0};         // User input string  
@@ -69,8 +72,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     uint8_t *cmdMSleep    = "msleep";     // Sleep for a # of milliseconds
     uint8_t *cmdShowDateTime = "datetime"; // Show CMOS RTC date/time values
     uint8_t *cmdSoundTest = "soundtest";   // Test pc speaker square wave sound
-    uint8_t *cmdOpenTest = "opentest";     // DEBUGGING, but may keep
-    uint8_t *cmdCloseTest = "closetest";   // DEBUGGING, but may keep
+    uint8_t *cmdRunTests = "runtests";     // Run test functions
     uint8_t fileExt[3];
     uint8_t *fileBin = "bin";
     uint8_t *file_ptr;
@@ -276,34 +278,39 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        // Test Open() syscall
-        if (strncmp(argv[0], cmdOpenTest, strlen(cmdOpenTest)) == 0) {
-            const char file[] = "opentest.txt";
+        // Run test functions and present results
+        if (strncmp(argv[0], cmdRunTests, strlen(cmdRunTests)) == 0) {
+            typedef struct {
+                //char name[256];
+                char *name;
+                bool (*function)(void);
+            } test_function_t;
 
-            if (open(file, O_CREAT) != -1) {
-                printf("\r\nCreated file %s\r\n", file);
-            } else {
-                printf("\r\nError: could not create file %s\r\n", file);
+            test_function_t tests[] = {
+                { "Open() & Close() Syscalls", test_open_close },
+                { "Seek() Syscall", test_seek },
+            };
+
+            const uint32_t fg = user_gfx_info->fg_color, bg = user_gfx_info->bg_color;
+            const uint32_t num_tests = sizeof tests / sizeof tests[0];  
+            uint32_t num_passed = 0;
+
+            printf("\r\nRunning tests...\r\n----------------");
+
+            for (uint32_t i = 0; i < num_tests; i++) {
+                printf("\r\n%s: ", tests[i].name);
+                if (tests[i].function()) {
+                    printf("\033FG%xBG%x;OK", GREEN, bg);
+                    num_passed++;
+                } else {
+                    printf("\033FG%xBG%x;FAIL", RED, bg);
+                }
+
+                // Reset default colors
+                printf("\033FG%xBG%x;", fg, bg);
             }
 
-            continue;
-        }
-
-        // Test close() syscall
-        if (strncmp(argv[0], cmdCloseTest, strlen(cmdCloseTest)) == 0) {
-            const char file[] = "closetest.txt";
-
-            int32_t fd = open(file, O_CREAT);
-            if (fd == -1)
-                printf("\r\nError: could not create file %s\r\n", file);
-            else
-                printf("\r\nCreated file %s\r\n", file);
-
-            if (close(fd) == 0) {
-                printf("Closed file %s\r\n", file);
-            } else {
-                printf("Error: could not close file %s\r\n", file);
-            }
+            printf("\r\nTests passed: %d/%d\r\n", num_passed, num_tests);
 
             continue;
         }
@@ -898,4 +905,105 @@ void init_open_inode_table(void) {
 
     *open_inode_table = (inode_t){0};
 }
+
+// Probably should move these to a separate file or something later...
+// Test open() & close() syscalls
+bool test_open_close(void) {
+    const char file[] = "openclosetest.txt";
+    const int32_t fd = open(file, O_CREAT);
+
+    if (fd != -1) {
+        printf("\r\nCreated file %s\r\n", file);
+    } else {
+        printf("\r\nError: could not create file %s\r\n", file);
+        return false;
+    }
+
+    // Test close() syscall
+    if (close(fd) == 0) {
+        printf("Closed file %s\r\n", file);
+    } else {
+        printf("Error: could not close file %s\r\n", file);
+        return false;
+    }
+
+    return true;
+}
+
+// Test seek() syscall
+bool test_seek(void) {
+    // TODO: Add more to this after read() and write() are filled out,
+    //   to be able to actually write data to a file
+
+    const char file[] = "seektest.txt";
+    const int32_t fd = open(file, O_CREAT);
+    int32_t seek_val = 0;
+
+    if (fd != -1) {
+        printf("\r\nCreated file %s\r\n", file);
+    } else {
+        printf("\r\nError: could not create file %s\r\n", file);
+        return false;
+    }
+
+    // Test seeking on a new/empty file
+    if (0 != seek(fd, 0, SEEK_SET)) {
+        printf("\r\nError: could not SEEK_SET to 0 for %s\r\n", file);
+        return false;
+    }
+
+    if (100 != seek(fd, 100, SEEK_SET)) {
+        printf("\r\nError: could not SEEK_SET to 100 for %s\r\n", file);
+        return false;
+    }
+
+    if (-1 != seek(fd, -100, SEEK_SET)) {
+        printf("\r\nError: could not SEEK_SET to -100 for %s\r\n", file);
+        return false;
+    }
+
+    if (0 != seek(fd, 0, SEEK_CUR)) {
+        printf("Error: could not SEEK_CUR to 0 for %s\r\n", file);
+        printf("seek result: %d\r\n", seek_val);
+        return false;
+    }
+
+    if (100 != seek(fd, 100, SEEK_CUR)) {
+        printf("\r\nError: could not SEEK_CUR to 100 for %s\r\n", file);
+        return false;
+    }
+
+    if (0 != seek(fd, -100, SEEK_CUR)) {
+        printf("\r\nError: could not SEEK_CUR to -100 for %s\r\n", file);
+        return false;
+    }
+
+    if (0 != seek(fd, 0, SEEK_END)) {
+        printf("\r\nError: could not SEEK_END to 0 for %s\r\n", file);
+        return false;
+    }
+
+    if (100 != seek(fd, 100, SEEK_END)) {
+        printf("\r\nError: could not SEEK_END to 100 for %s\r\n", file);
+        return false;
+    }
+
+    if (0 != seek(fd, -100, SEEK_END)) {
+        printf("\r\nError: could not SEEK_END to -100 for %s\r\n", file);
+        return false;
+    }
+
+    close(fd);
+
+    return true;
+}
+
+
+
+
+
+
+
+
+
 
