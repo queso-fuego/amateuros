@@ -4,6 +4,7 @@
 #pragma once
 
 #include "C/stdint.h"
+#include "C/stdio.h"    
 #include "sys/syscall_numbers.h"
 #include "print/print_types.h"
 #include "interrupts/pic.h"
@@ -92,23 +93,114 @@ void syscall_free(void)
 }
 
 // Write system call: Write bytes from a buffer to a file descriptor
-void syscall_write(void)
-{
+void syscall_write(void) {
     int fd = 0;
     void *buf = 0;
     uint32_t len = 0;
+
+    uint32_t bytes_written = 0;
 
     __asm__ __volatile__ ("mov %%EBX, %0;"
                           "mov %%ECX, %1;"
                           "mov %%EDX, %2;"
                           : "=b"(fd), "=c"(buf), "=d"(len) );
-
-    // TODO: Change to use some sort of calling process open fd table?
-    if (fd == 1) {
-        __asm__ __volatile__ ("mov %0, %%EAX" : : "a"(terminal_write(buf, len)) );
-    } else {
-        __asm__ __volatile__ ("movl $-1, %EAX"); // Unsupported FD for write
+    if (fd < 0) {
+        // Invalid FD
+        __asm__ __volatile__ ("movl $-1, %EAX"); 
+        return;
     }
+
+    if (fd == stdin ) {
+        // TODO: Remove error later
+        // Can't write to stdin
+        __asm__ __volatile__ ("movl $-1, %EAX"); // Unsupported FD for write
+        return;
+    }
+
+    if (fd == stdout || fd == stderr) {
+        // Terminal write will return bytes consumed/written
+        bytes_written = terminal_write(buf, len);   
+    } 
+
+    // Get open file table entry for input FD
+    open_file_table_t *oft = open_file_table + fd;
+
+    // Error if file not found or is not open
+    if (oft->inode == 0 || oft->ref_count == 0) {
+        __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(bytes_written) );
+        return;
+    }
+
+    // Check for O_APPEND flag, if used, set file offset to end of file (current file size)
+    if (oft->flags & O_APPEND) {
+        oft->offset = oft->inode->size_bytes;
+    }
+
+    // Check if current file offset is greater than length/size of file as pages allocated 
+    //  in memory, if so, last seek() call went beyond end of file
+    if ((uint32_t)oft->offset > oft->pages_allocated * PAGE_SIZE) {
+        // Allocate additional pages to reach new end of file from previous seek(),
+        //   and zero pad memory 
+        const uint32_t bytes_to_allocate = oft->offset - oft->inode->size_bytes;
+        uint32_t size_in_pages = bytes_to_blocks(bytes_to_allocate);
+        if (size_in_pages == 0) size_in_pages = 1;  // Reserve 1 page by default for new/empty files
+
+        // Allocate enough pages/blocks for file
+        for (uint32_t i = 0; i < size_in_pages; i++) {
+            pt_entry page = 0;
+            uint32_t phys_addr = (uint32_t)allocate_page(&page);
+
+            if (!map_page((void *)phys_addr, (void *)(next_available_file_virtual_address))) {
+                // Error: Couldn't allocate enough additional memory for file
+                __asm__ __volatile__ ("movl $-1, %EAX"); // Unsupported FD for write
+                return;
+            }
+            next_available_file_virtual_address += PAGE_SIZE;
+
+            oft->pages_allocated++;  // File has another page allocated
+        }
+
+        // Set allocated memory to 0 to initialize it
+        memset(oft->address + oft->inode->size_bytes, 0, bytes_to_allocate);
+
+        // Check if new file size needs another data disk block added to file's extents
+        const uint32_t current_blocks = bytes_to_blocks(oft->inode->size_bytes);
+        const uint32_t new_blocks = bytes_to_blocks(oft->offset);
+
+        if (new_blocks > current_blocks) {
+            // TODO: Allocate more disk blocks to file's extents
+        }
+
+        // Set new file size to current file offset
+        oft->inode->size_bytes = oft->offset;
+        oft->inode->size_sectors = bytes_to_sectors(oft->inode->size_bytes);
+    }
+
+    // Write data from input buffer to FD, at file offset
+    memcpy32(oft->address + oft->offset, buf, len);
+
+    // Set new file offset from data written
+    oft->offset += len;
+
+    bytes_written = len;    // Data written
+
+    // Set new file size from data written
+    if ((uint32_t)oft->offset > oft->inode->size_bytes) {
+        oft->inode->size_bytes = oft->offset;
+    }
+
+    // Update file's inode data
+    update_inode_on_disk(*oft->inode);
+
+    // Update file's data on disk
+    if (!fs_save_file(oft->inode, (uint32_t)oft->address)) {
+        // Error saving file
+        __asm__ __volatile__ ("movl $-1, %EAX"); 
+        return;
+    }
+
+    // Return number of bytes actually written to FD
+    __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(bytes_written) );
 }
 
 // Open system call: open a file
@@ -246,6 +338,8 @@ void syscall_open(void) {
             break;
         }
         next_available_file_virtual_address += PAGE_SIZE;
+
+        tmp_ft_entry->pages_allocated++;    // Another page was mapped/allocated for file
     }
 
     if (flags & O_APPEND) {
@@ -290,6 +384,9 @@ void syscall_close(void) {
 
     // Clear open file table entry if no longer in use and free memory used
     //   for file
+    // TODO: This assumes virtual addresses are contiguous for each file, that is not
+    //  guaranteed to be the case. Update to take this into account to get the actual virtual
+    //  addresses that were mapped/allocated for the file
     if (oft->ref_count == 0) {
         uint32_t size_in_pages = bytes_to_blocks(oft->inode->size_bytes);
         if (size_in_pages == 0) size_in_pages = 1;  // Files use 1 page by default 

@@ -129,10 +129,14 @@ void *memcpy(void *dst, const void *src, const uint32_t len)
 //
 // Returns:
 //  buffer
-void *memcpy32(void *dst, const void *src, const uint32_t len)
-{
-    for (uint32_t i = 0; i < len/4; i++)
+void *memcpy32(void *dst, const void *src, const uint32_t len) {
+    uint32_t i = 0;
+
+    for (i = 0; i < len / 4; i++)
         ((uint32_t *)dst)[i] = ((uint32_t *)src)[i];
+
+    for (; i < len % 4; i++)
+        ((uint8_t *)dst)[i] = ((uint8_t *)src)[i];
 
     return dst;
 }

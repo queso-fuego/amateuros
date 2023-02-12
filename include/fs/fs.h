@@ -87,13 +87,14 @@ typedef struct {
 const uint8_t DIR_ENTRIES_PER_BLOCK = FS_BLOCK_SIZE / sizeof(dir_entry_t);
 
 typedef struct {
-    uint8_t *address;       // Base virtual address file is loaded to
-    int32_t offset;         // Current file position; used with seek()
-    inode_t *inode;         // The underlying inode for the file, element in the open inode table
-    uint32_t ref_count;     // Reference count, used for dup() or similar syscalls
-    uint32_t flags;         // Open flags e.g. O_CREAT, O_RDONLY, O_WRONLY, O_RDWR, ...
+    uint8_t *address;           // Base virtual address file is loaded to
+    int32_t offset;             // Current file position; used with seek()
+    inode_t *inode;             // The underlying inode for the file, element in the open inode table
+    uint32_t ref_count;         // Reference count, used for dup() or similar syscalls
+    uint32_t flags;             // Open flags e.g. O_CREAT, O_RDONLY, O_WRONLY, O_RDWR, ...
+    uint32_t pages_allocated;   // # of pages currently allocated
                             
-    uint8_t padding[12];     // Unused
+    uint8_t padding[8];         // Unused
 } __attribute__ ((packed)) open_file_table_t;       // sizeof(open_file_table_t) should = 32 bytes
                                                     
 // Convert bytes to blocks

@@ -48,6 +48,7 @@ void init_fs_vars(void);
 
 bool test_open_close(void); // Test functions...
 bool test_seek(void);
+bool test_write(void);
 
 __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 {
@@ -288,7 +289,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
             test_function_t tests[] = {
                 { "Open() & Close() Syscalls", test_open_close },
-                { "Seek() Syscall", test_seek },
+                { "Seek() Syscall on New/Empty file", test_seek },
+                { "Write() Syscall for New file", test_write },
+                // TODO: { "Seek() Syscall on file with data", test_seek },
             };
 
             const uint32_t fg = user_gfx_info->fg_color, bg = user_gfx_info->bg_color;
@@ -912,17 +915,13 @@ bool test_open_close(void) {
     const char file[] = "openclosetest.txt";
     const int32_t fd = open(file, O_CREAT);
 
-    if (fd != -1) {
-        printf("\r\nCreated file %s\r\n", file);
-    } else {
+    if (fd < 0) {
         printf("\r\nError: could not create file %s\r\n", file);
         return false;
     }
 
     // Test close() syscall
-    if (close(fd) == 0) {
-        printf("Closed file %s\r\n", file);
-    } else {
+    if (close(fd) != 0) {
         printf("Error: could not close file %s\r\n", file);
         return false;
     }
@@ -939,9 +938,7 @@ bool test_seek(void) {
     const int32_t fd = open(file, O_CREAT);
     int32_t seek_val = 0;
 
-    if (fd != -1) {
-        printf("\r\nCreated file %s\r\n", file);
-    } else {
+    if (fd < 0) {
         printf("\r\nError: could not create file %s\r\n", file);
         return false;
     }
@@ -998,6 +995,30 @@ bool test_seek(void) {
     return true;
 }
 
+// Test write() syscall
+bool test_write(void) {
+    const char file[] = "writetest.txt";
+    const int32_t fd = open(file, O_CREAT);
+
+    if (fd < 0) {
+        printf("\r\nError: could not create file %s\r\n", file);
+        return false;
+    }
+
+    const char buf[] = "Hello, World!";
+
+    if (14 != write(fd, buf, sizeof buf)) {
+        printf("\r\nError: could not write \"%s\" to file %s\r\n", 
+               buf, file);
+        return false;
+    }
+
+    // TODO: Test O_APPEND
+
+    close(fd);
+
+    return true;
+}
 
 
 

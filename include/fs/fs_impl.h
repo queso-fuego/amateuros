@@ -15,6 +15,11 @@ uint8_t temp_block[FS_BLOCK_SIZE];      // Temporary work block
 inode_t root_inode;                     // Static place to put root dir 
 superblock_t superblock;
 
+// TODO: Add helper function for "update inode on disk" and
+//   others? This would take in an inode, read that inode
+//   from disk, update it's value from input inode, and write
+//   back to disk. Could save on lines of code in a few places
+
 // Load a file from disk to memory 
 bool fs_load_file(inode_t *inode, uint32_t address) {
     // Read all of the file's blocks to memory
@@ -34,6 +39,30 @@ bool fs_load_file(inode_t *inode, uint32_t address) {
 
     if (total_blocks > 0) {
         // TODO: Also load single & double indirect extents as needed
+    }
+
+    return true;
+}
+
+// Save a file from memory to disk 
+bool fs_save_file(inode_t *inode, uint32_t address) {
+    // Write all of the file's blocks to disk
+    uint32_t total_blocks = bytes_to_blocks(inode->size_bytes);
+    uint32_t address_offset = 0;
+
+    // Write inode direct extents
+    for (uint32_t i = 0; i < superblock.direct_extents_per_inode && total_blocks > 0; i++) {
+        rw_sectors(inode->extent[i].length_blocks * SECTORS_PER_BLOCK,
+                   inode->extent[i].first_block * SECTORS_PER_BLOCK,
+                   address + address_offset,
+                   WRITE_WITH_RETRY);
+
+        address_offset += inode->extent[i].length_blocks * FS_BLOCK_SIZE;
+        total_blocks -= inode->extent[i].length_blocks;
+    }
+
+    if (total_blocks > 0) {
+        // TODO: Also write single & double indirect extents as needed
     }
 
     return true;
@@ -248,13 +277,29 @@ void update_superblock(void) {
     rw_sectors(1, SUPERBLOCK_DISK_SECTOR, SUPERBLOCK_ADDRESS, WRITE_WITH_RETRY);
 }
 
+// Helper function to update an inode on disk, in the inode disk blocks
+void update_inode_on_disk(const inode_t inode) {
+    rw_sectors(1, 
+               (superblock.first_inode_block * SECTORS_PER_BLOCK) + 
+                   (inode.id / INODES_PER_SECTOR),
+               (uint32_t)temp_sector,
+               READ_WITH_RETRY);
+
+    inode_t *tmp_inode = (inode_t *)temp_sector + (inode.id % INODES_PER_SECTOR);
+    *tmp_inode = inode;
+
+    rw_sectors(1, 
+               (superblock.first_inode_block * SECTORS_PER_BLOCK) + 
+                   (inode.id / INODES_PER_SECTOR),
+               (uint32_t)temp_sector,
+               WRITE_WITH_RETRY);
+}
+
 // Create a new file in the filesystem given a file path
 // including: new inode, updating inode bitmap blocks, data bitmap blocks,
 // inode blocks, and data blocks for new file. Will probably need to also
 // update superblock
 inode_t fs_create_file(const char *path) {
-    inode_t *tmp_inode = 0;
-
     // Disallow creating files with special names 
     if (!strncmp(path, ".", strlen(path))  || 
         !strncmp(path, "..", strlen(path)) ||
@@ -301,18 +346,7 @@ inode_t fs_create_file(const char *path) {
                                                                          superblock.num_data_bitmap_blocks);
 
     // Update inode blocks for new file/inode
-    rw_sectors(1, 
-               (superblock.first_inode_block * SECTORS_PER_BLOCK) + (new_inode.id / INODES_PER_SECTOR),
-               (uint32_t)temp_sector, 
-               READ_WITH_RETRY);
-
-    tmp_inode = ((inode_t *)temp_sector + (new_inode.id % INODES_PER_SECTOR));
-    *tmp_inode = new_inode;
-
-    rw_sectors(1, 
-               (superblock.first_inode_block * SECTORS_PER_BLOCK) + (new_inode.id / INODES_PER_SECTOR),
-               (uint32_t)temp_sector, 
-               WRITE_WITH_RETRY);
+    update_inode_on_disk(new_inode);
 
     // Update fs info for parent directory inode
     // Update data bitmap blocks for new file/inode in parent dir,
@@ -321,6 +355,11 @@ inode_t fs_create_file(const char *path) {
     const uint32_t new_blocks = bytes_to_blocks(parent_inode.size_bytes + sizeof(dir_entry_t));
 
     if (new_blocks > current_blocks) {
+        // TODO: Abstract this code out into a general helper function,
+        //   as there is more than 1 place this logic can be used,
+        //   e.g. adding an additional block for files being written to in
+        //     write() syscall
+
         // TODO: Add new file dir_entry data in new block being added, vs. at first found location
         //   in dir's data blocks
         
@@ -397,20 +436,7 @@ inode_t fs_create_file(const char *path) {
     parent_inode.last_modified_timestamp = current_timestamp();
 
     // Update inode blocks for parent_dir inode
-    rw_sectors(1, 
-               (superblock.first_inode_block * SECTORS_PER_BLOCK) + 
-                   (parent_inode.id / INODES_PER_SECTOR),
-               (uint32_t)temp_sector,
-               READ_WITH_RETRY);
-
-    tmp_inode = (inode_t *)temp_sector + (parent_inode.id % INODES_PER_SECTOR);
-    *tmp_inode = parent_inode;
-
-    rw_sectors(1, 
-               (superblock.first_inode_block * SECTORS_PER_BLOCK) + 
-                   (parent_inode.id / INODES_PER_SECTOR),
-               (uint32_t)temp_sector,
-               WRITE_WITH_RETRY);
+    update_inode_on_disk(parent_inode);
     
     // Update data block for parent_inode, by adding new dir_entry for new file name and id
     //   use the first empty dir_entry available, or end of list
