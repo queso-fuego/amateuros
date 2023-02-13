@@ -135,7 +135,8 @@ void *memcpy32(void *dst, const void *src, const uint32_t len) {
     for (i = 0; i < len / 4; i++)
         ((uint32_t *)dst)[i] = ((uint32_t *)src)[i];
 
-    for (; i < len % 4; i++)
+    i *= 4;
+    for (uint32_t j = 0; j < len % 4; i++, j++)
         ((uint8_t *)dst)[i] = ((uint8_t *)src)[i];
 
     return dst;

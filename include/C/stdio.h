@@ -71,12 +71,18 @@ void printf(const char *fmt, ...)
     len = 0;
     write_buffer = malloc(max);
 
+    // Initialize buffer
+    memset(write_buffer, 0, max);
+
     for (uint32_t i = 0; fmt[i] != '\0'; i++) {
         while (len > max) {
             // Allocate and move to a larger buffer
             max *= 2;
 
             uint8_t *temp_buffer = malloc(max);
+
+            // Initialize buffer
+            memset(temp_buffer, 0, max);
 
             strcpy(temp_buffer, write_buffer);
 
@@ -116,7 +122,7 @@ void printf(const char *fmt, ...)
                 if (*s == '\0') s = "(null)";
 
                 while (*s) 
-                    write_buffer[len++] = *s++;
+                    write_buffer[len++] = *s++; 
                 break;
             case 'c':
                 // Single Character

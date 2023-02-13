@@ -68,9 +68,6 @@ int32_t terminal_write(void *buf, const uint32_t len)
                framebuffer = (uint8_t *)gfx_mode->physical_base_pointer;
 
                 for (uint32_t i = 0; i < gfx_mode->x_resolution * gfx_mode->y_resolution; i++) {
-                    // DEBUGGING
-                    //*((uint32_t *)framebuffer) = bg_color;
-
                     if (bytes_per_pixel > 2) {
                         *((uint32_t *)framebuffer) = user_gfx_info->bg_color;
                     } else if (bytes_per_pixel == 2) {
@@ -78,7 +75,6 @@ int32_t terminal_write(void *buf, const uint32_t len)
                     } else if (bytes_per_pixel == 1) {
                         *((uint8_t *)framebuffer) = (uint8_t)user_gfx_info->bg_color;
                     }
-                    // DEBUGGING
 
                     framebuffer += bytes_per_pixel;
                 }
@@ -185,7 +181,6 @@ int32_t terminal_write(void *buf, const uint32_t len)
                 for (int8_t bit = 7; bit >= 0 && px_drawn < FONT_W; bit--, px_drawn++) {
                     // If bit is set draw text color pixel, if not draw background color
                     if (font_char[line * bytes_per_char_line + byte] & (1 << bit)) {
-                        // DEBUGGING
                         if (bytes_per_pixel > 2) {
                             *((uint32_t *)framebuffer) = user_gfx_info->fg_color;
                         } else if (bytes_per_pixel == 2) {
@@ -193,9 +188,7 @@ int32_t terminal_write(void *buf, const uint32_t len)
                         } else if (bytes_per_pixel == 1) {
                             *((uint8_t *)framebuffer) = (uint8_t)user_gfx_info->fg_color;
                         }
-                        // DEBUGGING
                     } else {
-                        // DEBUGGING
                         if (bytes_per_pixel > 2) {
                             *((uint32_t *)framebuffer) = user_gfx_info->bg_color;
                         } else if (bytes_per_pixel == 2) {
@@ -203,7 +196,6 @@ int32_t terminal_write(void *buf, const uint32_t len)
                         } else if (bytes_per_pixel == 1) {
                             *((uint8_t *)framebuffer) = (uint8_t)user_gfx_info->bg_color;
                         }
-                        // DEBUGGING
                     }
 
                     framebuffer += bytes_per_pixel;  // Next pixel position

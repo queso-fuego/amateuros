@@ -132,7 +132,8 @@ void syscall_write(void) {
     }
 
     // Check FD's open flags
-    if (oft->flags & O_RDONLY) {
+    if (!(oft->flags & O_WRONLY) && 
+        !(oft->flags & O_RDWR)) {
         // Error, FD is only open for reading
         __asm__ __volatile__ ("movl $-1, %EAX"); 
         return;
@@ -341,6 +342,11 @@ void syscall_open(void) {
             fd = -1;
             break;
         }
+
+        // Set page as read/write
+        pt_entry *virt_page = get_page(next_available_file_virtual_address);
+        SET_ATTRIBUTE(virt_page, PTE_READ_WRITE);
+
         next_available_file_virtual_address += PAGE_SIZE;
 
         tmp_ft_entry->pages_allocated++;    // Another page was mapped/allocated for file

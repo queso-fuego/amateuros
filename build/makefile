@@ -7,7 +7,8 @@ CC = gcc
 
 # TODO: Add flag -Wshadow to check for shadowed variables
 # TODO: Add -pedantic or -Wpedantic for extra warnings for non C std compliance
-CFLAGS = -std=c17 -m32 -march=i386 -mgeneral-regs-only -ffreestanding -fno-stack-protector -fno-builtin -nostdinc -fno-pie \
+CFLAGS = -std=c17 -m32 -march=i386 -mgeneral-regs-only -ffreestanding -fno-stack-protector \
+	-fno-builtin -nostdinc -fno-pie \
 	-Wall -Wextra -Wno-pointer-sign -Wno-interrupt-service-routine -I../include/
 	
 SRCDIR = ../src/

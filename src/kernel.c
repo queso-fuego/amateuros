@@ -51,13 +51,12 @@ bool test_seek(void);
 bool test_write(void);
 bool test_read(void);
 
-__attribute__ ((section ("kernel_entry"))) void kernel_main(void)
-{
+__attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     char cmdString[256] = {0};         // User input string  
     char *cmdString_ptr = cmdString;
     uint8_t input_char   = 0;       // User input character
     uint8_t input_length;           // Length of user input
-    uint16_t idx          = 0;
+    //uint16_t idx          = 0;
     char *cmdDir          = "dir";          // Directory command; list all files/pgms on disk
     char *cmdReboot       = "reboot";       // 'warm' reboot option
     char *cmdPrtreg       = "prtreg";       // Print register values
@@ -77,7 +76,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     char *cmdRunTests     = "runtests";     // Run test functions
     char *cmdType         = "type";         // 'Type' out a text or other file to the screen
     uint8_t fileExt[3];
-    uint8_t *fileBin = "bin";
+    //uint8_t *fileBin = "bin";
     uint8_t *file_ptr;
     //uint8_t *windowsMsg     = "\r\n" "Oops! Something went wrong :(" "\r\n\0";
     uint8_t *menuString     = "------------------------------------------------------\r\n"
@@ -85,10 +84,10 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                               "------------------------------------------------------\r\n\r\n\0";
     uint8_t *failure        = "\r\n" "Command/Program not found, Try again" "\r\n\0";
     uint8_t *prompt         = ">";
-    uint8_t *pgmNotLoaded   = "\r\n" "Program/file found but not loaded, Try Again" "\r\n\0";
+    //uint8_t *pgmNotLoaded   = "\r\n" "Program/file found but not loaded, Try Again" "\r\n\0";
     uint8_t *fontNotFound   = "\r\n" "Font not found!" "\r\n\0";
 
-    uint32_t needed_pages;
+    uint32_t needed_pages; 
     uint8_t font_width  = *(uint8_t *)FONT_WIDTH;
     uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
     int argc = 0;
@@ -684,7 +683,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 
             const int32_t fd = open(argv[1], O_RDONLY);
 
-            // NEW: Check invalid FD or open() error
+            // Check invalid FD or open() error
             if (fd < 3) {
                 printf("\r\nError: Could not open file %s for reading\r\n", argv[1]);
                 continue;
@@ -703,21 +702,25 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
-        // If command not input, search file table entries for user input file
-        file_ptr = check_filename(argv[0], strlen(argv[0]));
-        if (*file_ptr == 0) {  
-            printf(failure);  // File not found in filetable, error
-
+        // Assuming user did not type in a command, but a program to run;
+        //  First Check if file is a bin file
+        if (strncmp(argv[0] + strlen(argv[0]) - 4, ".bin", 4) != 0) {
+            printf("\r\nError: Cannot run program; File %s is not a bin file\r\n", argv[0]);
             continue;
         }
 
-        // file_ptr is pointing to filetable entry, get number of pages needed to load the file
-        //   num_pages = (file size in sectors * # of bytes in a sector) / size of a page in bytes
-        needed_pages = (file_ptr[15] * 512) / PAGE_SIZE;  // Convert file size in bytes to pages
-        if ((file_ptr[15] * 512) % PAGE_SIZE > 0) needed_pages++;   // Allocate extra page for partial page of memory
+        // Check if this is a new file or not, don't run a newly created file
+        inode_t program_inode = inode_from_path(argv[0]);
 
-        printf("\r\nAllocating %d page(s)\r\n", needed_pages);
-        
+        if (program_inode.id == 0) {
+            printf("\r\nError: Program %s does not exist.\r\n", argv[0]);
+            continue;
+        }
+
+        // Get number of pages needed for file
+        needed_pages = (program_inode.size_sectors * 512) / PAGE_SIZE;  // Pgm size in sectors -> pages
+        if ((program_inode.size_sectors * 512) % PAGE_SIZE > 0) needed_pages++; // Extra partial page of memory
+
         // Load files/programs to this starting address
         const uint32_t entry_point = 0x400000;  // Put entry point right after identity mapped 4MB page table
 
@@ -726,106 +729,60 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             pt_entry page = 0;
             uint32_t phys_addr = (uint32_t)allocate_page(&page);
 
-            if (!map_page((void *)phys_addr, (void *)(entry_point + i*PAGE_SIZE)))
+            if (!map_page((void *)phys_addr, (void *)(entry_point + i*PAGE_SIZE))) {
                 printf("\r\nCouldn't map pages, may be out of memory :'(");
-        }
-
-        printf("\r\nAllocated to virtual address %x\r\n", entry_point);
-        
-        // Call load_file function to load program/file to starting memory address
-        // Input 1: File name (address)
-        //       2: File name length
-        //       3: Memory offset to load file to
-        //       4: File extension variable
-        // Return value - 0 = Success, !0 = error
-        if (!load_file(argv[0], strlen(argv[0]), entry_point, fileExt)) {
-            // Error, program did not load correctly
-            printf(pgmNotLoaded);
-
-            continue;
-        }
-
-        // Check file extension in file table entry, if 'bin'/binary, far jump & run
-        if (strncmp(fileExt, fileBin, 3) == 0) {
-            // Reset malloc variables before calling program
-            malloc_list_head    = 0;    // Start of linked list
-            malloc_virt_address = entry_point + (needed_pages * PAGE_SIZE);
-            malloc_phys_address = 0;
-            total_malloc_pages  = 0;
-
-            // Void function pointer to jump to and execute code at specific address in C
-            ((int (*)(int argc, char *argv[]))entry_point)(argc, argv);     // Execute program, this can return
-
-            // If used malloc(), free remaining memory to prevent memory leaks
-            for (uint32_t i = 0, virt = malloc_virt_address; i < total_malloc_pages; i++, virt += PAGE_SIZE) {
-                pt_entry *page = get_page(virt);
-
-                if (PAGE_PHYS_ADDRESS(page) && TEST_ATTRIBUTE(page, PTE_PRESENT)) {
-                    free_page(page);
-                    unmap_page((uint32_t *)virt);
-                    flush_tlb_entry(virt);  // Invalidate page as it is no longer present
-                }
+                continue;
             }
 
-            // Reset malloc variables after calling program
-            malloc_list_head    = kernel_malloc_list_head;
-            malloc_virt_address = kernel_malloc_virt_address;
-            malloc_phys_address = kernel_malloc_phys_address;
-            total_malloc_pages  = kernel_total_malloc_pages;
-            
-            // TODO: In the future, if using a backbuffer, restore screen data from that buffer here instead
-            //  of clearing
-            
-            // Clear the screen and reset cursor position before going back
-            clear_screen_esc();
+            pt_entry *virt_page = get_page(entry_point + i*PAGE_SIZE);
+            SET_ATTRIBUTE(virt_page, PTE_READ_WRITE);
+        }
 
-            // Free previously allocated pages when done
-            printf("\r\n" "Freeing %d page(s)\r\n", needed_pages);
-            
-            for (uint32_t i = 0, virt = entry_point; i < needed_pages; i++, virt += PAGE_SIZE) {
-                pt_entry *page = get_page(virt);
+        // Load program to entry point 
+        fs_load_file(&program_inode, entry_point);
 
-                if (PAGE_PHYS_ADDRESS(page) && TEST_ATTRIBUTE(page, PTE_PRESENT)) {
-                    free_page(page);
-                    unmap_page((uint32_t *)virt);
-                    flush_tlb_entry(virt);  // Invalidate page as it is no longer present or mapped
-                }
+        // Reset malloc variables before calling program
+        malloc_list_head    = 0;    // Start of linked list
+        // TODO: Change this, possibly using a virtual address map to get the next available 
+        //   virtual address
+        malloc_virt_address = next_available_file_virtual_address;
+        next_available_file_virtual_address += PAGE_SIZE;
+        malloc_phys_address = 0;
+        total_malloc_pages  = 0;
+
+        int32_t (*program)(int argc, char *argv[]) = 
+            (int32_t (*)(int, char **))entry_point;
+
+        int32_t return_code = program(argc, argv);
+
+        // If used malloc(), free remaining malloc-ed memory to prevent memory leaks
+        for (uint32_t i = 0, virt = malloc_virt_address; i < total_malloc_pages; i++, virt += PAGE_SIZE) {
+            pt_entry *page = get_page(virt);
+
+            if (PAGE_PHYS_ADDRESS(page) && TEST_ATTRIBUTE(page, PTE_PRESENT)) {
+                free_page(page);
+                unmap_page((uint32_t *)virt);
+                flush_tlb_entry(virt);  // Invalidate page as it is no longer present
             }
-
-            printf("\r\nFreed at address %x\r\n", entry_point);
-
-            continue;   // Loop back to prompt for next input
         }
 
-        // Else print text file to screen
-        // TODO: Put this behind a "shell" command like 'typ'/'type' or other
-        file_ptr = (uint8_t *)entry_point;   // File location to print from
+        // Reset malloc variables after calling program
+        malloc_list_head    = kernel_malloc_list_head;
+        malloc_virt_address = kernel_malloc_virt_address;
+        malloc_phys_address = kernel_malloc_phys_address;
+        total_malloc_pages  = kernel_total_malloc_pages;
+            
+        // TODO: In the future, if using a backbuffer, restore screen data from that buffer here instead
+        //  of clearing
+            
+        // Clear the screen and reset cursor position before going back
+        clear_screen_esc(); 
 
-        // Print newline first
-        printf("\r\n");
-        
-        // Get size of filesize in bytes (512 byte per sector)
-        // TODO: Change this later - currently assuming text files are only 1 sector
-        //	<fileSize> * 512 
-        
-        // print_file_char:
-        for (idx = 0; idx < 512; idx++) {
-            // TODO: Handle newlines (byte 0x0A in txt file data)
-            if (*file_ptr <= 0x0F)          // Convert to hex
-                *file_ptr = hex_to_ascii(*file_ptr);
-
-            // Print file character to screen
-            putc(*file_ptr);
-
-            file_ptr++;
+        if (return_code < 0) {
+            printf("Error running program; Return code: %d\r\n", return_code);
         }
 
-        // Print newline after printing file contents
-        printf("\r\n");
-
-        // Free pages when done
-        printf("\r\nFreeing %d page(s)\r\n", needed_pages);
-        
+        // Free program pages allocated
         for (uint32_t i = 0, virt = entry_point; i < needed_pages; i++, virt += PAGE_SIZE) {
             pt_entry *page = get_page(virt);
 
@@ -836,7 +793,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             }
         }
 
-        printf("\r\nFreed at address %x\r\n", entry_point);
+        continue;   // Loop back to prompt for next input
     }
 }
 
@@ -1028,7 +985,7 @@ bool test_seek(void) {
 // Test write() syscall
 bool test_write(void) {
     const char file[] = "writetest.txt";
-    const int32_t fd = open(file, O_CREAT);
+    const int32_t fd = open(file, O_CREAT | O_WRONLY); 
 
     if (fd < 0) {
         printf("\r\nError: could not create file %s\r\n", file);
@@ -1053,7 +1010,7 @@ bool test_write(void) {
 // Test read() syscall
 bool test_read(void) {
     const char file[] = "readtest.txt";
-    const int32_t fd = open(file, O_CREAT | O_RDONLY);
+    const int32_t fd = open(file, O_CREAT | O_RDWR);
 
     if (fd < 0) {
         printf("\r\nError: could not create file %s\r\n", file);
@@ -1085,7 +1042,6 @@ bool test_read(void) {
         return false;
     }
 
-    // Find out why this returns true, read_buf does contain this string
     if (strncmp(read_buf, "Hello, World!", strlen(read_buf)) != 0) {
         printf("\r\nError: could not read file %s into buffer correctly\r\n", file);
         return false;

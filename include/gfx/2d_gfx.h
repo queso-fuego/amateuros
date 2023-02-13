@@ -392,21 +392,15 @@ uint32_t convert_color(const uint32_t color)
         convert_g = 0;
         convert_b = orig_b;
     } else {
-        // DEBUGGING
         // Assuming bpp is > 8 and <= 32
         const uint8_t r_bits_to_shift = 8 - gfx_mode->linear_red_mask_size; 
         const uint8_t g_bits_to_shift = 8 - gfx_mode->linear_green_mask_size;
         const uint8_t b_bits_to_shift = 8 - gfx_mode->linear_blue_mask_size;
 
+        // Convert to new color portions by getting ratio of bit sizes of color compared to "full" 8 bit colors
         convert_r = (orig_r >> r_bits_to_shift) & ((1 << gfx_mode->linear_red_mask_size) - 1);
         convert_g = (orig_g >> g_bits_to_shift) & ((1 << gfx_mode->linear_green_mask_size) - 1);
         convert_b = (orig_b >> b_bits_to_shift) & ((1 << gfx_mode->linear_blue_mask_size) - 1);
-        // DEBUGGING
-
-        // Convert to new color portions by getting ratio of bit sizes of color compared to "full" 8 bit colors
-        //convert_r = orig_r * (((1 << gfx_mode->linear_red_mask_size) - 1) / 255);
-        //convert_g = orig_g * (((1 << gfx_mode->linear_green_mask_size) - 1) / 255);
-        //convert_b = orig_b * (((1 << gfx_mode->linear_blue_mask_size) - 1) / 255);
     }
 
     // Put new color portions into new color
