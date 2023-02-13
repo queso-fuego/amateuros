@@ -94,7 +94,7 @@ void syscall_free(void)
 
 // Write system call: Write bytes from a buffer to a file descriptor
 void syscall_write(void) {
-    int fd = 0;
+    int32_t fd = 0;
     void *buf = 0;
     uint32_t len = 0;
 
@@ -131,13 +131,20 @@ void syscall_write(void) {
         return;
     }
 
+    // Check FD's open flags
+    if (oft->flags & O_RDONLY) {
+        // Error, FD is only open for reading
+        __asm__ __volatile__ ("movl $-1, %EAX"); 
+        return;
+    }
+
     // Check for O_APPEND flag, if used, set file offset to end of file (current file size)
     if (oft->flags & O_APPEND) {
         oft->offset = oft->inode->size_bytes;
     }
 
     // Check if current file offset is greater than length/size of file as pages allocated 
-    //  in memory, if so, last seek() call went beyond end of file
+    //  in memory, if so, last seek() call probably went beyond end of file
     if ((uint32_t)oft->offset > oft->pages_allocated * PAGE_SIZE) {
         // Allocate additional pages to reach new end of file from previous seek(),
         //   and zero pad memory 
@@ -170,10 +177,6 @@ void syscall_write(void) {
         if (new_blocks > current_blocks) {
             // TODO: Allocate more disk blocks to file's extents
         }
-
-        // Set new file size to current file offset
-        oft->inode->size_bytes = oft->offset;
-        oft->inode->size_sectors = bytes_to_sectors(oft->inode->size_bytes);
     }
 
     // Write data from input buffer to FD, at file offset
@@ -187,6 +190,7 @@ void syscall_write(void) {
     // Set new file size from data written
     if ((uint32_t)oft->offset > oft->inode->size_bytes) {
         oft->inode->size_bytes = oft->offset;
+        oft->inode->size_sectors = bytes_to_sectors(oft->inode->size_bytes); 
     }
 
     // Update file's inode data
@@ -413,7 +417,55 @@ void syscall_close(void) {
 
 // Read system call: read bytes from an open file to a buffer
 void syscall_read(void) {
-    // TODO:
+    int32_t fd = 0;
+    void *buf = 0;
+    uint32_t len = 0;
+
+    uint32_t bytes_read = 0;
+
+    __asm__ __volatile__ ("mov %%EBX, %0;"
+                          "mov %%ECX, %1;"
+                          "mov %%EDX, %2;"
+                          : "=b"(fd), "=c"(buf), "=d"(len) );
+    if (fd < 0) {
+        // Invalid FD
+        __asm__ __volatile__ ("movl $-1, %EAX"); 
+        return;
+    }
+
+    // Get open file table entry for FD
+    open_file_table_t *oft = open_file_table + fd;
+    
+    // Check if file is open and valid
+    if (oft->address == 0 || oft->ref_count == 0) {
+        // Error, FD is not loaded to memory/invalid or file is not open anymore
+        __asm__ __volatile__ ("movl $-1, %EAX"); 
+        return;
+    }
+
+    // Check FD's open flags
+    if (oft->flags & O_WRONLY) {
+        // Error, FD is only open for writing
+        __asm__ __volatile__ ("movl $-1, %EAX"); 
+        return;
+    }
+
+    // Only read up to file len in bytes, do not read past end of file
+    if (oft->inode->size_bytes < oft->offset + len) {
+        bytes_read = oft->inode->size_bytes - oft->offset;
+    } else {
+        // Can read up to full length in bytes from file
+        bytes_read = len;
+    }
+
+    // Copy from file to input buffer
+    memcpy(buf, oft->address + oft->offset, bytes_read);
+
+    // Update file offset, adding bytes read from file
+    oft->offset += bytes_read;
+
+    // Return # of bytes actually read
+    __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(bytes_read) );
 }
 
 // Seek system call: update an open file's position 

@@ -27,9 +27,9 @@ int16_t strcmp(const uint8_t *string1, const uint8_t *string2)
 //   negative value if string1 is less than string2
 //   0 if string1 = string2
 //   positive value if string1 is greater than string2
-int16_t strncmp(const uint8_t *string1, const uint8_t *string2, uint8_t len)
+int32_t strncmp(const uint8_t *string1, const uint8_t *string2, uint8_t len)
 {
-    while (len > 0  && *string1 == *string2) {
+    while (len > 0 && *string1 == *string2) {
         string1++;
         string2++;
         len--;

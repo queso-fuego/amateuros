@@ -49,6 +49,7 @@ void init_fs_vars(void);
 bool test_open_close(void); // Test functions...
 bool test_seek(void);
 bool test_write(void);
+bool test_read(void);
 
 __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
 {
@@ -56,24 +57,25 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     char *cmdString_ptr = cmdString;
     uint8_t input_char   = 0;       // User input character
     uint8_t input_length;           // Length of user input
-    uint16_t idx         = 0;
-    uint8_t *cmdDir      = "dir";         // Directory command; list all files/pgms on disk
-    uint8_t *cmdReboot   = "reboot";      // 'warm' reboot option
-    uint8_t *cmdPrtreg   = "prtreg";      // Print register values
-    uint8_t *cmdGfxtst   = "gfxtst";      // Graphics mode test
-    uint8_t *cmdHlt      = "hlt";         // E(n)d current program by halting cpu
-    uint8_t *cmdCls	     = "cls";         // Clear screen by scrolling
-    uint8_t *cmdShutdown = "shutdown";    // Close QEMU emulator
-    uint8_t *cmdDelFile  = "del";		    // Delete a file from disk
-    uint8_t *cmdRenFile  = "ren";         // Rename a file in the file table
-    uint8_t *cmdPrtmemmap = "prtmemmap";  // Print physical memory map info
-    uint8_t *cmdChgColors = "chgcolors";  // Change current fg/bg colors
-    uint8_t *cmdChgFont   = "chgfont";    // Change current font
-    uint8_t *cmdSleep     = "sleep";      // Sleep for a # of seconds
-    uint8_t *cmdMSleep    = "msleep";     // Sleep for a # of milliseconds
-    uint8_t *cmdShowDateTime = "datetime"; // Show CMOS RTC date/time values
-    uint8_t *cmdSoundTest = "soundtest";   // Test pc speaker square wave sound
-    uint8_t *cmdRunTests = "runtests";     // Run test functions
+    uint16_t idx          = 0;
+    char *cmdDir          = "dir";          // Directory command; list all files/pgms on disk
+    char *cmdReboot       = "reboot";       // 'warm' reboot option
+    char *cmdPrtreg       = "prtreg";       // Print register values
+    char *cmdGfxtst       = "gfxtst";       // Graphics mode test
+    char *cmdHlt          = "hlt";          // E(n)d current program by halting cpu
+    char *cmdCls	      = "cls";          // Clear screen by scrolling
+    char *cmdShutdown     = "shutdown";     // Close QEMU emulator
+    char *cmdDelFile      = "del";		    // Delete a file from disk
+    char *cmdRenFile      = "ren";          // Rename a file in the file table
+    char *cmdPrtmemmap    = "prtmemmap";    // Print physical memory map info
+    char *cmdChgColors    = "chgcolors";    // Change current fg/bg colors
+    char *cmdChgFont      = "chgfont";      // Change current font
+    char *cmdSleep        = "sleep";        // Sleep for a # of seconds
+    char *cmdMSleep       = "msleep";       // Sleep for a # of milliseconds
+    char *cmdShowDateTime = "datetime";     // Show CMOS RTC date/time values
+    char *cmdSoundTest    = "soundtest";    // Test pc speaker square wave sound
+    char *cmdRunTests     = "runtests";     // Run test functions
+    char *cmdType         = "type";         // 'Type' out a text or other file to the screen
     uint8_t fileExt[3];
     uint8_t *fileBin = "bin";
     uint8_t *file_ptr;
@@ -196,10 +198,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
     // --------------------------------------------------------------------
     // Get user input, print to screen & run command/program  
     // --------------------------------------------------------------------
-    // TODO: Change printing everywhere to use printf/write instead of print_types functions, 
-    //   then remove kernel cursor variables
-    printf("\eX%dY%d;\eCSROFF;TESTING PRINTF; Char: %c, Int: %d, String: %s, Hex: %x, %: %%\r\n", 0, 3, 'f', 123, "Hello", 0xAB12);
-
     while (1) {
         // Reset tokens data, arrays, and variables for next input line
         memset(cmdString, 0, sizeof cmdString);
@@ -214,7 +212,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             input_char = get_key();     // Get ascii char from scancode from keyboard data port 60h
 
             if (input_char == '\r') {   // enter key?
-                printf("\eCSROFF; ");
+                printf("\eCSROFF; ");   // TODO: Add automatic newline here after prompt
                 break;                  // go on to tokenize user input line
             }
 
@@ -291,6 +289,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
                 { "Open() & Close() Syscalls", test_open_close },
                 { "Seek() Syscall on New/Empty file", test_seek },
                 { "Write() Syscall for New file", test_write },
+                { "Read() Syscall on file", test_read },
                 // TODO: { "Seek() Syscall on file with data", test_seek },
             };
 
@@ -673,6 +672,37 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void)
             continue;
         }
 
+        // Type out a file to screen
+        if (strncmp(argv[0], cmdType, strlen(cmdType)) == 0) {
+            // Check if text file
+            if (strncmp(argv[1] + strlen(argv[1]) - 4, ".txt", 4) != 0) {
+                printf("\r\nError: File %s is not a text file\r\n", argv[1]);
+                continue;
+            }
+
+            printf("\r\n");
+
+            const int32_t fd = open(argv[1], O_RDONLY);
+
+            // NEW: Check invalid FD or open() error
+            if (fd < 3) {
+                printf("\r\nError: Could not open file %s for reading\r\n", argv[1]);
+                continue;
+            }
+
+            char buf[256] = {0}; 
+
+            while (read(fd, buf, sizeof buf) > 0) {
+                printf("%s", buf);
+            }
+            printf("\r\n");
+
+            // File cleanup
+            close(fd);
+
+            continue;
+        }
+
         // If command not input, search file table entries for user input file
         file_ptr = check_filename(argv[0], strlen(argv[0]));
         if (*file_ptr == 0) {  
@@ -1014,6 +1044,52 @@ bool test_write(void) {
     }
 
     // TODO: Test O_APPEND
+
+    close(fd);
+
+    return true;
+}
+
+// Test read() syscall
+bool test_read(void) {
+    const char file[] = "readtest.txt";
+    const int32_t fd = open(file, O_CREAT | O_RDONLY);
+
+    if (fd < 0) {
+        printf("\r\nError: could not create file %s\r\n", file);
+        return false;
+    }
+
+    const char str_buf[] = "Hello, World!";
+
+    if (14 != write(fd, str_buf, sizeof str_buf)) {
+        printf("\r\nError: could not write \"%s\" to file %s\r\n", 
+               str_buf, file);
+        return false;
+    }
+
+    char read_buf[14];
+
+    // read() from end of file
+    if (read(fd, read_buf, sizeof read_buf) > 0) {
+        printf("\r\nError: Read from end of file %s should return 0\r\n", file);
+        return false;
+    }
+
+    // Move back to start of file
+    seek(fd, 0, SEEK_SET);
+
+    // read() from start of file
+    if (read(fd, read_buf, sizeof read_buf) < 1) {
+        printf("\r\nError: could not read from file %s into buffer\r\n", file);
+        return false;
+    }
+
+    // Find out why this returns true, read_buf does contain this string
+    if (strncmp(read_buf, "Hello, World!", strlen(read_buf)) != 0) {
+        printf("\r\nError: could not read file %s into buffer correctly\r\n", file);
+        return false;
+    }
 
     close(fd);
 

@@ -377,14 +377,13 @@ void fill_circle_solid(Point center, uint16_t radius, uint32_t color)
 // 0x00RRGGBB
 uint32_t convert_color(const uint32_t color)
 {
-    uint8_t orig_r, orig_g, orig_b;
     uint8_t convert_r, convert_g, convert_b;
     uint32_t converted_color = 0;
 
     // Get original color portions
-    orig_r = (color >> 16) & 0xFF;
-    orig_g = (color >> 8)  & 0xFF;
-    orig_b = color         & 0xFF;
+    const uint8_t orig_r = (color >> 16) & 0xFF;
+    const uint8_t orig_g = (color >> 8)  & 0xFF;
+    const uint8_t orig_b = color         & 0xFF;
 
     if (gfx_mode->bits_per_pixel == 8) {
         // 8bpp uses standard VGA 256 color pallette
@@ -393,10 +392,21 @@ uint32_t convert_color(const uint32_t color)
         convert_g = 0;
         convert_b = orig_b;
     } else {
+        // DEBUGGING
+        // Assuming bpp is > 8 and <= 32
+        const uint8_t r_bits_to_shift = 8 - gfx_mode->linear_red_mask_size; 
+        const uint8_t g_bits_to_shift = 8 - gfx_mode->linear_green_mask_size;
+        const uint8_t b_bits_to_shift = 8 - gfx_mode->linear_blue_mask_size;
+
+        convert_r = (orig_r >> r_bits_to_shift) & ((1 << gfx_mode->linear_red_mask_size) - 1);
+        convert_g = (orig_g >> g_bits_to_shift) & ((1 << gfx_mode->linear_green_mask_size) - 1);
+        convert_b = (orig_b >> b_bits_to_shift) & ((1 << gfx_mode->linear_blue_mask_size) - 1);
+        // DEBUGGING
+
         // Convert to new color portions by getting ratio of bit sizes of color compared to "full" 8 bit colors
-        convert_r = orig_r * (((1 << gfx_mode->linear_red_mask_size) - 1) / 255);
-        convert_g = orig_g * (((1 << gfx_mode->linear_green_mask_size) - 1) / 255);
-        convert_b = orig_b * (((1 << gfx_mode->linear_blue_mask_size) - 1) / 255);
+        //convert_r = orig_r * (((1 << gfx_mode->linear_red_mask_size) - 1) / 255);
+        //convert_g = orig_g * (((1 << gfx_mode->linear_green_mask_size) - 1) / 255);
+        //convert_b = orig_b * (((1 << gfx_mode->linear_blue_mask_size) - 1) / 255);
     }
 
     // Put new color portions into new color
@@ -406,5 +416,4 @@ uint32_t convert_color(const uint32_t color)
 
     return converted_color;
 }
-
 
