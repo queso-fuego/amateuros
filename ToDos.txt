@@ -1,0 +1,190 @@
+
+Legend:
+
+[ ] = not done yet
+
+[X] = done yet
+
+<name> = viewer/3rd party suggestion/attribution
+
+==================================================================================
+Shorter Term
+==================================================================================
+
+[ ] Fix/refactor editor, using new system calls for open(), read(), write(), etc. for files, 
+    printf() for printing, and redo/simplify in general.
+	It will NOT use the old file table system.
+
+[ ] Refactor malloctst.c and malloctst.ld to use printf(), don't clear screen. Fix page faults.
+	[ ] Move logic to a test function for malloc()/free(), to run in cmdRunTests in the kernel
+	[ ] Remove malloctst.c & malloctst.ld, now they're no longer needed
+
+[ ] Refactor makefile to use posix compliance, suffixes, actual inference rules, and prerequisites for recipes. Use those for all source files and
+	object files, to make the final executables/bin files. This way, other than building the final image, building and compilation can be faster 
+	and incremental, no reason to rebuild everything every time. It should also (hopefully) be less code and with wider portability due to posix.
+	Should be able to use directories and have suffix/inference rules work fine, but only if both suffix ruled files are in the same directory.
+	It may also be worse from included header files, and having to use those in the prerequisites, but at least they aren't needed in the 
+	suffix/inference rules.
+
+[ ] md/mkdir command; Try to use syscalls and not fs_* functions if possible?
+	[ ] "dir_fd = open(<dir_path>, O_CREAT | O_WRONLY)" // Should create new inode and update inode blocks/disk blocks in parent directory
+	[ ] Get inode for new dir with "inode_t dir_inode = inode_from_path(<dir_path>)"
+	[ ] Get parent dir inode for new dir with "inode_t parent_inode = parent_inode_from_path(<dir_path>)"
+	[ ] Change new dir inode's type to FILETYPE_DIR
+	[ ] Add/append to dir's data blocks on disk, with new dir_entry_t's for "." (this dir itself, use this file's id) 
+		  and ".." (parent dir, use parent's inode id).
+		[ ] ".": 
+			dir_entry_t dir_entry = { .id = dir_inode.id, .name = "." }; // Probably have to strcpy/memcpy for name instead
+			write(dir_fd, &dir_entry, sizeof dir_entry);
+		[ ] "..": 
+			dir_entry = (dir_entry_t){ .id = parent_inode.id, .name = ".." }; // Probably have to strcpy/memcpy for name instead
+			write(dir_fd, &dir_entry, sizeof dir_entry);
+	[ ] Update inode data on disk
+	[ ] Update current inode/root inode if this directory was created in the current directory and/or root directory
+
+[ ] cd/chdir command
+	[ ] Error if last inode/name in given path in argv[1] is not a dir (inode's type != FILETYPE_DIR)
+	[ ] Set new current_dir string and current_dir_inode to new inode from given path
+		[ ] current_dir_inode = inode_from_path(argv[1]);
+		[ ] Resolve path from current dir string to argv[1], if valid/reachable
+			[ ] ".." will remove the last dir from path, replacing the last '/' found with a null or '\0'
+			[ ] "." will do nothing, stay in the current dir
+			[ ] else add the next dir's name, if found/valid, to the end of the current dir string. And add a '/' separator at the end
+			[ ] Set new current_dir_string value
+
+[ ] Change printf() to allow fixed width and left/right justification
+	ex:
+	%-10d = 10 digit integer, left justified, padded with blanks on the right to 10 width
+	%10d = 10 digit integer, right justified, padded with blanks on the left to 10 width
+	[ ] Use new printf width/justifying for 'dir'/'ls' command to line up output better
+	[ ] Use new printf for 'prtmemmap' command to line up output better
+
+[ ] Make a 'chgprompt' or similar command, to set the prompt from user input, to change from the default '>'
+
+?[ ] Add parent inode id as a new field to inode_t struct, to simplify setting/getting parent directories for files and other fs logic.
+	[ ] Remove "size_sectors" field to make room, as it is redundant for size_bytes, and can be computed where needed
+	[ ] Remove adding explicit "." and ".." entries to directories, they can be implicit for resolving paths, but no need to 
+		take up space in dir_entry's in the disk blocks for directories. (credit to plan9 for inspiration)
+		With the parent inode id in the file's inode, there would be no need for an explicit ".." dir_entry, and "." refers to 
+		the containing directory itself.
+	[ ] Fix/refactor places where "." and ".." are used
+		[ ] fs_impl.h
+		[ ] make_disk.c
+		[ ] other places...?
+
+[ ] Add screen scrollback, and save screen lines or pixels somewhere, either in a file (easier?) or buffer in memory (harder?).
+	Probably add to terminal.h, in terminal_write()?
+	[ ] Save user's current screen line position, and X/Y row/col? To later retrieve current screen lines and offset from text saved 
+		when scrolling. Every enter key press and terminal write will increment the user line number by 1, up to the max number of history
+		lines. Or can roll over to 0 or 1, if that works better.
+	[ ] Keep a certain number of lines of history/scrollback, e.g. 10,000 lines.
+	[ ] Each line written to screen from the terminal, also save in the 10,000 lines array somewhere. User input past line 10,000 will
+		overwrite previous history lines, by moving the history lines up by 1, so that line 1-10,000 is the new line 0-9999, similar to
+		current screen/text scrolling on newlines.
+		[ ] Use a ring buffer or similar for the history buffer? https://en.wikipedia.org/wiki/Circular_buffer
+			This way adding past the max line/end of buffer would wrap around and overwrite the previous lines starting at the 
+			beginning again. Reading before the start would wrap back to the end and go 
+			backwards again. Would need 2 pointers to starting/ending lines to work correctly?
+	[ ] When scrolling (pageup/pagedown keys?), move screen height lines up/down, keeping cursor in same X/Y position. Or can move cursor 
+		to middle of screen or somewhere better. Text will print on the screen from the array of history lines, for a slice/range of
+		the current size of the screen, as a sort of moving window. 
+		If the screen is 50 lines in height for the current font, then scrolling up can show lines [current_line - 49 .. current_line],
+		or can go up 50 lines and not show current line. A next scroll up would show [current_line - 99 .. current_line - 49], or 
+		-100 .. -50, and so on. Scrolling down would decrease the range ends by 50, instead of increase.
+	[ ] On input/typing, move screen back down to where the prompt and cursor are currently. As in, scroll back down to starting position 
+		and lines before scrolling.
+	[ ] Don't allow scrolling down past end of lines, or up before start of lines. Why attempt to show data that doesn't exist? 
+		Or can show blank screen if wanted for some reason? May change if going with ring buffer approach above.
+
+[ ] Change make_disk.c or 3rdstage.c or kernel.c: 
+	[ ] Take in list of "strings"/files to create as parms, or read a txt file for the list?
+	[ ] Should file names all be in the root dir, or be able to pass and parse "folder1/folder2/file" as a string and have it 
+		create missing directories and create the final file? This may need `#include "fs/fs_impl.h"` and work without
+		the host's libc, same as the other OS C files.
+		This would allow creating initial default files & directories.
+		- An alternative would be adding code to 3rdstage.c or kernel.c in "setup" functions that create the file system at first boot,
+		possibly using another global address to hold flag(s) that are set/not set at first boot or a user driven system reset/restore.
+
+		[ ] How to fill in the file data for these initial files? Make the same dir/file structure under <project root>/src/ ?
+
+	[ ] Possible initial filesystem setup:
+		/
+			sys
+				docs
+					<documentation txt files on OS layout, overview, subsystems, shell commands, program help, etc.>
+				examples
+					<OS code examples (source files) e.g. calling syscalls, shell commands, program examples, etc.>
+				src
+					<OS source files, same as in $project_root/src, to be able to update OS within itself later on>
+			usr
+				<user folder for user files, as an example. User can always change anything and put things anywhere as desired>
+
+[ ] "Help" command - print string(s) to list currently available commands and their descriptions
+	[ ] Read command/program help info from files e.g. "/sys/docs/command/help.txt" ?
+
+[ ] Delete file function & rm/del command
+	[ ] ...
+
+[ ] Delete directory function & rmdir command
+	[ ] ...
+
+[ ] Rename file/dir function & ren or mov command
+	[ ] ...
+
+ other needed filesystem functions, other things here...
+
+
+==================================================================================
+Longer term
+==================================================================================
+
+[ ] README.md: update screenshots & wording/descriptions in each part to be simpler/more succinct and up to date
+
+[ ] makefile: 
+	[ ] add -Wpedantic to CFLAGS, fix all warnings/errors as possible. Also add -Werror to hate life.
+	[ ] Research implicit rules, inference rules, and .SUFFIXES to try and simplify converting .c to .o and .bin files, and .asm to .bin files,
+		if possible.
+
+[ ] 3D graphics primitives and math, rotations, matrices, etc. Also overhaul current 2d_gfx.h, separate framebuffer? Make framebuffer a file in 
+	the filesystem e.g. /dev/fb or similar? Implement graphics in userland, not in kernel, or otherwise remove floating point math from
+	ellipses and other places so they can be added back in.
+
+[ ] Processes, "shell" as separate program and first program started up in kernel, PID 1
+
+[ ] SMT, SMP, scheduling (priorities w/ priority queue?, time slices, round robin, etc.)
+
+[ ] 8 bit pcm audio using pc speaker & PIT. Works by PWM/Pulse width modulation.
+
+[ ] Soundblaster 16 or ac97 or hd audio, or other audio support
+
+[ ] editor.c: rewrite/overhaul to use terminal escape sequences for cursor movement and printing. New terminal escape sequences for moving
+	cursor 1 column left, 1 column right, 1 row up, and 1 row down. Make the text editor into a modal editor similar in some
+	ways to ex/vi. Maybe line oriented like ed, but visual like vi. Still include "hex" mode for binary viewing and editing.
+
+[ ] Show images: Start with netpbm/.ppm files for color pixels
+
+[ ] Page swapping and algorithms
+
+[ ] Update OS files within itself, without rebooting, if possible. Might have backups on disk for prior OS versions in case user wants to 
+	roll back changes. Otherwise new OS programs or full kernel/full OS can be loaded to memory and jumped to at kernel entry to re-initialize.
+
+[ ] UEFI bootloader option, for 64 bit only. 32 bit can use legacy/BIOS booting with current boot sector, 2nd stage, and 3rd stage bootloaders.
+	will add a struct to be passed to the kernel, if wanted, with devices discovered and machine state. Can add printing to screen/terminal from
+	3rd stage, where 3rd stage will handle all initialization before handing off to the kernel.
+	UEFI would be a replacement for boot sector/2nd stage/3rd stage, where it will handle device discovery, memory map, framebuffer set up, 
+	etc. and pass a struct with that info to the kernel. Ideally the kernel will stay the same for both OS versions, 32 & 64 bit, only the 
+	pre-kernel setup including bootloader will be different.
+
+[ ] Network stack? NIC driver, ARP, IP, TCP, UDP, QUIC?, etc.
+
+[ ] (Text mode) browser? No JS, can do simple html/text, maybe some CSS, maybe not. Maybe a gopher browser or similar.
+
+[ ] IRC?
+
+[ ] Port doom? (it can't be a viable system until it runs DOOM!)
+
+[ ] Assembler &| compiler for x86 asm (16 bit real mode, 32 bit protected mode, and 64 bit long mode), a subset of C, maybe a forth or lisp,
+	other languages...
+
+[ ] 16 bit real mode emulator, at least to run simple games "virtualized" within the OS. Could use real virtualization with intel VT-d, etc.
+
