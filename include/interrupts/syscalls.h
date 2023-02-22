@@ -4,6 +4,7 @@
 #pragma once
 
 #include "C/stdint.h"
+#include "C/stdlib.h"
 #include "C/stdio.h"    
 #include "sys/syscall_numbers.h"
 #include "print/print_types.h"
@@ -12,6 +13,23 @@
 #include "memory/virtual_memory_manager.h" 
 #include "terminal/terminal.h"
 #include "fs/fs_impl.h"
+
+// Registers pushed onto stack when a syscall function is called
+//  from the syscall dispatcher
+typedef struct {
+    uint32_t esp;
+    uint32_t ebx;
+    uint32_t ecx;
+    uint32_t edx;
+    uint32_t esi;
+    uint32_t edi;
+    uint32_t ebp;
+    uint32_t ds;
+    uint32_t es;
+    uint32_t fs;
+    uint32_t gs;
+    uint32_t eax;
+} __attribute__ ((packed)) syscall_regs_t;
 
 // These extern vars are from kernel.c
 extern open_file_table_t *open_file_table;  
@@ -24,49 +42,36 @@ extern uint32_t current_open_inodes;
 extern uint32_t next_available_file_virtual_address;
 
 // Test syscall 0
-void syscall_test0(void)
-{
-    uint16_t x = 0, y = 20;
-    uint32_t color = user_gfx_info->fg_color;   // Save current text color
+int32_t syscall_test0(syscall_regs_t regs) {
+    printf("\r\nTest Syscall; Syscall # (EAX): %d\r\n", regs.eax);
 
-    user_gfx_info->fg_color = convert_color(0x00FFFF00);    // YELLOW
-    print_string(&x, &y, "Test system call 0");
-
-    user_gfx_info->fg_color = color;    // Restore text color
+    return EXIT_SUCCESS;
 }
 
 // Test syscall 1
-void syscall_test1(void)
-{
-    uint16_t x = 0, y = 21;
-    uint32_t color = user_gfx_info->fg_color;   // Save current text color
+int32_t syscall_test1(syscall_regs_t regs) {
+    printf("\r\nTest Syscall; Syscall # (EAX): %d\r\n", regs.eax);
 
-    user_gfx_info->fg_color = convert_color(0x0000FF00);    // GREEN
-    print_string(&x, &y, "Test system call 1");
-
-    user_gfx_info->fg_color = color;    // Restore text color
+    return EXIT_SUCCESS;
 }
 
 // Sleep for a given number of milliseconds
 // INPUTS:
 //  EBX = # of milliseconds
-void syscall_sleep(void)
-{
-    //__asm__ __volatile__ ("movl %%ebx, %0" : "=r"(*sleep_timer_ticks) );
-    __asm__ __volatile__ ("mov %%ebx, %0" : "=r"(*sleep_timer_ticks) );
+int32_t syscall_sleep(syscall_regs_t regs) {
+    *sleep_timer_ticks = regs.ebx;  // Set ticks value to sleep for
 
     // Wait ("Sleep") until # of ticks is 0
     while (*sleep_timer_ticks > 0) __asm__ __volatile__ ("sti;hlt;cli");
+
+    return EXIT_SUCCESS;
 }
 
 // Allocate uninitialized memory
 // INPUT:
 //   EBX = size in bytes to allocate
-void syscall_malloc(void)
-{
-    uint32_t bytes = 0;
-
-    __asm__ __volatile__ ("mov %%EBX, %0" : "=b"(bytes) );
+int32_t syscall_malloc(syscall_regs_t regs) {
+    uint32_t bytes = regs.ebx;
 
     // First malloc() from the calling program?
     if (!malloc_list_head)
@@ -77,66 +82,60 @@ void syscall_malloc(void)
     merge_free_blocks();    // Combine consecutive free blocks of memory
 
     // Return pointer to malloc-ed memory
-    __asm__ __volatile__ ("mov %0, %%EAX" : : "r"(ptr) );
+    __asm__ __volatile__ ("mov %0, %%EDX" : : "g"(ptr) );
+
+    return EXIT_SUCCESS;
 }
 
 // Free allocated memory at a pointer
 // INPUT:
 //   EBX = pointer to malloc-ed bytes
-void syscall_free(void)
-{
-    void *ptr = 0;
-
-    __asm__ __volatile__ ("mov %%EBX, %0" : "=b"(ptr) );
+int32_t syscall_free(syscall_regs_t regs) {
+    void *ptr = (void *)regs.ebx;
 
     malloc_free(ptr);
+
+    return EXIT_SUCCESS;
 }
 
 // Write system call: Write bytes from a buffer to a file descriptor
-void syscall_write(void) {
-    int32_t fd = 0;
-    void *buf = 0;
-    uint32_t len = 0;
+int32_t syscall_write(syscall_regs_t regs) {
+    int32_t fd   = regs.ebx;
+    void *buf    = (void *)regs.ecx;
+    uint32_t len = regs.edx;
 
     uint32_t bytes_written = 0;
 
-    __asm__ __volatile__ ("mov %%EBX, %0;"
-                          "mov %%ECX, %1;"
-                          "mov %%EDX, %2;"
-                          : "=b"(fd), "=c"(buf), "=d"(len) );
     if (fd < 0) {
         // Invalid FD
-        __asm__ __volatile__ ("movl $-1, %EAX"); 
-        return;
+        return -1;
     }
 
     if (fd == stdin ) {
         // TODO: Remove error later
-        // Can't write to stdin
-        __asm__ __volatile__ ("movl $-1, %EAX"); // Unsupported FD for write
-        return;
+        // Can't write to stdin, invalid FD for writing
+        return -1;
     }
 
     if (fd == stdout || fd == stderr) {
-        // Terminal write will return bytes consumed/written
-        bytes_written = terminal_write(buf, len);   
+        // Terminal write will return bytes consumed/written,
+        // Return early, don't run code below
+        return terminal_write(buf, len);   
     } 
 
     // Get open file table entry for input FD
     open_file_table_t *oft = open_file_table + fd;
 
-    // Error if file not found or is not open
+    // Error: file not found or is not open
     if (oft->inode == 0 || oft->ref_count == 0) {
-        __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(bytes_written) );
-        return;
+        return -1;
     }
 
     // Check FD's open flags
     if (!(oft->flags & O_WRONLY) && 
         !(oft->flags & O_RDWR)) {
         // Error, FD is only open for reading
-        __asm__ __volatile__ ("movl $-1, %EAX"); 
-        return;
+        return -1; 
     }
 
     // Check for O_APPEND flag, if used, set file offset to end of file (current file size)
@@ -160,8 +159,7 @@ void syscall_write(void) {
 
             if (!map_page((void *)phys_addr, (void *)(next_available_file_virtual_address))) {
                 // Error: Couldn't allocate enough additional memory for file
-                __asm__ __volatile__ ("movl $-1, %EAX"); // Unsupported FD for write
-                return;
+                return -1;
             }
             next_available_file_virtual_address += PAGE_SIZE;
 
@@ -200,23 +198,19 @@ void syscall_write(void) {
     // Update file's data on disk
     if (!fs_save_file(oft->inode, (uint32_t)oft->address)) {
         // Error saving file
-        __asm__ __volatile__ ("movl $-1, %EAX"); 
-        return;
+        return -1;
     }
 
     // Return number of bytes actually written to FD
-    __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(bytes_written) );
+    return bytes_written;
 }
 
 // Open system call: open a file
-void syscall_open(void) {
-    int32_t fd = -1;
-    char *filepath = 0;
-    int flags = 0;
+int32_t syscall_open(syscall_regs_t regs) {
+    char *filepath = (char *)regs.ebx;
+    int flags      = regs.ecx;
 
-    __asm__ __volatile__ ("mov %%EBX, %0;"
-                          "mov %%ECX, %1;"
-                          : "=b"(filepath), "=c"(flags));
+    int32_t fd = -1;
 
     // Grab inode for given file path
     inode_t file_inode = inode_from_path(filepath);
@@ -225,9 +219,8 @@ void syscall_open(void) {
     if (file_inode.id == 0) {
 
         if (!(flags & O_CREAT)) {
-            // User did not say to create, error
-            __asm__ __volatile__ ("mov %0, %%EAX" : : "r"(fd) );
-            return;
+            // User did not say to create or otherwise does not have creation flag, error
+            return -1;
         }
 
         // File doesn't exist, and flags does have O_CREAT,
@@ -237,8 +230,7 @@ void syscall_open(void) {
 
         if (file_inode.id == 0) {
             // Error, could not create file at path
-            __asm__ __volatile__ ("mov %0, %%EAX" : : "r"(fd) );
-            return;
+            return -1;
         }
     }
 
@@ -362,21 +354,16 @@ void syscall_open(void) {
       fd = -1; // Error, could not load file
     }
 
-    __asm__ __volatile__ ("mov %0, %%EAX" : : "r"(fd) );
+    return fd;
 }
 
 // Close system call: close an open file
-void syscall_close(void) {
-    int32_t fd = -1;
-    int32_t result = -1;
-
-    __asm__ __volatile__ ("mov %%EBX, %0;"
-                          : "=b"(fd));
+int32_t syscall_close(syscall_regs_t regs) {
+    int32_t fd = regs.ebx;
 
     // Error for invalid file descriptor
     if (fd < 0) {
-        __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
-        return;
+        return -1;
     }
 
     // Get open file table entry corresponding to given file descriptor/fd
@@ -384,8 +371,7 @@ void syscall_close(void) {
 
     // Error if file not found or is not open
     if (oft->inode == 0 || oft->ref_count == 0) {
-        __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
-        return;
+        return -1;
     }
 
     // Found fd in table, decrement ref count for file in file table and inode table
@@ -417,26 +403,20 @@ void syscall_close(void) {
         memset(oft, 0, sizeof(open_file_table_t));  // Clear file table entry
     }
 
-    result = 0; // Success
-    __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
+    return 0;   // Success
 }
 
 // Read system call: read bytes from an open file to a buffer
-void syscall_read(void) {
-    int32_t fd = 0;
-    void *buf = 0;
-    uint32_t len = 0;
+int32_t syscall_read(syscall_regs_t regs) {
+    int32_t fd   = regs.ebx;
+    void *buf    = (void *)regs.ecx;
+    uint32_t len = regs.edx;
 
     uint32_t bytes_read = 0;
 
-    __asm__ __volatile__ ("mov %%EBX, %0;"
-                          "mov %%ECX, %1;"
-                          "mov %%EDX, %2;"
-                          : "=b"(fd), "=c"(buf), "=d"(len) );
     if (fd < 0) {
         // Invalid FD
-        __asm__ __volatile__ ("movl $-1, %EAX"); 
-        return;
+        return -1;
     }
 
     // Get open file table entry for FD
@@ -445,15 +425,13 @@ void syscall_read(void) {
     // Check if file is open and valid
     if (oft->address == 0 || oft->ref_count == 0) {
         // Error, FD is not loaded to memory/invalid or file is not open anymore
-        __asm__ __volatile__ ("movl $-1, %EAX"); 
-        return;
+        return -1;
     }
 
     // Check FD's open flags
     if (oft->flags & O_WRONLY) {
         // Error, FD is only open for writing
-        __asm__ __volatile__ ("movl $-1, %EAX"); 
-        return;
+        return -1;
     }
 
     // Only read up to file len in bytes, do not read past end of file
@@ -471,25 +449,18 @@ void syscall_read(void) {
     oft->offset += bytes_read;
 
     // Return # of bytes actually read
-    __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(bytes_read) );
+    return bytes_read;
 }
 
 // Seek system call: update an open file's position 
-void syscall_seek(void) {
-    int32_t result = -1;
-    int32_t fd = -1;
-    int32_t offset = 0;
-    whence_value_t whence = 0;
-
-    __asm__ __volatile__ ("mov %%EBX, %0;"
-                          "mov %%ECX, %1;"
-                          "mov %%EDX, %2;"
-                          : "=b"(fd), "=c"(offset), "=d"(whence) );
+int32_t syscall_seek(syscall_regs_t regs) {
+    int32_t fd            = regs.ebx;
+    int32_t offset        = regs.ecx;
+    whence_value_t whence = regs.edx;
 
     // Error for invalid file descriptor
     if (fd < 0) {
-        __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
-        return;
+        return -1;
     }
 
     // Get open file table entry corresponding to given file descriptor/fd
@@ -497,8 +468,7 @@ void syscall_seek(void) {
 
     // Error if file not found or is not open
     if (oft->inode == 0 || oft->ref_count == 0) {
-        __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
-        return;
+        return -1;
     }
 
     switch(whence) {
@@ -507,8 +477,7 @@ void syscall_seek(void) {
             if (offset < 0) {
                 oft->offset = 0; // Prevent further errors, just go to the start
                 // ERROR: Can not seek before start of file
-                __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
-                return;
+                return -1;
             }
             oft->offset = offset;
             break;
@@ -527,17 +496,16 @@ void syscall_seek(void) {
 
         default: 
             // ERROR: Did not pass valid whence value
-            __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(result) );
-            return;
+            return -1;
             break;
     }
 
     // Return file offset
-    __asm__ __volatile__ ("mov %0, %%EAX" : : "g"(oft->offset) );
+    return oft->offset;
 }
 
 // Syscall table
-void (*syscalls[MAX_SYSCALLS])(void) = {
+int32_t (*syscalls[MAX_SYSCALLS])(syscall_regs_t) = {
     [SYSCALL_TEST1]  = syscall_test1,
     [SYSCALL_TEST0]  = syscall_test0,
     [SYSCALL_SLEEP]  = syscall_sleep,
@@ -552,8 +520,7 @@ void (*syscalls[MAX_SYSCALLS])(void) = {
 
 // Syscall dispatcher
 // naked attribute means no function prologue/epilogue, and only allows inline asm
-__attribute__ ((naked)) void syscall_dispatcher(void)
-{
+__attribute__ ((naked)) void syscall_dispatcher(void) {
     // "basic" syscall handler, push everything we want to save, call the syscall by
     //   offsetting into syscalls table with value in eax, then pop everything back 
     //   and return using "iret" (d/q), NOT regualar "ret" as this is technically
@@ -583,10 +550,13 @@ __attribute__ ((naked)) void syscall_dispatcher(void)
                           "push ebx\n"
                           "push esp\n"
                           "call [syscalls+eax*4]\n"
-                          "add esp, 4\n"
+                          "add esp, 4\n"    // Do not overwrite esp
                           "pop ebx\n"
                           "pop ecx\n"
-                          "pop edx\n"
+
+                          // Do not overwrite EDX, as some syscalls e.g. malloc() will need it
+                          "add esp, 4\n"    
+
                           "pop esi\n"
                           "pop edi\n"
                           "pop ebp\n"
@@ -594,7 +564,7 @@ __attribute__ ((naked)) void syscall_dispatcher(void)
                           "pop es\n"
                           "pop fs\n"
                           "pop gs\n"
-                          "add esp, 4\n"    // Save eax value in case
+                          "add esp, 4\n"    // Save eax value in case; don't overwrite it
                           "iretd\n"         // Need interrupt return here! iret, NOT ret
 
                           "invalid_syscall:\n"

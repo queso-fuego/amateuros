@@ -37,19 +37,32 @@ static uint8_t *error_msg = "Syntax Error\0";
 int32_t parse_num = 0;
 
 __attribute__ ((section ("calc_entry"))) int32_t calc_main(int argc, char *argv[]) {
-    (void)argc;
-    (void)argv;
-
     uint8_t input_char;
     const uint8_t valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
     uint8_t idx;
 
-	clear_screen_esc(); 
+    // Check if user passed in expressions to evaluate; if so, do not run interactively
+    if (argc > 1) {
+        for (uint8_t i = 1; i < argc; i++) {
+            // Set calc input buffer to expression in arg,
+            // skip initial dbl quote, and stop before ending dbl quote (length - 2)
+            memset(buffer, 0, sizeof buffer); // Initialize buffer
+
+            memcpy(buffer, &argv[i][1], strlen(argv[i]) - 2);
+
+            parse_buffer();
+        }
+
+        return 0;   // Return to caller with SUCCESS
+    }
+    
+    // Initial newline to not be at end of last user input from shell prompt
+    printf("\r\n");
 
     // Get line of input
     scan = 0;
     while (1) {
-        write(1, "\eCSRON;", 7);
+        printf("\033CSRON; \033BS;");
         input_char = get_key();
 
         for (idx = 0; idx < 20 && valid_input[idx] != input_char; idx++) ;
@@ -59,7 +72,7 @@ __attribute__ ((section ("calc_entry"))) int32_t calc_main(int argc, char *argv[
 
         // Enter key with some input or buffer is full
         if ((input_char == '\r' && scan > 0) || scan == 80) {    
-            write(1, "\eCSROFF;", 8);
+            printf("\eCSROFF; ");
             parse_buffer();
             scan = 0;
 
@@ -86,15 +99,12 @@ void parse_buffer(void)
     int32_t num = 0;
 
     scan = 0;
-    printf("\r\n");
 
 	// Print error msg or result
 	if ((num = parse_sum()) == ERROR)
-        printf("%s", error_msg);
+        printf("\r\n%s\r\n", error_msg);
     else
-        printf("%d", num);
-
-    printf("\r\n");
+        printf("\r\n%d\r\n", num);
 }
 
 int32_t parse_sum(void)

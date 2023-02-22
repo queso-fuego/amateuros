@@ -257,6 +257,16 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             // Found next non space character, start of next input token/argument
             argv[argc++] = cmdString_ptr; 
 
+            // Found dbl quoted string, count the string as 1 full token
+            if (*cmdString_ptr == '\"') {
+                // Keep reading until ending dbl quote delimiter
+                cmdString_ptr++;
+
+                while (*cmdString_ptr != '\"') {
+                    cmdString_ptr++;
+                }
+            }
+
             // Go to next space or end of string
             while (!isspace(*cmdString_ptr) && *cmdString_ptr != '\0') 
                 cmdString_ptr++;
@@ -776,7 +786,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         //  of clearing
             
         // Clear the screen and reset cursor position before going back
-        clear_screen_esc(); 
+        //clear_screen_esc();  // TODO: Probably remove this
 
         if (return_code < 0) {
             printf("Error running program; Return code: %d\r\n", return_code);
@@ -866,6 +876,8 @@ void init_fs_vars(void) {
 
     // Set filesystem starting point
     current_dir = malloc(1024); // Set starting size of current working directory string
+    memset(current_dir, 0, 1024); // Initialize memory
+
     strcpy(current_dir, "/");   // Start in 'root' directory by default
     current_dir_inode = root_inode;
     current_parent_inode = root_inode;  // Root's parent is itself
