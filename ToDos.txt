@@ -12,8 +12,12 @@ Shorter Term
 ==================================================================================
 
 [ ] Fix/refactor editor, using new system calls for open(), read(), write(), etc. for files, 
-    printf() for printing, and redo/simplify in general.
-	It will NOT use the old file table system.
+    printf() for printing, and redo/simplify in general. It will NOT use the old file table system.
+	Could also try to change it to be more of a modal editor, line oriented editor, use terminal
+    escape sequences for cursor/etc., and/or add an editor state struct to keep track of cursor X/Y
+    and other things.
+    [ ] Might make this more of an 'ed' like editor, i.e. line oriented, but still print all visible
+        lines to screen and maybe not use only 1 character commands. Still thinking it through.
 
 [ ] Refactor malloctst.c and malloctst.ld to use printf(), don't clear screen. Fix page faults.
 	[ ] Move logic to a test function for malloc()/free(), to run in cmdRunTests in the kernel
@@ -23,8 +27,7 @@ Shorter Term
 	object files, to make the final executables/bin files. This way, other than building the final image, building and compilation can be faster 
 	and incremental, no reason to rebuild everything every time. It should also (hopefully) be less code and with wider portability due to posix.
 	Should be able to use directories and have suffix/inference rules work fine, but only if both suffix ruled files are in the same directory.
-	It may also be worse from included header files, and having to use those in the prerequisites, but at least they aren't needed in the 
-	suffix/inference rules.
+	It may also be worse from included header files, and having to use those in the prerequisites.
 
 [ ] md/mkdir command; Try to use syscalls and not fs_* functions if possible?
 	[ ] "dir_fd = open(<dir_path>, O_CREAT | O_WRONLY)" // Should create new inode and update inode blocks/disk blocks in parent directory
@@ -49,7 +52,8 @@ Shorter Term
 		[ ] Resolve path from current dir string to argv[1], if valid/reachable
 			[ ] ".." will remove the last dir from path, replacing the last '/' found with a null or '\0'
 			[ ] "." will do nothing, stay in the current dir
-			[ ] else add the next dir's name, if found/valid, to the end of the current dir string. And add a '/' separator at the end
+			[ ] else add the next dir's name, if found/valid, to the end of the current dir string. And add a '/' 
+                separator at the end
 			[ ] Set new current_dir_string value
 
 [ ] Change printf() to allow fixed width and left/right justification
@@ -61,8 +65,9 @@ Shorter Term
 
 [ ] Make a 'chgprompt' or similar command, to set the prompt from user input, to change from the default '>'
 
-?[ ] Add parent inode id as a new field to inode_t struct, to simplify setting/getting parent directories for files and other fs logic.
-	[ ] Remove "size_sectors" field to make room, as it is redundant for size_bytes, and can be computed where needed
+?[ ] Add parent inode id as a new field to inode_t struct, to simplify setting/getting parent directories for files and 
+    other fs logic.
+	[ ] Remove "size_sectors" field to make room, as it is redundant with size_bytes, and can be computed where needed
 	[ ] Remove adding explicit "." and ".." entries to directories, they can be implicit for resolving paths, but no need to 
 		take up space in dir_entry's in the disk blocks for directories. (credit to plan9 for inspiration)
 		With the parent inode id in the file's inode, there would be no need for an explicit ".." dir_entry, and "." refers to 
@@ -98,29 +103,39 @@ Shorter Term
 
 [ ] Change make_disk.c or 3rdstage.c or kernel.c: 
 	[ ] Take in list of "strings"/files to create as parms, or read a txt file for the list?
-	[ ] Should file names all be in the root dir, or be able to pass and parse "folder1/folder2/file" as a string and have it 
-		create missing directories and create the final file? This may need `#include "fs/fs_impl.h"` and work without
-		the host's libc, same as the other OS C files.
+	[ ] Should file names all be in the root dir, or should make_disk be able to parse "folder1/folder2/file" strings,
+        create missing directories, and create the final file? This may need an `#include "fs/fs_impl.h"` line and 
+        work without the host's libc, same as the other C files for the OS.
 		This would allow creating initial default files & directories.
-		- An alternative would be adding code to 3rdstage.c or kernel.c in "setup" functions that create the file system at first boot,
-		possibly using another global address to hold flag(s) that are set/not set at first boot or a user driven system reset/restore.
 
-		[ ] How to fill in the file data for these initial files? Make the same dir/file structure under <project root>/src/ ?
+		- An alternative would be adding code to 3rdstage.c or kernel.c in "setup" functions that create the file system 
+        at first boot, possibly using a global address to hold flag(s) set at first boot, or a user driven system 
+        reset/restore process.
+
+		[ ] How to fill in the file data for these initial files? 
+            Make the same dir/file structure under <project root>/src/ and copy the files from there?
 
 	[ ] Possible initial filesystem setup:
-		/
+        Overall Goal would be a "single source of truth" for documentation and system required programs at minimum.
+        Consistency is key, programs could expect 1 location for things they can use, and users could expect 1
+        location for help text, system source files and maintenance, etc.
+		/ 
 			sys
-				docs
-					<documentation txt files on OS layout, overview, subsystems, shell commands, program help, etc.>
-				examples
+				doc
+					<Documentation files on OS layout, overview, subsystems, shell commands, program help, etc.>
+				example
 					<OS code examples (source files) e.g. calling syscalls, shell commands, program examples, etc.>
 				src
 					<OS source files, same as in $project_root/src, to be able to update OS within itself later on>
+                bin
+                    <System (kernel) required programs, that the OS is using when running>
+                versions
+                    <Copies/previous versions of the OS or whole image itself; Could be used for updates/rollbacks>
 			usr
-				<user folder for user files, as an example. User can always change anything and put things anywhere as desired>
+				<user folder for user files, as an example. The user can always change anything and put things anywhere as desired>
 
 [ ] "Help" command - print string(s) to list currently available commands and their descriptions
-	[ ] Read command/program help info from files e.g. "/sys/docs/command/help.txt" ?
+	[ ] Read command/program help info from standard files e.g. "/sys/doc/commands/cmdA/help.txt" ?
 
 [ ] Delete file function & rm/del command
 	[ ] ...
@@ -130,6 +145,18 @@ Shorter Term
 
 [ ] Rename file/dir function & ren or mov command
 	[ ] ...
+
+[ ] Hex "monitor" program? Command line/interactive mode. This could be a replacement for the hex mode
+    of the editor, or as an additional similar feature. It would be started from a "hexmon" or "monitor" command 
+    or similar, and allow typing in an address or range of addresses to view contents of memory. Can have the 
+    default view be similar to 'xxd' in that it shows 8/16 bytes per line in hex and ascii (unicode?) on the 
+    right. Can also allow typing in values to use, but this would be up to the user to know what/why they're
+    typing in e.g. strings somewhere for text output, or x86 machine code for a program.
+    >: 0xF000:0xFFFF\r   for input to view memory contents of 0xF000-0xFFFF
+    >: 0xF000 i 123      to input value 123 into memory address 0xF000
+    >: 0xF000 i 0xFF 0x23 0x11 ...  to input multiple values in each byte starting at address 0xF000
+    ... more examples here ...
+    (Credit to Ben Eater's video on running Apple I software on the 6502 breadboard computer for inspiration)
 
  other needed filesystem functions, other things here...
 
@@ -145,25 +172,66 @@ Longer term
 	[ ] Research implicit rules, inference rules, and .SUFFIXES to try and simplify converting .c to .o and .bin files, and .asm to .bin files,
 		if possible.
 
+[ ] In bootsector or 2ndstage, find any ATA hard drives installed. If this OS is on a usb or otherwise not on an ATA drive,
+    ask user to choose which drive to install to. Use bios interrupts to read the OS sectors from USB, and write to 
+    start of chosen drive. Then reboot or shutdown so user can boot from the ATA drive, and have the OS work as normal.
+
+[ ] <Viewer Requested> SMT, SMP, scheduling (priorities w/ priority queue?, time slices, round robin, etc.)
+
+[ ] 2ndstage: when checking VBE graphics modes, use the highest mode found for X-res/Y-res/bpp as
+    the default, _not_ 1920x1080 32bpp. Change default text to say something similar to "highest 
+    VBE gfx mode found: NxN Nbpp. Press (Y/Enter) to accept or (N) to input a different mode."
+    This could help booting between more modern systems and older ones such as thinkpad x60, which
+    is limited to 1024x768.
+
+[ ] ELF & PE file loaders, for relocatable executables. This could replace the current flat binary files, at least
+    for loaded programs such as the editor/calculator, but maybe even the kernel.
+    This would probably increase support on more platforms for building everything, from the makefile or elsewhere.
+    It would also open up porting a lot more software, assuming shim/translation layers are made for translating
+    system calls or other C library calls.
+
+[ ] Change build/boot process (again...) to support ELF/PE for the kernel, using homemade ELF/PE loaders.
+    This would remove the need for a flat binary kernel, but may involve a more complicated linker script
+    and other changes. The kernel would be initially compiled as relocatable (e.g. DYN type for ELF),
+    its loadable sections loaded to a set base address e.g. 0xC0000000 (3GB) and jumped to as normal.
+    Hopefully less bugs and greater support on more systems/OSes/etc. would be had by switching everything
+    to standard ELF & PE files instead of flat binaries. Or at least it's fun to learn how to do it!
+
 [ ] 3D graphics primitives and math, rotations, matrices, etc. Also overhaul current 2d_gfx.h, separate framebuffer? Make framebuffer a file in 
 	the filesystem e.g. /dev/fb or similar? Implement graphics in userland, not in kernel, or otherwise remove floating point math from
 	ellipses and other places so they can be added back in.
 
-[ ] Processes, "shell" as separate program and first program started up in kernel, PID 1
+[ ] Assembler &| compiler for x86 asm (16 bit real mode, 32 bit protected mode, and 64 bit long mode), a subset of C, maybe a forth or lisp,
+	other languages...
 
-[ ] SMT, SMP, scheduling (priorities w/ priority queue?, time slices, round robin, etc.)
+[ ] Implement Processes; make the "shell" a separate program and first program started up in kernel, PID 1
+
+[ ] Better 'global' error handling; either global error codes & strings, or consistent error code
+    (-1? any negative number?) and a global error string/error buffer. Could have the 
+    "last error string" as a buffer in the process struct (sort of like Plan9).
 
 [ ] 8 bit pcm audio using pc speaker & PIT. Works by PWM/Pulse width modulation.
 
 [ ] Soundblaster 16 or ac97 or hd audio, or other audio support
 
-[ ] editor.c: rewrite/overhaul to use terminal escape sequences for cursor movement and printing. New terminal escape sequences for moving
-	cursor 1 column left, 1 column right, 1 row up, and 1 row down. Make the text editor into a modal editor similar in some
-	ways to ex/vi. Maybe line oriented like ed, but visual like vi. Still include "hex" mode for binary viewing and editing.
+[ ] editor.c: rewrite/overhaul to use terminal escape sequences for cursor movement and printing? 
+    [ ] New terminal escape sequences for moving the cursor: 1 col left (X-1 if > 0), 1 col right (X+1 if < 80 or <max_X>),
+        1 row up (Y-1 if > 0), and 1 row down (Y+1 if > <max_Y>).
+        Make more of a modal editor similar in some ways to ex/vi? Maybe more line oriented like ed/ex, but still full screen
+        & visual like vi. Still include "hex" mode for binary viewing and editing.
+    [ ] Make and use an "editor state" object/struct, that contains cursor X/Y, lines, buffers?, etc.
+        Pass this struct around to functions, don't have it as global state, unless that greatly simplifies things.
 
-[ ] Show images: Start with netpbm/.ppm files for color pixels
+[ ] Image support: Include reading, writing, and displaying (with added scaling support?)
+    [ ] Start with netpbm/.ppm files for color pixels
+    [ ] Bitmap (.bmp) standard, or a subset
+    [ ] Gif? Animated gifs?
+    [ ] Jpg?
+    [ ] Png?
 
-[ ] Page swapping and algorithms
+[ ] Page swapping and algorithms for it
+
+[ ] Page cache
 
 [ ] Update OS files within itself, without rebooting, if possible. Might have backups on disk for prior OS versions in case user wants to 
 	roll back changes. Otherwise new OS programs or full kernel/full OS can be loaded to memory and jumped to at kernel entry to re-initialize.
@@ -177,14 +245,11 @@ Longer term
 
 [ ] Network stack? NIC driver, ARP, IP, TCP, UDP, QUIC?, etc.
 
-[ ] (Text mode) browser? No JS, can do simple html/text, maybe some CSS, maybe not. Maybe a gopher browser or similar.
-
 [ ] IRC?
 
-[ ] Port doom? (it can't be a viable system until it runs DOOM!)
+[ ] (Text mode) browser? No JS, can do simple html/text, maybe some CSS, maybe not. Maybe a gopher browser or similar.
 
-[ ] Assembler &| compiler for x86 asm (16 bit real mode, 32 bit protected mode, and 64 bit long mode), a subset of C, maybe a forth or lisp,
-	other languages...
+[ ] Port doom? (it can't be a viable system until it runs DOOM!)
 
 [ ] 16 bit real mode emulator, at least to run simple games "virtualized" within the OS. Could use real virtualization with intel VT-d, etc.
 
