@@ -38,7 +38,6 @@ file_name_size_pointer files[] = {
     {"../bin/ter-u32n.bin", 0, NULL},   
     {"../bin/calculator.bin", 0, NULL},
     {"../bin/editor.bin", 0, NULL},
-    {"../bin/malloctst.bin", 0, NULL},
     {"../bin/kernel.bin", 0, NULL},
 };
 const uint32_t num_files = sizeof files / sizeof files[0];
@@ -85,7 +84,11 @@ bool write_superblock() {
     superblock.num_data_bitmap_blocks     = num_data_bits / (FS_BLOCK_SIZE * 8) + ((num_data_bits % (FS_BLOCK_SIZE * 8) > 0) ? 1 : 0);
     superblock.first_inode_block          = superblock.first_data_bitmap_block + superblock.num_data_bitmap_blocks;
     superblock.first_data_block           = superblock.first_inode_block + superblock.num_inode_blocks;
-    superblock.num_data_blocks            = (file_blocks-2) + 1;        // +1 block for root directory entries, -1 for bootsect & 2ndstage file blocks
+
+    // Blocks taken by inital root dir on disk; files -2 for no boot sector and 2nd stage, +2 for "." and ".." dir entries
+    uint32_t root_dir_blocks = ((num_files-2+2) / DIR_ENTRIES_PER_BLOCK) + ((num_files-2+2) % DIR_ENTRIES_PER_BLOCK ? 1 : 0);
+
+    superblock.num_data_blocks            = file_blocks + root_dir_blocks; 
     superblock.max_file_size_bytes        = 0xFFFFFFFF;                 // 32 bit size max = 0xFFFFFFFF
     superblock.block_size_bytes           = FS_BLOCK_SIZE;              // Should be FS_BLOCK_SIZE
     superblock.inode_size_bytes           = sizeof(inode_t);
@@ -94,7 +97,7 @@ bool write_superblock() {
     superblock.direct_extents_per_inode   = 4;                          // Probably will be 4
     superblock.extents_per_indirect_block = FS_BLOCK_SIZE / sizeof(extent_t); 
     superblock.first_free_inode_bit       = superblock.num_inodes;      // First 0 bit in inode bitmap
-    superblock.first_free_data_bit        = (file_blocks-2) + 1;        // First 0 bit in data bitmap; // +1 block for root directory entries, -1 for bootsect & 2ndstage file blocks
+    superblock.first_free_data_bit        = file_blocks + root_dir_blocks;  // 0-based index of first available disk block in data bitmap
     superblock.device_number              = 0x1;
     superblock.first_unreserved_inode     = 3;                          // inode 0 = invalid, inode 1 = root dir, inode 2 = bootloader/3rdstage
 

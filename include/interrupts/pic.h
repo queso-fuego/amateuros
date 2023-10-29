@@ -210,6 +210,7 @@ __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame)
     const uint8_t *num_row_shifts = ")!@#$%^&*(";
 
     // Set current key to null
+    key_info_t *key_info = (key_info_t *)KEY_INFO_ADDRESS;
     key_info->key = 0;
 
     key = inb(PS2_DATA_PORT);   // Read in new key

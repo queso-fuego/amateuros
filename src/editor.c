@@ -66,8 +66,8 @@ uint8_t hex_byte = 0;   // 1 byte/2 hex digits
 uint8_t bottom_msg[80];
 uint8_t file_mode;     
 
-__attribute__ ((section ("editor_entry"))) int editor_main(int argc, char *argv[])
-{
+//__attribute__ ((section ("editor_entry"))) int editor_main(int argc, char *argv[])
+int main(int argc, char *argv[]) {
     uint8_t *choose_filetype_string = "(B)inary/hex file or (O)ther file type (.txt, etc)?\0";
     uint8_t *keybinds_text_editor = " Ctrl-R = Return to kernel Ctrl-S = Save file to disk\0";
 
@@ -279,8 +279,7 @@ void editor_load_file(char *filename)
     }
 }
 
-void text_editor(void)
-{
+void text_editor(void) {
     uint8_t *keybinds_text_editor = " Ctrl-R: Return | Ctrl-S: Save | Ctrl-C: Chg name/ext | Ctrl-D: Del line\0";
     uint16_t save_x, save_y;
     uint8_t *x = "X:\0";
@@ -295,6 +294,8 @@ void text_editor(void)
     uint8_t *new = "NEW \0";
     uint8_t *upd = "UPD \0";
     uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
+
+    key_info_t *key_info = (key_info_t *)KEY_INFO_ADDRESS;
 
     // Write keybinds at bottom of screen
     fill_out_bottom_editor_message(keybinds_text_editor);

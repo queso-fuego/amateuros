@@ -8,9 +8,8 @@ Legend:
 <name> = viewer/3rd party suggestion/attribution
 
 ==================================================================================
-Shorter Term
+Shorter Term / Next Up
 ==================================================================================
-
 [ ] Fix/refactor editor, using new system calls for open(), read(), write(), etc. for files, 
     printf() for printing, and redo/simplify in general. It will NOT use the old file table system.
 	Could also try to change it to be more of a modal editor, line oriented editor, use terminal
@@ -18,10 +17,6 @@ Shorter Term
     and other things.
     [ ] Might make this more of an 'ed' like editor, i.e. line oriented, but still print all visible
         lines to screen and maybe not use only 1 character commands. Still thinking it through.
-
-[ ] Refactor malloctst.c and malloctst.ld to use printf(), don't clear screen. Fix page faults.
-	[ ] Move logic to a test function for malloc()/free(), to run in cmdRunTests in the kernel
-	[ ] Remove malloctst.c & malloctst.ld, now they're no longer needed
 
 [ ] Refactor makefile to use posix compliance, suffixes, actual inference rules, and prerequisites for recipes. Use those for all source files and
 	object files, to make the final executables/bin files. This way, other than building the final image, building and compilation can be faster 

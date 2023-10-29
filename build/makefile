@@ -10,16 +10,21 @@ CC = gcc
 CFLAGS = -std=c17 -m32 -march=i386 -mgeneral-regs-only -ffreestanding -fno-stack-protector \
 	-fno-builtin -nostdinc -fno-pie \
 	-Wall -Wextra -Wno-pointer-sign -Wno-interrupt-service-routine -I../include/
+
+EXE_CFLAGS = -std=c17 -m32 -march=i386 -mgeneral-regs-only -ffreestanding -fno-stack-protector \
+	-fno-builtin -nostdinc -fPIE \
+	-Wall -Wextra -Wno-pointer-sign -Wno-interrupt-service-routine -I../include/
 	
 SRCDIR = ../src/
 BINDIR = ../bin/
 FONTDIR = ../src/fonts/
-C_FILES != find $(SRCDIR) -maxdepth 1 -name "*.c" -exec basename -s ".c" {} \;
+C_FILES != find $(SRCDIR) -maxdepth 1 -name "*.c" ! -name "calculator.c" ! -name "editor.c" -exec basename -s ".c" {} \;
+EXES = calculator editor
 FONTS_BDF != find $(FONTDIR) -name "*.bdf" -exec basename -s ".bdf" {} \;
 
 # Make final OS.bin binary - padding out to full 1.44MB "floppy" img
 # TODO: Send list of files to make_disk.bin
-OS: $(FONTS_BDF) asm_files $(C_FILES) 
+OS: $(FONTS_BDF) asm_files $(C_FILES) $(EXES)
 	@$(CC) ./make_disk.c -o ./make_disk.bin -I../include	
 	@./make_disk.bin
 
@@ -31,6 +36,16 @@ asm_files:
 		size=$$(($$(wc -c < $(BINDIR)$$file.bin)));\
 		echo "$$file" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors)";\
 	done
+
+# Compile C source files into PIE executable files, and pad out their size to next 512 byte sector size
+$(EXES):
+	@$(CC) -c $(EXE_CFLAGS) -o $@.o $(SRCDIR)$@.c
+	@ld -melf_i386 -e main -pie $@.o -o $(BINDIR)$@.bin
+	@rm -f $@.o
+	@size=$$(($$(wc -c < $(BINDIR)$@.bin)));\
+	newsize=$$((size - $$((size % 512)) + 512));\
+	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors) ->" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
+	dd if=/dev/zero of=$(BINDIR)$@.bin bs=1 seek=$$size count=$$((newsize - size)) status=none;
 
 # Compile C source files into binary files, and pad out their size to next 512 byte sector size
 $(C_FILES):

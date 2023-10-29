@@ -5,6 +5,7 @@
 #include "C/stdlib.h"
 #include "C/string.h"
 #include "C/stdio.h"
+#include "C/stddef.h"
 #include "C/time.h"
 #include "C/ctype.h"
 #include "global/global_addresses.h"
@@ -28,6 +29,7 @@
 #include "sys/syscall_numbers.h"
 #include "sys/syscall_wrappers.h"
 #include "fs/fs_impl.h"
+#include "elf/elf.h"
 
 // Open file table & inode table pointers
 open_file_table_t *open_file_table;
@@ -40,16 +42,21 @@ uint32_t current_open_inodes;
 
 uint32_t next_available_file_virtual_address;
 
+void *exe_buffer;
+
 // Forward function declarations
 void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
 void init_open_file_table(void);                                        
 void init_open_inode_table(void);                                        
 void init_fs_vars(void);
 
+void *load_elf_file(uint8_t *);
+
 bool test_open_close(void); // Test functions...
 bool test_seek(void);
 bool test_write(void);
 bool test_read(void);
+bool test_malloc(void);
 
 __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     char cmdString[256] = {0};         // User input string  
@@ -295,10 +302,11 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             } test_function_t;
 
             test_function_t tests[] = {
-                { "Open() & Close() Syscalls", test_open_close },
+                { "Open() & Close() Syscalls",        test_open_close },
                 { "Seek() Syscall on New/Empty file", test_seek },
-                { "Write() Syscall for New file", test_write },
-                { "Read() Syscall on file", test_read },
+                { "Write() Syscall for New file",     test_write },
+                { "Read() Syscall on file",           test_read },
+                { "Malloc() & Free() tests",          test_malloc },
                 // TODO: { "Seek() Syscall on file with data", test_seek },
             };
 
@@ -727,43 +735,68 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             continue;
         }
 
-        // Get number of pages needed for file
-        needed_pages = (program_inode.size_sectors * 512) / PAGE_SIZE;  // Pgm size in sectors -> pages
-        if ((program_inode.size_sectors * 512) % PAGE_SIZE > 0) needed_pages++; // Extra partial page of memory
+        // Load file to memory
+        char *exe_name = argv[0];
+        int32_t fd = open(exe_name, O_RDWR);
 
-        // Load files/programs to this starting address
-        const uint32_t entry_point = 0x400000;  // Put entry point right after identity mapped 4MB page table
+        if (fd < 0) {
+            printf("\r\nError: Could not load program %s\r\n", exe_name);
+            continue;
+        }
 
-        // Allocate & map pages
-        for (uint32_t i = 0; i < needed_pages; i++) {
-            pt_entry page = 0;
-            uint32_t phys_addr = (uint32_t)allocate_page(&page);
+        printf("\r\nFile loaded to address %x\r\n", open_file_table[fd].address);
 
-            if (!map_page((void *)phys_addr, (void *)(entry_point + i*PAGE_SIZE))) {
-                printf("\r\nCouldn't map pages, may be out of memory :'(");
+        // Determine what type of executable this is
+        uint8_t *magic = (uint8_t *)open_file_table[fd].address;
+
+        int32_t (*program)(int argc, char *argv[]); 
+        int32_t return_code = 0;
+
+        // Save current kernel malloc values
+        malloc_block_t *save_malloc_head  = malloc_list_head;
+        uint32_t save_malloc_virt_address = malloc_virt_address;
+        uint32_t save_malloc_phys_address = malloc_phys_address;
+        uint32_t save_malloc_pages        = total_malloc_pages;
+
+        if (magic[0] == 'M' && magic[1] == 'Z') {
+            // PE32 File
+            printf("PE32 Executable\r\n");
+
+            // ...
+
+        } else if (magic[0] == 0x7F && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F') {
+            // ELF32 File
+            printf("ELF32 Executable\r\n");
+
+            // Load elf file and get entry point
+            void *entry_point = load_elf_file(open_file_table[fd].address);
+
+            if (entry_point == NULL) {
+                printf("Error: Could not load ELF file or get entry point\r\n");
                 continue;
             }
 
-            pt_entry *virt_page = get_page(entry_point + i*PAGE_SIZE);
-            SET_ATTRIBUTE(virt_page, PTE_READ_WRITE);
+            // Reset malloc variables before calling program
+            malloc_list_head    = 0;    // Start of linked list
+            // TODO: Change this, possibly using a virtual address map to get the next available 
+            //   virtual address
+            malloc_virt_address = next_available_file_virtual_address;
+            next_available_file_virtual_address += PAGE_SIZE;
+            malloc_phys_address = 0;
+            total_malloc_pages  = 0;
+
+            // Run the executable
+            printf("Entry point: %x\r\n", (uint32_t)entry_point);
+
+            program = (int32_t (*)(int, char**))entry_point;
+            return_code = program(argc, argv);
+
+            printf("Return Code: %d\r\n", return_code);
+
+        } else {
+            // Assuming flat binary file by default
+            // ...
         }
-
-        // Load program to entry point 
-        fs_load_file(&program_inode, entry_point);
-
-        // Reset malloc variables before calling program
-        malloc_list_head    = 0;    // Start of linked list
-        // TODO: Change this, possibly using a virtual address map to get the next available 
-        //   virtual address
-        malloc_virt_address = next_available_file_virtual_address;
-        next_available_file_virtual_address += PAGE_SIZE;
-        malloc_phys_address = 0;
-        total_malloc_pages  = 0;
-
-        int32_t (*program)(int argc, char *argv[]) = 
-            (int32_t (*)(int, char **))entry_point;
-
-        int32_t return_code = program(argc, argv);
 
         // If used malloc(), free remaining malloc-ed memory to prevent memory leaks
         for (uint32_t i = 0, virt = malloc_virt_address; i < total_malloc_pages; i++, virt += PAGE_SIZE) {
@@ -777,11 +810,17 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         }
 
         // Reset malloc variables after calling program
-        malloc_list_head    = kernel_malloc_list_head;
-        malloc_virt_address = kernel_malloc_virt_address;
-        malloc_phys_address = kernel_malloc_phys_address;
-        total_malloc_pages  = kernel_total_malloc_pages;
+        malloc_list_head    = save_malloc_head;
+        malloc_virt_address = save_malloc_virt_address;
+        malloc_phys_address = save_malloc_phys_address;
+        total_malloc_pages  = save_malloc_pages;
             
+        // Free memory for exe
+        free(exe_buffer);
+
+        // Close file when done
+        close(fd);
+
         // TODO: In the future, if using a backbuffer, restore screen data from that buffer here instead
         //  of clearing
             
@@ -790,17 +829,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
 
         if (return_code < 0) {
             printf("Error running program; Return code: %d\r\n", return_code);
-        }
-
-        // Free program pages allocated
-        for (uint32_t i = 0, virt = entry_point; i < needed_pages; i++, virt += PAGE_SIZE) {
-            pt_entry *page = get_page(virt);
-
-            if (PAGE_PHYS_ADDRESS(page) && TEST_ATTRIBUTE(page, PTE_PRESENT)) {
-                free_page(page);
-                unmap_page((uint32_t *)virt);
-                flush_tlb_entry(virt);  // Invalidate page as it is no longer present or mapped
-            }
         }
 
         continue;   // Loop back to prompt for next input
@@ -906,6 +934,118 @@ void init_open_inode_table(void) {
     memset(open_inode_table, 0, sizeof(open_file_table_t) * max_open_files);
 
     *open_inode_table = (inode_t){0};
+}
+
+// Load ELF File
+void *load_elf_file(uint8_t *file_address) {
+    Elf32_Ehdr *ehdr = (Elf32_Ehdr *)file_address;
+
+    // Print ELF Info
+    printf("Info:\r\n"
+           "Type: %d\r\n"
+           "Machine: %x\r\n"
+           "Entry: %x\r\n"
+           "Program Header offset: %d\r\n"
+           "Elf Header size: %d\r\n"
+           "Program Header entry size: %d\r\n"
+           "Program Header num: %d\r\n",
+           ehdr->e_type,
+           ehdr->e_machine,
+           ehdr->e_entry,
+           ehdr->e_phoff,
+           ehdr->e_ehsize,
+           ehdr->e_phentsize,
+           ehdr->e_phnum);
+
+    // Only allow executables or Dynamic executables (e.g. PIE)
+    if (ehdr->e_type != ET_EXEC && ehdr->e_type != ET_DYN) {
+        printf("\r\nError: Program is not an executable or dynamic executable.\r\n");
+        return NULL;
+    }
+
+    // Figure out max needed memory to load elf sections into
+    uint32_t mem_min = 0xFFFFFFFF, mem_max = 0;
+
+    Elf32_Phdr *phdr = (Elf32_Phdr *)(file_address + ehdr->e_phoff);
+
+    uint32_t alignment = PAGE_SIZE;
+    uint32_t align = alignment;
+
+    printf("Program Headers:\r\n");
+    for (uint32_t i = 0; i < ehdr->e_phnum; i++) {
+        // Only interested in loadable program sections
+        if (phdr[i].p_type != PT_LOAD) continue;
+
+        // Print out program header info
+        printf("No: %d, Type: %d, Offset: %d, Virt Addr: %x, Phys Addr: %x, "
+               "File Size: %d, Mem Size: %d, Flags: %d, Align: %x\r\n",
+               i,
+               phdr[i].p_type,
+               phdr[i].p_offset,
+               phdr[i].p_vaddr,
+               phdr[i].p_paddr,
+               phdr[i].p_filesz,
+               phdr[i].p_memsz,
+               phdr[i].p_flags,
+               phdr[i].p_align);
+
+        // Update max alignment as needed
+        if (align < phdr[i].p_align) align = phdr[i].p_align;
+
+        uint32_t mem_begin = phdr[i].p_vaddr;
+        uint32_t mem_end = phdr[i].p_vaddr + phdr[i].p_memsz + align-1;
+
+        mem_begin &= ~(align-1);
+        mem_end &= ~(align-1);
+
+        // Get new minimum & maximum memory bounds for all program sections
+        if (mem_begin < mem_min) mem_min = mem_begin;
+        if (mem_end > mem_max) mem_max = mem_end;
+    }
+
+    uint32_t buffer_size = mem_max - mem_min;
+    printf("\r\nMemory needed for file: %x\r\n", buffer_size);
+
+    // Create buffer for file
+    exe_buffer = malloc(buffer_size);
+
+    if (exe_buffer == NULL) {
+        printf("\r\nError: Could not malloc() enough memory for program\r\n");
+        return NULL;
+    }
+
+    printf("\r\nProgram buffer address: %x\r\n", (uint32_t)exe_buffer);
+
+    // Zero init buffer, to ensure 0 padding for all program sections
+    memset(exe_buffer, 0, buffer_size);
+
+    // Load program headers into buffer
+    for (uint32_t i = 0; i < ehdr->e_phnum; i++) {
+        // Only interested in loadable program sections
+        if (phdr[i].p_type != PT_LOAD) continue;
+
+        // Use relative position of program section in file, to ensure it still works correctly.
+        //   With PIE executables, this means we can use any entry point or addresses, as long as
+        //   we use the same relative addresses.
+        // In PE files this should be equivalent to the "RVA"
+        uint32_t relative_offset = phdr[i].p_vaddr - mem_min;
+
+        // Read in p_memsz amount of data from p_offset into original file buffer,
+        //   to p_vaddr (offset by a relative amount) into new buffer
+        uint8_t *dst = (uint8_t *)exe_buffer + relative_offset; 
+        uint8_t *src = file_address + phdr[i].p_offset;
+        uint32_t len = phdr[i].p_memsz;
+
+        printf("MEMCPY dst: %x, src: %x, len: %x\r\n", (uint32_t)dst, (uint32_t)src, len);
+
+        memcpy(dst, src, len);
+    }
+
+    // Return entry point which if offset into new buffer, 
+    //   also needs to be relatively offset from the start of the original ELF buffer
+    void *entry_point = (void *)((uint8_t *)exe_buffer + (ehdr->e_entry - mem_min));
+
+    return entry_point;
 }
 
 // Probably should move these to a separate file or something later...
@@ -1064,11 +1204,37 @@ bool test_read(void) {
     return true;
 }
 
+// Test malloc() & free() function calls
+bool test_malloc(void) {
+    void *buf;
+    void *buf2;
+    void *buf3;
+    void *buf4;
+    void *buf5;
 
+    buf = malloc(100);
+    printf("\r\nMalloc-ed 100 bytes to address %x\r\n", (uint32_t)buf);
+    printf("Free-ing bytes...\r\n");
+    free(buf);
 
+    buf2 = malloc(42);
+    printf("Malloc-ed 42 bytes to address %x\r\n", (uint32_t)buf2);
+    printf("Free-ing bytes...\r\n");
+    free(buf2);
 
+    buf3 = malloc(250);
+    printf("Malloc-ed 250 bytes to address %x\r\n", (uint32_t)buf3);
 
+    buf4 = malloc(6000);
+    printf("Malloc-ed 6000 bytes to address %x\r\n", (uint32_t)buf4);
 
+    buf5 = malloc(333);
+    printf("Malloc-ed 333 bytes to address %x\r\n", (uint32_t)buf5);
 
+    free(buf4);
+    free(buf5);
+    free(buf3);
 
+    return true;
+}
 

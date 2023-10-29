@@ -34,18 +34,19 @@ const uint8_t FALSE = 0;
 
 uint8_t buffer[80];
 uint16_t scan;
-static uint8_t *error_msg = "Syntax Error\0";
 int32_t parse_num = 0;
 bool interactive = false;
 
-__attribute__ ((section ("calc_entry"))) int32_t calc_main(int argc, char *argv[]) {
+//__attribute__ ((section ("calc_entry"))) int32_t calc_main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
     uint8_t input_char;
     const uint8_t valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
     uint8_t idx;
+    key_info_t *key_info = (key_info_t *)KEY_INFO_ADDRESS;
 
     // Check if user passed in expressions to evaluate; if so, do not run interactively
     if (argc > 1) {
-        interactive = false;    // NEW:
+        interactive = false;    
 
         for (uint8_t i = 1; i < argc; i++) {
             // Set calc input buffer to expression in arg,
@@ -57,19 +58,20 @@ __attribute__ ((section ("calc_entry"))) int32_t calc_main(int argc, char *argv[
             parse_buffer();
         }
 
-        printf("\r\n"); // NEW: End newline to fix spacing 
+        printf("\r\n"); // End newline to fix spacing 
         return 0;   // Return to caller with SUCCESS
     }
     
     // Initial newline to not be at end of last user input from shell prompt
     printf("\r\n");
 
-    interactive = true; // NEW:
+    interactive = true; 
 
     // Get line of input
     scan = 0;
     while (1) {
         printf("\033CSRON; \033BS;");
+
         input_char = get_key();
 
         for (idx = 0; idx < 20 && valid_input[idx] != input_char; idx++) ;
@@ -79,8 +81,7 @@ __attribute__ ((section ("calc_entry"))) int32_t calc_main(int argc, char *argv[
 
         // Enter key with some input or buffer is full
         if ((input_char == '\r' && scan > 0) || scan == 80) {    
-            //printf("\eCSROFF; "); // NEW: Print newline
-            printf("\033CSROFF; "); // NEW: Print newline for result
+            printf("\033CSROFF; "); // Print newline for result
             parse_buffer();
             scan = 0;
 
@@ -109,16 +110,14 @@ void parse_buffer(void)
     scan = 0;
 
 	// Print error msg or result
-    // NEW: Only end with newline, no need to double up
+    // Only end with newline, no need to double up
 	if ((num = parse_sum()) == ERROR) {
-        //printf("\r\n%s\r\n", error_msg);
-        printf("\r\n%s", error_msg);
+        printf("\r\nSyntax Error");
     } else {
-        //printf("\r\n%d\r\n", num);
         printf("\r\n%d", num);
     }
 
-    if (interactive) { // NEW: 
+    if (interactive) { 
         printf("\r\n");
     }
 }
