@@ -42,15 +42,11 @@ uint32_t current_open_inodes;
 
 uint32_t next_available_file_virtual_address;
 
-void *exe_buffer;
-
 // Forward function declarations
 void print_physical_memory_info(void);  // Print information from the physical memory map (SMAP)
 void init_open_file_table(void);                                        
 void init_open_inode_table(void);                                        
 void init_fs_vars(void);
-
-void *load_elf_file(uint8_t *);
 
 bool test_open_close(void); // Test functions...
 bool test_seek(void);
@@ -63,7 +59,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     char *cmdString_ptr = cmdString;
     uint8_t input_char   = 0;       // User input character
     uint8_t input_length;           // Length of user input
-    //uint16_t idx          = 0;
     char *cmdDir          = "dir";          // Directory command; list all files/pgms on disk
     char *cmdReboot       = "reboot";       // 'warm' reboot option
     char *cmdPrtreg       = "prtreg";       // Print register values
@@ -82,19 +77,30 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     char *cmdSoundTest    = "soundtest";    // Test pc speaker square wave sound
     char *cmdRunTests     = "runtests";     // Run test functions
     char *cmdType         = "type";         // 'Type' out a text or other file to the screen
+
+    // TODO: Move all commands to this array 
+    // !NOTE!: All commands here need to have their own functions at the 
+    //   exact same array offset/element in the command_functions array below
+    char *commands[] = {
+        "mkdir",
+        "chdir",
+    };
+
+    bool (*command_functions[])(char *) = {
+        fs_make_dir,
+        fs_change_dir,
+    };
+
     uint8_t fileExt[3];
-    //uint8_t *fileBin = "bin";
     uint8_t *file_ptr;
     //uint8_t *windowsMsg     = "\r\n" "Oops! Something went wrong :(" "\r\n\0";
     uint8_t *menuString     = "------------------------------------------------------\r\n"
                               "Kernel Booted, Welcome to QuesOS - 32 Bit 'C' Edition!\r\n"
-                              "------------------------------------------------------\r\n\r\n\0";
-    uint8_t *failure        = "\r\n" "Command/Program not found, Try again" "\r\n\0";
+                              "------------------------------------------------------\r\n";
+    uint8_t *failure        = "\r\n" "Command/Program not found, Try again" "\r\n";
     uint8_t *prompt         = ">";
-    //uint8_t *pgmNotLoaded   = "\r\n" "Program/file found but not loaded, Try Again" "\r\n\0";
-    uint8_t *fontNotFound   = "\r\n" "Font not found!" "\r\n\0";
+    uint8_t *fontNotFound   = "\r\n" "Font not found!" "\r\n";
 
-    uint32_t needed_pages; 
     uint8_t font_width  = *(uint8_t *)FONT_WIDTH;
     uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
     int argc = 0;
@@ -209,7 +215,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         memset(cmdString, 0, sizeof cmdString);
 
         // Print prompt
-        printf("\eCSRON;%s%s", current_dir, prompt);
+        printf("\r\n\033CSRON;%s%s", current_dir, prompt);
         
         input_length = 0;   // reset byte counter of input
 
@@ -280,6 +286,22 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         }
 
         // Check commands 
+        // TODO: Move all commands to commands and functions array
+        bool found_command = false;
+        for (uint32_t i = 0; i < sizeof commands / sizeof commands[0]; i++) {
+            if (!strncmp(argv[0], commands[i], strlen(commands[i]))) {
+                found_command = true;
+
+                if (!command_functions[i](argv[1])) {
+                    printf("\r\nError: command %s failed\r\n", argv[0]);
+                }
+                break;
+            }
+        }
+
+        // Already found and ran command, loop for next user input
+        if (found_command) continue;
+
         // Get first token (command to run) & second token (if applicable e.g. file name)
         if (strncmp(argv[0], cmdDir, strlen(cmdDir)) == 0) {
             if (!argv[1]) {
@@ -758,6 +780,18 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         uint32_t save_malloc_phys_address = malloc_phys_address;
         uint32_t save_malloc_pages        = total_malloc_pages;
 
+        void *exe_buffer  = NULL; // Buffer to hold loaded executable
+        void *entry_point = NULL; // Entry point of executable
+
+        // Reset malloc variables before calling program
+        malloc_list_head    = 0;    // Start of linked list
+        // TODO: Change this, possibly using a virtual address map to get the next available 
+        //   virtual address
+        malloc_virt_address = next_available_file_virtual_address;
+        next_available_file_virtual_address += PAGE_SIZE;
+        malloc_phys_address = 0;
+        total_malloc_pages  = 0;
+
         if (magic[0] == 'M' && magic[1] == 'Z') {
             // PE32 File
             printf("PE32 Executable\r\n");
@@ -769,34 +803,25 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             printf("ELF32 Executable\r\n");
 
             // Load elf file and get entry point
-            void *entry_point = load_elf_file(open_file_table[fd].address);
+            entry_point = load_elf_file(open_file_table[fd].address, exe_buffer);
 
             if (entry_point == NULL) {
                 printf("Error: Could not load ELF file or get entry point\r\n");
                 continue;
             }
 
-            // Reset malloc variables before calling program
-            malloc_list_head    = 0;    // Start of linked list
-            // TODO: Change this, possibly using a virtual address map to get the next available 
-            //   virtual address
-            malloc_virt_address = next_available_file_virtual_address;
-            next_available_file_virtual_address += PAGE_SIZE;
-            malloc_phys_address = 0;
-            total_malloc_pages  = 0;
-
-            // Run the executable
-            printf("Entry point: %x\r\n", (uint32_t)entry_point);
-
-            program = (int32_t (*)(int, char**))entry_point;
-            return_code = program(argc, argv);
-
-            printf("Return Code: %d\r\n", return_code);
-
         } else {
             // Assuming flat binary file by default
             // ...
         }
+
+        // Run the executable
+        printf("Entry point: %x\r\n", (uint32_t)entry_point);
+
+        program = (int32_t (*)(int, char**))entry_point;
+        return_code = program(argc, argv);
+
+        printf("Return Code: %d\r\n", return_code);
 
         // If used malloc(), free remaining malloc-ed memory to prevent memory leaks
         for (uint32_t i = 0, virt = malloc_virt_address; i < total_malloc_pages; i++, virt += PAGE_SIZE) {
@@ -934,118 +959,6 @@ void init_open_inode_table(void) {
     memset(open_inode_table, 0, sizeof(open_file_table_t) * max_open_files);
 
     *open_inode_table = (inode_t){0};
-}
-
-// Load ELF File
-void *load_elf_file(uint8_t *file_address) {
-    Elf32_Ehdr *ehdr = (Elf32_Ehdr *)file_address;
-
-    // Print ELF Info
-    printf("Info:\r\n"
-           "Type: %d\r\n"
-           "Machine: %x\r\n"
-           "Entry: %x\r\n"
-           "Program Header offset: %d\r\n"
-           "Elf Header size: %d\r\n"
-           "Program Header entry size: %d\r\n"
-           "Program Header num: %d\r\n",
-           ehdr->e_type,
-           ehdr->e_machine,
-           ehdr->e_entry,
-           ehdr->e_phoff,
-           ehdr->e_ehsize,
-           ehdr->e_phentsize,
-           ehdr->e_phnum);
-
-    // Only allow executables or Dynamic executables (e.g. PIE)
-    if (ehdr->e_type != ET_EXEC && ehdr->e_type != ET_DYN) {
-        printf("\r\nError: Program is not an executable or dynamic executable.\r\n");
-        return NULL;
-    }
-
-    // Figure out max needed memory to load elf sections into
-    uint32_t mem_min = 0xFFFFFFFF, mem_max = 0;
-
-    Elf32_Phdr *phdr = (Elf32_Phdr *)(file_address + ehdr->e_phoff);
-
-    uint32_t alignment = PAGE_SIZE;
-    uint32_t align = alignment;
-
-    printf("Program Headers:\r\n");
-    for (uint32_t i = 0; i < ehdr->e_phnum; i++) {
-        // Only interested in loadable program sections
-        if (phdr[i].p_type != PT_LOAD) continue;
-
-        // Print out program header info
-        printf("No: %d, Type: %d, Offset: %d, Virt Addr: %x, Phys Addr: %x, "
-               "File Size: %d, Mem Size: %d, Flags: %d, Align: %x\r\n",
-               i,
-               phdr[i].p_type,
-               phdr[i].p_offset,
-               phdr[i].p_vaddr,
-               phdr[i].p_paddr,
-               phdr[i].p_filesz,
-               phdr[i].p_memsz,
-               phdr[i].p_flags,
-               phdr[i].p_align);
-
-        // Update max alignment as needed
-        if (align < phdr[i].p_align) align = phdr[i].p_align;
-
-        uint32_t mem_begin = phdr[i].p_vaddr;
-        uint32_t mem_end = phdr[i].p_vaddr + phdr[i].p_memsz + align-1;
-
-        mem_begin &= ~(align-1);
-        mem_end &= ~(align-1);
-
-        // Get new minimum & maximum memory bounds for all program sections
-        if (mem_begin < mem_min) mem_min = mem_begin;
-        if (mem_end > mem_max) mem_max = mem_end;
-    }
-
-    uint32_t buffer_size = mem_max - mem_min;
-    printf("\r\nMemory needed for file: %x\r\n", buffer_size);
-
-    // Create buffer for file
-    exe_buffer = malloc(buffer_size);
-
-    if (exe_buffer == NULL) {
-        printf("\r\nError: Could not malloc() enough memory for program\r\n");
-        return NULL;
-    }
-
-    printf("\r\nProgram buffer address: %x\r\n", (uint32_t)exe_buffer);
-
-    // Zero init buffer, to ensure 0 padding for all program sections
-    memset(exe_buffer, 0, buffer_size);
-
-    // Load program headers into buffer
-    for (uint32_t i = 0; i < ehdr->e_phnum; i++) {
-        // Only interested in loadable program sections
-        if (phdr[i].p_type != PT_LOAD) continue;
-
-        // Use relative position of program section in file, to ensure it still works correctly.
-        //   With PIE executables, this means we can use any entry point or addresses, as long as
-        //   we use the same relative addresses.
-        // In PE files this should be equivalent to the "RVA"
-        uint32_t relative_offset = phdr[i].p_vaddr - mem_min;
-
-        // Read in p_memsz amount of data from p_offset into original file buffer,
-        //   to p_vaddr (offset by a relative amount) into new buffer
-        uint8_t *dst = (uint8_t *)exe_buffer + relative_offset; 
-        uint8_t *src = file_address + phdr[i].p_offset;
-        uint32_t len = phdr[i].p_memsz;
-
-        printf("MEMCPY dst: %x, src: %x, len: %x\r\n", (uint32_t)dst, (uint32_t)src, len);
-
-        memcpy(dst, src, len);
-    }
-
-    // Return entry point which if offset into new buffer, 
-    //   also needs to be relatively offset from the start of the original ELF buffer
-    void *entry_point = (void *)((uint8_t *)exe_buffer + (ehdr->e_entry - mem_min));
-
-    return entry_point;
 }
 
 // Probably should move these to a separate file or something later...

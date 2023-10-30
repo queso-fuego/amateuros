@@ -78,8 +78,8 @@ bool write_superblock() {
 
     const uint32_t data_blocks = bytes_to_blocks(disk_size);
 
-    // TODO: Also subtract blocks taken by data_bitmap for num_data_bits? or does not matter?
-    uint32_t num_data_bits = (data_blocks - superblock.first_data_bitmap_block - superblock.num_inode_blocks); 
+    // Total disk blocks - (boot block + superblock + inode bitmap blocks + data bit map blocks + inode blocks)
+    uint32_t num_data_bits = (data_blocks - superblock.first_data_bitmap_block - superblock.num_inode_blocks - 1); 
 
     superblock.num_data_bitmap_blocks     = num_data_bits / (FS_BLOCK_SIZE * 8) + ((num_data_bits % (FS_BLOCK_SIZE * 8) > 0) ? 1 : 0);
     superblock.first_inode_block          = superblock.first_data_bitmap_block + superblock.num_data_bitmap_blocks;
@@ -88,7 +88,10 @@ bool write_superblock() {
     // Blocks taken by inital root dir on disk; files -2 for no boot sector and 2nd stage, +2 for "." and ".." dir entries
     uint32_t root_dir_blocks = ((num_files-2+2) / DIR_ENTRIES_PER_BLOCK) + ((num_files-2+2) % DIR_ENTRIES_PER_BLOCK ? 1 : 0);
 
-    superblock.num_data_blocks            = file_blocks + root_dir_blocks; 
+    // TODO: Find why this needs 1 extra right now (maybe more later???) and how to correctly calculate this
+    //   sometimes making new files seems to overwrite part of the kernel or otherwise break booting the kernel
+    superblock.num_data_blocks            = 1 + file_blocks + root_dir_blocks; 
+
     superblock.max_file_size_bytes        = 0xFFFFFFFF;                 // 32 bit size max = 0xFFFFFFFF
     superblock.block_size_bytes           = FS_BLOCK_SIZE;              // Should be FS_BLOCK_SIZE
     superblock.inode_size_bytes           = sizeof(inode_t);
@@ -97,7 +100,11 @@ bool write_superblock() {
     superblock.direct_extents_per_inode   = 4;                          // Probably will be 4
     superblock.extents_per_indirect_block = FS_BLOCK_SIZE / sizeof(extent_t); 
     superblock.first_free_inode_bit       = superblock.num_inodes;      // First 0 bit in inode bitmap
-    superblock.first_free_data_bit        = file_blocks + root_dir_blocks;  // 0-based index of first available disk block in data bitmap
+
+    // TODO: Find why this needs 1 extra right now (maybe more later???) and how to correctly calculate this
+    //   sometimes making new files seems to overwrite part of the kernel or otherwise break booting the kernel
+    superblock.first_free_data_bit        = 1 + file_blocks + root_dir_blocks;  // 0-based index of first available disk block in data bitmap
+
     superblock.device_number              = 0x1;
     superblock.first_unreserved_inode     = 3;                          // inode 0 = invalid, inode 1 = root dir, inode 2 = bootloader/3rdstage
 

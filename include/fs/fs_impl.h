@@ -6,6 +6,9 @@
 #include "C/stdbool.h"
 #include "C/stdio.h"
 #include "fs/fs.h"
+#include "sys/syscall_wrappers.h" 
+
+#define MAX_PATH_SIZE 256
 
 char *current_dir;                      // "Current working directory" string
 inode_t current_dir_inode;              // Inode for current working dir
@@ -14,11 +17,6 @@ uint8_t temp_sector[FS_SECTOR_SIZE];    // Temporary work sector
 uint8_t temp_block[FS_BLOCK_SIZE];      // Temporary work block
 inode_t root_inode;                     // Static place to put root dir 
 superblock_t superblock;
-
-// TODO: Add helper function for "update inode on disk" and
-//   others? This would take in an inode, read that inode
-//   from disk, update it's value from input inode, and write
-//   back to disk. Could save on lines of code in a few places
 
 // Load a file from disk to memory 
 bool fs_load_file(inode_t *inode, uint32_t address) {
@@ -562,28 +560,105 @@ bool print_dir(const char *path) {
 }
 
 // Create a new directory file in the filesystem given a file path
-// including new inode; updating inode bitmap blocks, data bitmap blocks,
-// inode blocks, and data blocks for new file. Will probably need to also
-// update superblock; This will probably be behind a "mkdir" or similar command
-//inode_t fs_make_dir(const char *path) {
-//    // TODO: Data blocks/directory's initial data will be
-//    //  dir_entrys for "." and ".."
-//    
-//    return (inode_t){0};
-//}
+bool fs_make_dir(char *path) {
+    if (!path) return false;
 
+    // Create new empty default file
+    int32_t fd = open(path, O_CREAT | O_WRONLY);
+    if (fd < 0) return false;
 
+    // Grab this new directory's inode and its containing directory's inode
+    //   for . and .. dir_entry's
+    inode_t dir_inode = inode_from_path(path);
+    inode_t parent_inode = parent_inode_from_path(path);
 
+    // Change filetype of new file to DIR
+    dir_inode.type = FILETYPE_DIR;
 
+    // Write default dir entries for . and ..
+    // "." = this directory itself
+    dir_entry_t dir_entry = { .id = dir_inode.id, .name = "." };
+    write(fd, &dir_entry, sizeof dir_entry);
 
+    // ".." = parent directory, which contains this new directory
+    dir_entry.id = parent_inode.id;
+    memcpy(&dir_entry.name, "..", 3);
+    write(fd, &dir_entry, sizeof dir_entry);
 
+    // Update size of directory
+    dir_inode.size_bytes = sizeof(dir_entry) * 2;
+    dir_inode.size_sectors = bytes_to_sectors(dir_inode.size_bytes);
 
+    // Update inode for new dir on disk
+    update_inode_on_disk(dir_inode);
 
+    // Update current dir inode and root dir inode, in case new dir 
+    //   was added to either
+    if (current_dir_inode.id == parent_inode.id)
+        current_dir_inode = parent_inode;
 
+    if (root_inode.id == parent_inode.id)
+        root_inode = parent_inode;
 
+    return true;
+}
 
+// Change current directory
+bool fs_change_dir(char *path) {
+    if (!path) return false;
 
+    // TODO: Create multiple directories in path if not exist?
 
+    // Change directory to current directory
+    if (!strncmp(path, ".", 2)) return true;
 
+    inode_t dir_inode = inode_from_path(path);
+    if (dir_inode.id == 0) return false;    // Dir does not exist
 
+    if (dir_inode.type != FILETYPE_DIR) return false;   // Not a directory
+
+    char *curr = current_dir;
+    if (*path == '/') {
+        // Changing to explicit path starting at root
+        *curr = *path;
+
+    } else {
+        // Start path from current dir path,
+        //   get pointer to end of current path
+        while (*curr) curr++;
+        curr--; // Go back before ending null terminator
+    }
+
+    // Update current directory 
+    current_dir_inode = dir_inode;
+
+    for (char *p = path; *p != '\0'; p++) {
+        // '/' = directory separator, skip over
+        if (*p == '/') continue;
+
+        // .. = parent directory, skip over, set current dir string
+        //   to end on next parent directory (up by 1 level)
+        if (!strncmp(p, "..", 2)) {
+            if (*curr == '/') curr--;   // Go before current separator first
+
+            while (*curr != '/') curr--;    
+
+            p++;
+            continue;
+        }
+
+        // . = current directory, skip over
+        if (*p == '.') continue;
+
+        // Else found next folder name, copy to current_dir string
+        curr++; // Move past slash in current_dir string
+        while (*p != '\0' && *p != '/') *curr++ = *p++;
+    }
+
+    // Will always end current_dir path string with a slash
+    if (*curr != '/') *curr = '/';
+    *(curr + 1) = '\0';   // Null terminate new string
+
+    return true;
+}
 

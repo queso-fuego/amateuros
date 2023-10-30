@@ -5,51 +5,36 @@ Legend:
 
 [X] = done yet
 
+?[ ] = optional 
+
 <name> = viewer/3rd party suggestion/attribution
 
 ==================================================================================
 Shorter Term / Next Up
 ==================================================================================
+?[ ] Move printing elf info into another function in elf.h, similar to readelf? 
+    or move into a command in kernel.c for 'readelf' or similar?
+
+[ ] Change command_functions array to take in the argv[] array starting at argv[1] as the input 
+    parm, not just 1 char* parm for path. That way each function for a command can interpret flags,
+    multiple paths, etc. and act more like actual shell commands.
+
+[ ] Make create file command e.g. "touch" or similar
+
 [ ] Fix/refactor editor, using new system calls for open(), read(), write(), etc. for files, 
     printf() for printing, and redo/simplify in general. It will NOT use the old file table system.
 	Could also try to change it to be more of a modal editor, line oriented editor, use terminal
     escape sequences for cursor/etc., and/or add an editor state struct to keep track of cursor X/Y
     and other things.
-    [ ] Might make this more of an 'ed' like editor, i.e. line oriented, but still print all visible
-        lines to screen and maybe not use only 1 character commands. Still thinking it through.
+
+    [ ] Alternatively, might redo the whole thing and make it more of an 'ed' like editor, 
+        i.e. line oriented. The hex editor could be remade into its own separate "monitor" program.
 
 [ ] Refactor makefile to use posix compliance, suffixes, actual inference rules, and prerequisites for recipes. Use those for all source files and
 	object files, to make the final executables/bin files. This way, other than building the final image, building and compilation can be faster 
 	and incremental, no reason to rebuild everything every time. It should also (hopefully) be less code and with wider portability due to posix.
 	Should be able to use directories and have suffix/inference rules work fine, but only if both suffix ruled files are in the same directory.
 	It may also be worse from included header files, and having to use those in the prerequisites.
-
-[ ] md/mkdir command; Try to use syscalls and not fs_* functions if possible?
-	[ ] "dir_fd = open(<dir_path>, O_CREAT | O_WRONLY)" // Should create new inode and update inode blocks/disk blocks in parent directory
-	[ ] Get inode for new dir with "inode_t dir_inode = inode_from_path(<dir_path>)"
-	[ ] Get parent dir inode for new dir with "inode_t parent_inode = parent_inode_from_path(<dir_path>)"
-	[ ] Change new dir inode's type to FILETYPE_DIR
-	[ ] Add/append to dir's data blocks on disk, with new dir_entry_t's for "." (this dir itself, use this file's id) 
-		  and ".." (parent dir, use parent's inode id).
-		[ ] ".": 
-			dir_entry_t dir_entry = { .id = dir_inode.id, .name = "." }; // Probably have to strcpy/memcpy for name instead
-			write(dir_fd, &dir_entry, sizeof dir_entry);
-		[ ] "..": 
-			dir_entry = (dir_entry_t){ .id = parent_inode.id, .name = ".." }; // Probably have to strcpy/memcpy for name instead
-			write(dir_fd, &dir_entry, sizeof dir_entry);
-	[ ] Update inode data on disk
-	[ ] Update current inode/root inode if this directory was created in the current directory and/or root directory
-
-[ ] cd/chdir command
-	[ ] Error if last inode/name in given path in argv[1] is not a dir (inode's type != FILETYPE_DIR)
-	[ ] Set new current_dir string and current_dir_inode to new inode from given path
-		[ ] current_dir_inode = inode_from_path(argv[1]);
-		[ ] Resolve path from current dir string to argv[1], if valid/reachable
-			[ ] ".." will remove the last dir from path, replacing the last '/' found with a null or '\0'
-			[ ] "." will do nothing, stay in the current dir
-			[ ] else add the next dir's name, if found/valid, to the end of the current dir string. And add a '/' 
-                separator at the end
-			[ ] Set new current_dir_string value
 
 [ ] Change printf() to allow fixed width and left/right justification
 	ex:

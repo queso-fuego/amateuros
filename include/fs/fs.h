@@ -15,8 +15,10 @@ const uint8_t SECTORS_PER_BLOCK = FS_BLOCK_SIZE / FS_SECTOR_SIZE;
 const uint32_t BITS_PER_BLOCK  = 8 * FS_BLOCK_SIZE; // 1 byte = 8 bits
 
 // File types
-#define FILETYPE_FILE 0
-#define FILETYPE_DIR  1
+enum {
+    FILETYPE_FILE = 0,
+    FILETYPE_DIR  = 1
+};
 
 typedef struct {
     uint8_t second;
