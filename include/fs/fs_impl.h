@@ -600,6 +600,9 @@ bool fs_make_dir(char *path) {
     if (root_inode.id == parent_inode.id)
         root_inode = parent_inode;
 
+    // Close file created by open()
+    close(fd);
+
     return true;
 }
 
@@ -653,6 +656,8 @@ bool fs_change_dir(char *path) {
         // Else found next folder name, copy to current_dir string
         curr++; // Move past slash in current_dir string
         while (*p != '\0' && *p != '/') *curr++ = *p++;
+
+        *curr = '/';    // Always end current_dir path with a slash
     }
 
     // Will always end current_dir path string with a slash

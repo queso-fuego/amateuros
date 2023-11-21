@@ -23,8 +23,10 @@ EXES = calculator editor
 FONTS_BDF != find $(FONTDIR) -name "*.bdf" -exec basename -s ".bdf" {} \;
 
 # Make final OS.bin binary - padding out to full 1.44MB "floppy" img
-# TODO: Send list of files to make_disk.bin
+# All files/directories under ../bin/fs_root/ will be added to disk image as the initial 
+#   filesystem, from make_disk.c
 OS: $(FONTS_BDF) asm_files $(C_FILES) $(EXES)
+	@cp $(BINDIR)*[!OS].bin $(BINDIR)fs_root/system/bin/
 	@$(CC) ./make_disk.c -o ./make_disk.bin -I../include	
 	@./make_disk.bin
 

@@ -181,8 +181,7 @@ void set_pit_channel_mode_frequency(const uint8_t channel, const uint8_t operati
 }
 
 // Keyboard IRQ1 handler
-__attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame)
-{
+__attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame) {
     (void)frame;    // Silence compiler warnings
                     
     enum {
@@ -242,6 +241,8 @@ __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame)
                             else if (key == ',')  key = '<';
                             else if (key == '.')  key = '>';
                             else if (key == '/')  key = '?';
+                            else if (key == '-')  key = '_';
+
                             // TODO: Add more shifted keys here...
                         }
                     }

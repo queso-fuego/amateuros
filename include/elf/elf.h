@@ -6,7 +6,7 @@
 #include "C/stdint.h"
 #include "C/string.h"
 #include "C/stddef.h"
-#include "memory/malloc.h"
+#include "C/stdlib.h"
 
 typedef uint16_t Elf32_Half;
 typedef uint32_t Elf32_Word;
