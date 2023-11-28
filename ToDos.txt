@@ -7,8 +7,6 @@ Legend:
 
 ?[ ] = optional 
 
-![ ] = Bugfix
-
 <name> = viewer/3rd party suggestion/attribution
 
 ==================================================================================
@@ -17,31 +15,11 @@ Shorter Term / Next Up
 ?[ ] Move printing elf info into another function in elf.h, similar to readelf? 
     or move into a command in kernel.c for 'readelf' or similar?
 
-[ ] Change command_functions array to take in the argv[] array parm, not 
-    just 1 char* parm for path. That way each function for a command can 
-    interpret flags, multiple paths, etc. and act more like actual shell 
-    commands or program calls.
-    [ ] bool (*command_functions[])(char **)    // char** for *argv[]
-    [ ] if (!command_functions[i](argv)) {
-    [ ] fs_make_dir(char *argv[]) // or (char **argv)
-    [ ] fs_change_dir(char *argv[]) // or (char **argv)
+[ ] Change command_functions array to take in the argv[] array starting at argv[1] as the input 
+    parm, not just 1 char* parm for path. That way each function for a command can interpret flags,
+    multiple paths, etc. and act more like actual shell commands.
 
-[ ] Make create file command e.g. "touch" or similar. 
-    Alternatively, could have "read" and "write" commands that function 
-    similarly to "cat"/"type" and "echo". That may make more sense intuitively.
-    Could also go with "mkfile" to have consistency with "mkdir" for directories.
-
-[ ]<Paul Wratt> Add "multi-command" lines for the shell with semi-colons (or other separators?).
-    This could open up '&&' and '||' or other ways of chaining commands together as well.
-    Ex: "chdir folderA; dir" would execute "chdir folderA" and then "dir",
-    changing the current dir to folderA and showing the contents of folderA, 
-    without needing 2 separate commands and enter keypresses.
-
-[ ] Add PATH "environment variable" or equivalent. Probably semicolon 
-    delimited? 
-    [ ] Read all directories in PATH or equivalent to check for input 
-        command/program, in each one, stop if found input command/program, 
-        and execute it.
+[ ] Make create file command e.g. "touch" or similar
 
 [ ] Fix/refactor editor, using new system calls for open(), read(), write(), etc. for files, 
     printf() for printing, and redo/simplify in general. It will NOT use the old file table system.
@@ -51,15 +29,6 @@ Shorter Term / Next Up
 
     [ ] Alternatively, might redo the whole thing and make it more of an 'ed' like editor, 
         i.e. line oriented. The hex editor could be remade into its own separate "monitor" program.
-
-    [ ]<Paul Wratt> If going the "ed" route, have it function similarly to the calculator for input,
-        where it allows interactive and non-interactive use (e.g. "sed") for scripting.
-
-        Could have it use interactive input (keystrokes from user) if given no input args,
-        execute string input args as scripts (argument would start and end with a double quote "),
-        and execute other input args as file paths, where the files contain text data that is ran
-        as a script like the string arguments. Can iterate through all given input arguments and
-        run each one in order, then exit. If no input args then run an interactive session.
 
 [ ] Refactor makefile to use posix compliance, suffixes, actual inference rules, and prerequisites for recipes. Use those for all source files and
 	object files, to make the final executables/bin files. This way, other than building the final image, building and compilation can be faster 
@@ -74,7 +43,7 @@ Shorter Term / Next Up
 	[ ] Use new printf width/justifying for 'dir'/'ls' command to line up output better
 	[ ] Use new printf for 'prtmemmap' command to line up output better
 
-[ ] Make a 'chgprompt' or similar command, to set the prompt from user input, to change from the default '>'. 
+[ ] Make a 'chgprompt' or similar command, to set the prompt from user input, to change from the default '>'
 
 ?[ ] Add parent inode id as a new field to inode_t struct, to simplify setting/getting parent directories for files and 
     other fs logic.
@@ -112,17 +81,41 @@ Shorter Term / Next Up
 	[ ] Don't allow scrolling down past end of lines, or up before start of lines. Why attempt to show data that doesn't exist? 
 		Or can show blank screen if wanted for some reason? May change if going with ring buffer approach above.
 
+[ ] Change make_disk.c or 3rdstage.c or kernel.c: 
+	[ ] Take in list of "strings"/files to create as parms, or read a txt file for the list?
+	[ ] Should file names all be in the root dir, or should make_disk be able to parse "folder1/folder2/file" strings,
+        create missing directories, and create the final file? This may need an `#include "fs/fs_impl.h"` line and 
+        work without the host's libc, same as the other C files for the OS.
+		This would allow creating initial default files & directories.
+
+		- An alternative would be adding code to 3rdstage.c or kernel.c in "setup" functions that create the file system 
+        at first boot, possibly using a global address to hold flag(s) set at first boot, or a user driven system 
+        reset/restore process.
+
+		[ ] How to fill in the file data for these initial files? 
+            Make the same dir/file structure under <project root>/src/ and copy the files from there?
+
+	[ ] Possible initial filesystem setup:
+        Overall Goal would be a "single source of truth" for documentation and system required programs at minimum.
+        Consistency is key, programs could expect 1 location for things they can use, and users could expect 1
+        location for help text, system source files and maintenance, etc.
+		/ 
+			sys
+				doc
+					<Documentation files on OS layout, overview, subsystems, shell commands, program help, etc.>
+				example
+					<OS code examples (source files) e.g. calling syscalls, shell commands, program examples, etc.>
+				src
+					<OS source files, same as in $project_root/src, to be able to update OS within itself later on>
+                bin
+                    <System (kernel) required programs, that the OS is using when running>
+                versions
+                    <Copies/previous versions of the OS or whole image itself; Could be used for updates/rollbacks>
+			usr
+				<user folder for user files, as an example. The user can always change anything and put things anywhere as desired>
+
 [ ] "Help" command - print string(s) to list currently available commands and their descriptions
-	[ ] Read command/program help info from standard files e.g. "/system/docs/commands/cmdA/help.txt" ?
-    [ ] Can alias a single '?' as the same command as 'help'
-
-[ ] In addition to or as an alternative to the 'help' command, a "man" command or other documentation
-    retriever. Can be as simple as reading file(s) under 
-    /system/docs/further/path/to/thing/which/has/man/pages/documentation.txt or similar
-
-[ ] New function(s) for better string comparison, something like "str_equals" or "string_matches", etc.
-    This could obviate using strcmp/strncmp/memcmp in some places, with better handling for initial
-    prefix or substring, length differences, or others.
+	[ ] Read command/program help info from standard files e.g. "/sys/doc/commands/cmdA/help.txt" ?
 
 [ ] Delete file function & rm/del command
 	[ ] ...
@@ -144,13 +137,6 @@ Shorter Term / Next Up
     >: 0xF000 i 0xFF 0x23 0x11 ...  to input multiple values in each byte starting at address 0xF000
     ... more examples here ...
     (Credit to Ben Eater's video on running Apple I software on the 6502 breadboard computer for inspiration)
-
-    [ ]<Paul Wratt>Extend the current hex portion of the editor to allow disk sectors or blocks and 
-        memory chunks.
-
-        I would probably move the hex functionality out into it's own utility program, and be similar
-        to 'xxd', but interactive. It would allow viewing and changing bytes in memory or 
-        on disk (on disk would update/save the new contents to those disk sectors/blocks when done).
 
  other needed filesystem functions, other things here...
 
@@ -178,28 +164,18 @@ Longer term
     This could help booting between more modern systems and older ones such as thinkpad x60, which
     is limited to 1024x768.
 
-[ ] PE file loader for relocatable executables. This could replace the current flat binary files, at least
+[ ] ELF & PE file loaders, for relocatable executables. This could replace the current flat binary files, at least
     for loaded programs such as the editor/calculator, but maybe even the kernel.
     This would probably increase support on more platforms for building everything, from the makefile or elsewhere.
     It would also open up porting a lot more software, assuming shim/translation layers are made for translating
-    system calls or other C library calls. 
-    This would function similarly to the current ELF loading.
+    system calls or other C library calls.
 
 [ ] Change build/boot process (again...) to support ELF/PE for the kernel, using homemade ELF/PE loaders.
     This would remove the need for a flat binary kernel, but may involve a more complicated linker script
-    or other changes. The kernel would be compiled as relocatable (e.g. ET_DYN type for ELF), and
+    and other changes. The kernel would be initially compiled as relocatable (e.g. DYN type for ELF),
     its loadable sections loaded to a set base address e.g. 0xC0000000 (3GB) and jumped to as normal.
     Hopefully less bugs and greater support on more systems/OSes/etc. would be had by switching everything
     to standard ELF & PE files instead of flat binaries. Or at least it's fun to learn how to do it!
-
-[ ] Add tab completion for shell commands/programs. 
-    [ ] If user presses TAB key, check all commands, if not found then 
-        check all directories in PATH string for files/programs.
-        Checking includes comparing the initial prefix of the name of a 
-        command or file with the current (last) "word" the user has typed in
-        before hitting tab.
-        If found, type out the rest of the word at the current user input 
-        with the full name of the first found command or file.
 
 [ ] 3D graphics primitives and math, rotations, matrices, etc. Also overhaul current 2d_gfx.h, separate framebuffer? Make framebuffer a file in 
 	the filesystem e.g. /dev/fb or similar? Implement graphics in userland, not in kernel, or otherwise remove floating point math from
@@ -215,16 +191,6 @@ Longer term
     "last error string" as a buffer in the process struct (sort of like Plan9).
 
 [ ] 8 bit pcm audio using pc speaker & PIT. Works by PWM/Pulse width modulation.
-
-[ ] "Alias" commands, that are the same as current commands but with a different name.
-    A simple implementation could be simply forwarding the call to the actual command that is
-    aliased, or have a soft/hard link system a la unix.
-    Ex: 'alias cd = chdir' or 'alias ls = dir' 
-    [ ] Maybe can start with another array of alias_commands that are structs ("tuples" here?)
-        with char *alias_name and char *actual_command. First search the alias array,
-        if found then get the actual command name and run that. May need to use a pointer
-        to the commands array element itself, rather than a pointer to a string for
-        the actual command.
 
 [ ] Soundblaster 16 or ac97 or hd audio, or other audio support
 

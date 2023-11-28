@@ -10,7 +10,8 @@
 #include "gfx/2d_gfx.h"
 #include "fs/fs_impl.h"
 
-__attribute__ ((section ("prekernel_entry"))) void prekernel_main(void) {
+__attribute__ ((section ("prekernel_entry"))) void prekernel_main(void)
+{
     // Physical memory map entry from Bios Int 15h EAX E820h
     typedef struct SMAP_entry {
         uint64_t base_address;
@@ -19,7 +20,7 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void) {
         uint32_t acpi;
     } __attribute__ ((packed)) SMAP_entry_t;
 
-    //const char *font = "ter-u32n";  // Set initial font
+    const char *font = "ter-u32n";  // Set initial font
 
     uint32_t num_SMAP_entries; 
     uint32_t total_memory; 
@@ -49,36 +50,43 @@ __attribute__ ((section ("prekernel_entry"))) void prekernel_main(void) {
     deinitialize_memory_region(0x1000, 0x11000);                           // Reserve all memory below 12000h for the kernel/OS
     deinitialize_memory_region(MEMMAP_AREA, max_blocks / BLOCKS_PER_BYTE); // Reserve physical memory map area 
 
-    // Load root inode, root is always inode 1 
+    // Load root dir
     superblock = *(superblock_t *)SUPERBLOCK_ADDRESS;
-
-    rw_sectors(1, 
-               (superblock.first_inode_block*8),   // 1 block = 8 sectors
-               (uint32_t)temp_sector,
+    
+    //TODO: Not needed here? Can set in kernel; 
+    //superblock->root_inode_pointer = BOOTLOADER_FIRST_INODE_ADDRESS + sizeof(inode_t);  // Root inode = inode 1
+    rw_sectors(SECTORS_PER_BLOCK, 
+               superblock.first_data_block*SECTORS_PER_BLOCK, 
+               SCRATCH_BLOCK_ADDRESS, 
                READ_WITH_RETRY);
 
-    root_inode = *((inode_t *)temp_sector + 1);
-    superblock.root_inode_pointer = (uint32_t)&root_inode;
+    // Find kernel id
+    dir_entry_t *dir_entry = (dir_entry_t *)SCRATCH_BLOCK_ADDRESS;
+    while (dir_entry->name[0] != '\0' && strncmp(dir_entry->name, "kernel", strlen("kernel")) != 0)
+        dir_entry++;
 
-    // Set filesystem starting point
-    char temp_buf[256];
-    current_dir = temp_buf;
-    memset(current_dir, 0, 256); // Initialize memory
+    // Find kernel inode
+    inode_t *inode = (inode_t *)BOOTLOADER_FIRST_INODE_ADDRESS;
+    while (inode->id != dir_entry->id) inode++;
 
-    strcpy(current_dir, "/");   // Start in 'root' directory by default
-    current_dir_inode = root_inode;
-    current_parent_inode = root_inode;  // Root's parent is itself
-                                        //
     // Load kernel from disk
-    inode_t inode = inode_from_path("/system/bin/kernel.bin");
-    fs_load_file(&inode, KERNEL_ADDRESS);
+    fs_load_file(inode, KERNEL_ADDRESS);
     
+    // Find a font id
+    dir_entry = (dir_entry_t *)SCRATCH_BLOCK_ADDRESS;
+    while (dir_entry->name[0] != '\0' && 
+           strncmp(dir_entry->name, font, strlen(font)) != 0)
+        dir_entry++;
+
+    // Find font inode
+    inode = (inode_t *)BOOTLOADER_FIRST_INODE_ADDRESS;
+    while (inode->id != dir_entry->id) inode++;
+
     // Load font from disk
-    inode = inode_from_path("/system/bin/ter-u32n.bin");
-    fs_load_file(&inode, FONT_ADDRESS);
+    fs_load_file(inode, FONT_ADDRESS);
 
     // Mark font memory as in use
-    deinitialize_memory_region(FONT_ADDRESS, inode.extent[0].length_blocks * FS_BLOCK_SIZE);
+    deinitialize_memory_region(FONT_ADDRESS, inode->extent[0].length_blocks * FS_BLOCK_SIZE);
 
     // Set up virtual memory & paging - TODO: Check if return value is true/false
     initialize_virtual_memory_manager();
