@@ -81,39 +81,6 @@ Shorter Term / Next Up
 	[ ] Don't allow scrolling down past end of lines, or up before start of lines. Why attempt to show data that doesn't exist? 
 		Or can show blank screen if wanted for some reason? May change if going with ring buffer approach above.
 
-[ ] Change make_disk.c or 3rdstage.c or kernel.c: 
-	[ ] Take in list of "strings"/files to create as parms, or read a txt file for the list?
-	[ ] Should file names all be in the root dir, or should make_disk be able to parse "folder1/folder2/file" strings,
-        create missing directories, and create the final file? This may need an `#include "fs/fs_impl.h"` line and 
-        work without the host's libc, same as the other C files for the OS.
-		This would allow creating initial default files & directories.
-
-		- An alternative would be adding code to 3rdstage.c or kernel.c in "setup" functions that create the file system 
-        at first boot, possibly using a global address to hold flag(s) set at first boot, or a user driven system 
-        reset/restore process.
-
-		[ ] How to fill in the file data for these initial files? 
-            Make the same dir/file structure under <project root>/src/ and copy the files from there?
-
-	[ ] Possible initial filesystem setup:
-        Overall Goal would be a "single source of truth" for documentation and system required programs at minimum.
-        Consistency is key, programs could expect 1 location for things they can use, and users could expect 1
-        location for help text, system source files and maintenance, etc.
-		/ 
-			sys
-				doc
-					<Documentation files on OS layout, overview, subsystems, shell commands, program help, etc.>
-				example
-					<OS code examples (source files) e.g. calling syscalls, shell commands, program examples, etc.>
-				src
-					<OS source files, same as in $project_root/src, to be able to update OS within itself later on>
-                bin
-                    <System (kernel) required programs, that the OS is using when running>
-                versions
-                    <Copies/previous versions of the OS or whole image itself; Could be used for updates/rollbacks>
-			usr
-				<user folder for user files, as an example. The user can always change anything and put things anywhere as desired>
-
 [ ] "Help" command - print string(s) to list currently available commands and their descriptions
 	[ ] Read command/program help info from standard files e.g. "/sys/doc/commands/cmdA/help.txt" ?
 

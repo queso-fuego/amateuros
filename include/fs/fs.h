@@ -80,6 +80,7 @@ typedef struct {
 } __attribute__ ((packed)) inode_t;         // sizeof(inode_t) should = 64
                                             
 const uint8_t INODES_PER_SECTOR = FS_SECTOR_SIZE / sizeof(inode_t);
+const uint8_t INODES_PER_BLOCK = FS_BLOCK_SIZE / sizeof(inode_t);
 
 typedef struct {
     uint32_t id;                            // This will match the inode id

@@ -653,6 +653,8 @@ bool fs_change_dir(char *path) {
         // Else found next folder name, copy to current_dir string
         curr++; // Move past slash in current_dir string
         while (*p != '\0' && *p != '/') *curr++ = *p++;
+
+        *curr = '/';    // Always end current dir string with a slash
     }
 
     // Will always end current_dir path string with a slash
