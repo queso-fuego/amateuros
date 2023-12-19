@@ -15,11 +15,32 @@ Shorter Term / Next Up
 ?[ ] Move printing elf info into another function in elf.h, similar to readelf? 
     or move into a command in kernel.c for 'readelf' or similar?
 
-[ ] Change command_functions array to take in the argv[] array starting at argv[1] as the input 
-    parm, not just 1 char* parm for path. That way each function for a command can interpret flags,
-    multiple paths, etc. and act more like actual shell commands.
+[ ] Change command_functions array to take in the argv[] array parm, not 
+    just 1 char* parm for path. That way each function for a command can 
+    interpret flags, multiple paths, etc. and act more like actual shell 
+    commands or program calls.
+    [ ] bool (*command_functions[])(char **)    // char** for *argv[]
+    [ ] if (!command_functions[i](argv)) {
+    [ ] fs_make_dir(char *argv[]) // or (char **argv)
+    [ ] fs_change_dir(char *argv[]) // or (char **argv)
+    [ ] ...
 
-[ ] Make create file command e.g. "touch" or similar
+[ ] Make create file command e.g. "touch" or similar. 
+    Alternatively, could have "read" and "write" commands that function 
+    similarly to "cat"/"type" and "echo". That may make more sense.
+    Could also go with "mkfile" to have consistency with "mkdir" for directories.
+
+[ ]<Paul Wratt> Add "multi-command" lines for the shell with semi-colons (or other separators?).
+    This could open up '&&' and '||' or other ways of chaining commands together as well.
+    Ex: "chdir folderA; dir" would execute "chdir folderA" and then "dir",
+    changing the current dir to folderA and showing the contents of folderA, 
+    without needing 2 separate commands and enter keypresses.
+
+[ ] Add PATH "environment variable" or equivalent. Probably semicolon 
+    delimited? 
+    [ ] Read all directories in PATH or equivalent to check for input 
+        command/program, in each one, stop if found input command/program, 
+        and execute it.
 
 [ ] Fix/refactor editor, using new system calls for open(), read(), write(), etc. for files, 
     printf() for printing, and redo/simplify in general. It will NOT use the old file table system.
@@ -29,6 +50,15 @@ Shorter Term / Next Up
 
     [ ] Alternatively, might redo the whole thing and make it more of an 'ed' like editor, 
         i.e. line oriented. The hex editor could be remade into its own separate "monitor" program.
+
+    [ ]<Paul Wratt> If going the "ed" route, have it function similarly to the calculator for input,
+        where it allows interactive and non-interactive use (e.g. "sed") for scripting.
+
+        Could have it use interactive input (keystrokes from user) if given no input args,
+        execute string input args as scripts (argument would start and end with a double quote "),
+        and execute other input args as file paths, where the files contain text data that is ran
+        as a script like the string arguments. Can iterate through all given input arguments and
+        run each one in order, then exit. If no input args then run an interactive session.
 
 [ ] Refactor makefile to use posix compliance, suffixes, actual inference rules, and prerequisites for recipes. Use those for all source files and
 	object files, to make the final executables/bin files. This way, other than building the final image, building and compilation can be faster 
@@ -83,6 +113,11 @@ Shorter Term / Next Up
 
 [ ] "Help" command - print string(s) to list currently available commands and their descriptions
 	[ ] Read command/program help info from standard files e.g. "/sys/doc/commands/cmdA/help.txt" ?
+    [ ] Can alias a single '?' to be the same command as 'help'
+
+[ ] In addition to or as an alternative to the 'help' command, a "man" command or other documentation
+    retriever ("docs?"). Can be as simple as reading file(s) under 
+    /system/docs/further/path/to/thing/which/has/man/pages/documentation.txt, or similar.
 
 [ ] Delete file function & rm/del command
 	[ ] ...
@@ -91,6 +126,9 @@ Shorter Term / Next Up
 	[ ] ...
 
 [ ] Rename file/dir function & ren or mov command
+    [ ] mov/move can take in a 'before' path and 'after' path
+    [ ] ren/rename can take in a 'before' path and 'after' name (not path!). 
+        Will rename the file in path to new name only.
 	[ ] ...
 
 [ ] Hex "monitor" program? Command line/interactive mode. This could be a replacement for the hex mode
@@ -105,13 +143,19 @@ Shorter Term / Next Up
     ... more examples here ...
     (Credit to Ben Eater's video on running Apple I software on the 6502 breadboard computer for inspiration)
 
- other needed filesystem functions, other things here...
+[ ]<Paul Wratt>Extend the current hex portion of the editor to allow disk sectors or blocks and 
+        memory chunks.
+
+        I would probably move the hex functionality out into it's own utility program, and be similar
+        to 'xxd', but interactive. It would allow viewing and changing bytes in memory or 
+        on disk (on disk would update/save the new contents to those disk sectors/blocks when done).
+
+ Other needed filesystem functions, or other things here...
 
 
 ==================================================================================
 Longer term
 ==================================================================================
-
 [ ] README.md: update screenshots & wording/descriptions in each part to be simpler/more succinct and up to date
 
 [ ] makefile: 
@@ -131,11 +175,12 @@ Longer term
     This could help booting between more modern systems and older ones such as thinkpad x60, which
     is limited to 1024x768.
 
-[ ] ELF & PE file loaders, for relocatable executables. This could replace the current flat binary files, at least
+[ ] PE file loader for relocatable executables. This could replace the current flat binary files, at least
     for loaded programs such as the editor/calculator, but maybe even the kernel.
     This would probably increase support on more platforms for building everything, from the makefile or elsewhere.
     It would also open up porting a lot more software, assuming shim/translation layers are made for translating
-    system calls or other C library calls.
+    system calls or other C library calls. 
+    This would function similarly to the current ELF loading.
 
 [ ] Change build/boot process (again...) to support ELF/PE for the kernel, using homemade ELF/PE loaders.
     This would remove the need for a flat binary kernel, but may involve a more complicated linker script
@@ -143,6 +188,15 @@ Longer term
     its loadable sections loaded to a set base address e.g. 0xC0000000 (3GB) and jumped to as normal.
     Hopefully less bugs and greater support on more systems/OSes/etc. would be had by switching everything
     to standard ELF & PE files instead of flat binaries. Or at least it's fun to learn how to do it!
+
+[ ] Add tab completion for shell commands/programs. 
+    [ ] If user presses TAB key, check all commands, if not found then 
+        check all directories in PATH string for any files/programs matching the name.
+        Checking includes comparing the initial prefix of the name of a 
+        command or file with the current (last) "word" the user has typed in
+        before hitting tab.
+        If found, type out the rest of the word at the current user input 
+        with the full name of the first found command or file.
 
 [ ] 3D graphics primitives and math, rotations, matrices, etc. Also overhaul current 2d_gfx.h, separate framebuffer? Make framebuffer a file in 
 	the filesystem e.g. /dev/fb or similar? Implement graphics in userland, not in kernel, or otherwise remove floating point math from
@@ -158,6 +212,16 @@ Longer term
     "last error string" as a buffer in the process struct (sort of like Plan9).
 
 [ ] 8 bit pcm audio using pc speaker & PIT. Works by PWM/Pulse width modulation.
+
+[ ] "Alias" commands, that are the same as current commands but with a different name.
+    A simple implementation could be simply forwarding the call to the actual command that is
+    aliased, or have a soft/hard link system a la unix.
+    Ex: 'alias cd = chdir' or 'alias ls = dir' 
+    [ ] Maybe can start with another array of alias_commands that are structs ("tuples" here?)
+        with char *alias_name and char *actual_command. First search the alias array,
+        if found then get the actual command name and run that. May need to use a pointer
+        to the commands array element itself, rather than a pointer to a string for
+        the actual command.
 
 [ ] Soundblaster 16 or ac97 or hd audio, or other audio support
 
