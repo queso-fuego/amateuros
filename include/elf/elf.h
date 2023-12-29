@@ -104,7 +104,7 @@ void *load_elf_file(uint8_t *file_address, void *exe_buffer) {
         if (phdr[i].p_type != PT_LOAD) continue;
 
         // Print out program header info
-        printf("No: %d, Type: %d, Offset: %d, Virt Addr: %x, Phys Addr: %x, "
+        printf("No: %d, Type: %d, Offset: %d, Vaddr: %x, Paddr: %x, "
                "File Size: %d, Mem Size: %d, Flags: %d, Align: %x\r\n",
                i,
                phdr[i].p_type,

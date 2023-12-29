@@ -23,9 +23,8 @@ EXES = calculator editor
 FONTS_BDF != find $(FONTDIR) -name "*.bdf" -exec basename -s ".bdf" {} \;
 
 # Make final OS.bin binary - padding out to full 1.44MB "floppy" img
-# TODO: change cp to mv when ready and not needed in ../bin folder
 OS: $(FONTS_BDF) asm_files $(C_FILES) $(EXES)
-	@cp $(BINDIR)[!OS]*.bin $(BINDIR)fs_root/sys/bin
+	@mv $(BINDIR)[!OS]*.bin $(BINDIR)fs_root/sys/bin
 	@$(CC) ./make_disk.c -o ./make_disk.bin -I../include	
 	@./make_disk.bin
 
@@ -38,7 +37,7 @@ asm_files:
 		echo "$$file" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors)";\
 	done
 
-# Compile C source files into PIE executable files, and pad out their size to next 512 byte sector size
+# Compile C source files into PIE executable files, and pad out their size to next 512 byte sector 
 $(EXES):
 	@$(CC) -c $(EXE_CFLAGS) -o $@.o $(SRCDIR)$@.c
 	@ld -melf_i386 -e main -pie $@.o -o $(BINDIR)$@.bin
@@ -48,7 +47,7 @@ $(EXES):
 	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors) ->" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
 	dd if=/dev/zero of=$(BINDIR)$@.bin bs=1 seek=$$size count=$$((newsize - size)) status=none;
 
-# Compile C source files into binary files, and pad out their size to next 512 byte sector size
+# Compile C source files into binary files, and pad out their size to next 512 byte sector 
 $(C_FILES):
 	@$(CC) -c $(CFLAGS) -o $@.o $(SRCDIR)$@.c
 	@ld -melf_i386 -T$@.ld $@.o --oformat binary -o $(BINDIR)$@.bin
@@ -61,6 +60,7 @@ $(C_FILES):
 # Launch OS through qemu 
 # NOTE: Remove driftfix=slew if not needed
 # NOTE: -enable-kvm makes RTC and disk accesses slow for me, but can be better accuracy
+# NOTE: Change or remove audiodev and related audio lines depending on platform and sound setup
 run:
 	qemu-system-i386 \
 	-monitor stdio \
@@ -76,7 +76,7 @@ bochs:
 	bochs -qf $(BINDIR).bochsrc
 
 clean:
-	rm -f $(BINDIR)*.bin ./*.o ./sector_num.txt
+	rm -f $(BINDIR)*.bin ./*.o 
 
 # Make program to convert fonts
 make_font_pgm:

@@ -21,12 +21,12 @@ long time for his own self-interest. It might look simple, amateurish, and incom
 
 * Feel free to fork or make your own changes to your own repos, the license is effectively public domain (0-clause BSD license). Suggestions or improvements are welcome, and will be covered 
 in a video if used (and will credit you, if I remember and you don't say otherwise). I might open up this repo to the public in the future, but currently lack 
-sufficient time to manage that, and would rather work on things solo for the time being. 
+sufficient time to manage that, and would rather work on things solo for now.
 
 Project Structure:
 ---
-* /bin: intermediate binary files during the build process, and the final OS.bin binary. 
-* /build: linker scripts for C source files, a makefile to build the project, and other supporting programs/scripts/files.
+* /bin: intermediate binary files during the build process, the final `OS.bin` binary, and the initial file tree under `bin/fs_root`. 
+* /build: linker scripts for C source files, a makefile to build the project, and other supporting programs/scripts/files used for building.
 * /include: subdirectories containing header/source files to be included in the main /src files. These are mainly .h C files, without .c counterparts, with all the code in the "header". It mostly works ok.
 * /src: the main source files used to build the intermediate binary files and final OS.bin file.
 
@@ -38,11 +38,11 @@ IRQ1 for keyboard handling, but only a subset of scancode set 1. Currently keyst
 * Vesa Bios Extensions for graphics modes. On boot you type in desired X resolution, Y resolution, and bits per pixel values, or take a default of 1920x1080 32bpp. 
 If trying to run on actual hardware, ensure you know what your hardware supports! Trying to run unsupported modes may damage your hardware!!
 * "Generic" bitmap font support for bdf fonts. Add a bdf font to /src/fonts, add the font file with '.asm' extension to the file list in /build/make_disk.c, and use 'chgfont <font name>' at OS shell when booted.
-* Barely functioning text/hex editor for 512 byte length files, and a 4 function calculator. More programs to come in the future.
+* Barely functioning text/hex editor for 512 byte length files, and a 4 function calculator. More/other programs to come in the future.
 * Ability to save and load text or binary (hex) files. Valid x86 binary files can be run from the hex editor if the file length is <= 1 sector, or from the main kernel command line if set up in the file table.
 Binary files written in the hex editor are auto-ended with a '0xCB', or far return. That probably doesn't work, and will change when better memory management and program loading is developed.
 * Several commands available for the in-built kernel "shell" such as del, ren, chgcolors, chgfont, etc. A list of available commands is in the kernel.c source, in kernel_main(), where
-they're prefixed with "cmd*". Eventually there should be a better implementation like a "help" command to list available commands and descriptions at runtime.
+they're prefixed with "cmd*". Eventually there will be a "help" command or similar to list available commands and descriptions at runtime.
 
 How to Build/Run:
 ---
@@ -65,74 +65,61 @@ How to Build/Run:
 Note: Qemu seems to run and act better than bochs, so I use it for the most part, with limited testing in bochs for accuracy/stability. If anything is broken on bochs please let me know. 
 Also let me know of any ways to simplify the build process/makefile, or how to make the OS more portable for other environments (Windows, POSIX utilities or compliance, etc.)
 
-TODO (There's ALWAYS more to do e.g. lots of TODOs in the source files, this list is updated when/if I remember):
+TODO (There's ALWAYS more to do e.g. lots of TODOs in the source files):
 ---
-In no particular order:
-* 64bit long mode? maybe with PAE or other RAM extending stuff? Still mulling it over as a possible "fork" to go with UEFI in the future.
-* UEFI, as an alternative to the current bootsector and bootloader. It could be all in C but has it's own ways of handling device discovery and setting video modes and things.
-  ** Ultimately, if not too much work, I'd like to maintain separate versions for: 1) 32bit x86 (i386 minimum) BIOS, and 2) 64bit x86 UEFI. 
-Any additional versions for other architectures can be worried about later, ARM, PPC, etc., if it gets to that point and better/more general abstractions are in place for any needed asm code. Possibly having separate all assembly versions of these 2 overall OS versions as well, to check size/speed differences, large project structure, etc.
-* Task scheduling? Not sure yet on implementations, may do round-robin or another simple way to do processes. Using PIT, HPET, APIC, TSC, other timers?
-* Interrupt handler disk reading/loading for the PIC, and more system calls (using int 0x80) for malloc/free and other needed things. Probably using APIC & IOAPIC to replace PIC later on.
-* Somehow convert the bootsector and bootloader to C. The bootsector is fine, if enough code is moved elsewhere so that it fits in 512 bytes with the AA55h signature, 
-but I have had no luck so far with structures and intermediate (to me) C code working with 16bit inline asm, to allow the bootloader to work effectively. It may be due to only having 32bit addresses and memory instructions available in clang/gcc inline asm.
-* Other/better device drivers, PCI(e), USB, something for SATA or SSD storage, mouse, etc.
-* More C standard library functions/header files: string abstractions, type conversions, other stuff to help out with C code development.
-* Assembler and Compiler for x86/x86_64, for a C-like language or subset. Possibly making a forth or other languages later on.
-* Games, or other graphical things. Or text based games.
-* Read and use other fonts and font standards, such as PC screen font or bdf or other standardized bitmapped fonts.
-* Font editor program, for homemade bitmapped fonts at least.
-* Implement options/flags for kernel "shell" commands, if needed. Also a way for the user to add shell commands and aliases.
-* Editor fixes/improvements. Eventually edit the OS files & binaries within itself, without rebooting, for self-hosting and dogfooding.
-* A windowing/UI system, maybe.
-* 16bit real mode emulation (possibly using virtual 8086 mode for the 32bit OS build, but that is unavailable from 64bit long mode) to run bootsector games! Or other things
-* Get this thing to run on UEFI for newer computers, but it does currently boot and work from BIOS on a Thinkpad x60!
-* Fix up all the TODOs in the code (Ha! who am I kidding...).
-* Refactors for less lines of code, clarification, easier interfaces, and overall simplification over time.
-
-* Whatever else comes up...
+See the `ToDos.txt` file for a mostly up-to-date list.
 
 Videos / Documenting Progress:
 ---
-All progress, or as much as (hopefully!) every new/changed line of code, will be documented on video in a youtube playlist on my main channel here:
-https://www.youtube.com/QuesoFuego
-
-Playlist link:
+All progress, or every new/changed line of code (as possible and needed), will be documented on 
+video in a youtube playlist on my main channel:
 https://www.youtube.com/playlist?list=PLT7NbkyNWaqajsw8Xh7SP9KJwjfpP8TNX
 
-* All development is currently done on "live" recordings, and is probably arduous or boring for most people to watch. Footage is edited down to cut out long pauses, gratuitous ums and ahs, redundant info, off-topic ramblings, and more.
+* All development is currently done on "live" recordings, and is probably arduous or boring for 
+most people to watch. Footage is edited down to cut out long pauses, gratuitous ums and ahs, 
+redundant info, off-topic ramblings, mouth noises/clicks, and more.
 
-_Suggestions or comments regarding videos can be made in video comments, twitter @Queso_Fuego, or email fuegoqueso@gmail.com_
+_Suggestions or comments regarding videos can be made in the video comments, twitter @Queso_Fuego, 
+or email fuegoqueso@gmail.com_
 
-* The rollout of these videos will be slow (weeks to months between videos). I have a full time job and lack the time/energy/motivation most days to do too much 
-outside of research. However, I will respond to messages sent by Youtube video comments, twitter, or email, and I greatly appreciate all those who wait and watch.
+* The rollout of these videos will probably be slow (weeks to months between videos). 
+I have a full time job and lack the time/energy/motivation most days to do much work outside of 
+reading, research, and light testing. However, I will respond to messages sent by Youtube video 
+comments/twitter/email, and I greatly appreciate all those who wait and watch.
 
 Tools used for these videos:
 * recording: OBS Studio
 * video editor: Davinci Resolve
-* OS: Windows 11 Enterprise (blech! but I need it for work, VSTs, Nvidia, and bluetooth)
+* OS: Recording and development is done on Alpine Linux, editing is done on Windows 11 Enterprise 
+as Davinci Resolve isn't available on Alpine, and I've had issues with Kdenlive and other editors.
 * microphone: Shure SM7B, Cloudlifter CL-1, Focusrite Scarlett Solo
 * camera: Sony ZV-1, Elgato Camlink 4k
-* mouse: Logitech M590
+* mouse: Logitech M590 or Logitech G502
 * keyboard: HHKB professional hybrid type S
 
 Development:
 ---
 Currently, this OS is developed with: 
-* 64 bit Alpine Linux virtual machine using VMware Workstation Player
+* 64 bit Alpine Linux, dual booted with Windows 11
 * neovim 
 * qemu emulator (sometimes bochs)
-* nasm assembler (as needed, may switch to full clang/gcc 'as' assembly in the future for less dependencies)
+* nasm assembler (may switch to full clang/gcc 'as' assembly in the future to not need this)
 
-This may change later on if I fully develop the OS within itself; that is, running the OS binary and editing that binary during runtime from within itself, using the OS's
-own editors, languages, and toolchains.
-In this event, changes to the binary would still be uploaded to this repo or others as time and space allows, but relevant changes would not necessarily be seen in source 
-files. I'm assuming only the binary file would be changing at that point. So I may take a different approach at that time to better document changes.
+This may change later on if I fully develop the OS within itself; that is, running the OS binary 
+and editing that binary during runtime from within itself, using the OS's own editors, languages, 
+and toolchains.
+In this event, changes to the binary would still be uploaded to this repo or others as time and 
+space allows, but relevant changes would not necessarily be seen in source files. I'm assuming 
+only the binary file would be changing at that point. So I may take a different approach at that 
+time to better document changes.
 
 Screenshots:
 ---
-![Showing boot screen and example of reading a file to screen](./screenshots/boot_phys_mem_mgr.png "Showing boot screen and example of reading a file to screen")
-![Showing 'editor' program updating a text file](./screenshots/editor_test.png "Showing 'editor' program updating a text file")
-![Showing 'gfxtst' command showing basic 2D graphics primitives](./screenshots/gfxtst.png "Showing 'gfxtst' command showing basic 2D graphics primitives")
+![final build output and choosing resolution on boot](./screenshots/os_choose_resolution.png "Final build output and choosing resolution on boot")
+![loading and running an ELF32 PIE executable](./screenshots/os_elf_program_example.png "loading and running an ELF32 PIE executable")
+![making a new directory and running sample OS tests](./screenshots/os_mkdir_run_tests.png "making a new directory and running sample OS tests")
+![boot screen and read file test](./screenshots/os_read_file_test.png "boot screen and read file test")
 
-These are way out of date and different screenshots will be used in the future.
+!['gfxtst' command showing basic 2D graphics primitives](./screenshots/gfxtst.png "'gfxtst' command showing basic 2D graphics primitives")
+
+These are probably way out of date and different screenshots will be used in the future.

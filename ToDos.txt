@@ -5,14 +5,16 @@ Legend:
 
 [X] = done yet
 
-?[ ] = optional 
+? [ ] = optional 
+
+! [ ] = Bugfix or important
 
 <name> = viewer/3rd party suggestion/attribution
 
 ==================================================================================
 Shorter Term / Next Up
 ==================================================================================
-?[ ] Move printing elf info into another function in elf.h, similar to readelf? 
+? [ ] Move printing elf info into another function in elf.h, similar to readelf? 
     or move into a command in kernel.c for 'readelf' or similar?
 
 [ ] Change command_functions array to take in the argv[] array parm, not 
@@ -30,7 +32,7 @@ Shorter Term / Next Up
     similarly to "cat"/"type" and "echo". That may make more sense.
     Could also go with "mkfile" to have consistency with "mkdir" for directories.
 
-[ ]<Paul Wratt> Add "multi-command" lines for the shell with semi-colons (or other separators?).
+[ ]<Paul Wratt> Add "multi-command" lines for the shell with semicolons (or other separators?).
     This could open up '&&' and '||' or other ways of chaining commands together as well.
     Ex: "chdir folderA; dir" would execute "chdir folderA" and then "dir",
     changing the current dir to folderA and showing the contents of folderA, 
@@ -42,7 +44,7 @@ Shorter Term / Next Up
         command/program, in each one, stop if found input command/program, 
         and execute it.
 
-[ ] Fix/refactor editor, using new system calls for open(), read(), write(), etc. for files, 
+! [ ] Fix/refactor editor, using new system calls for open(), read(), write(), etc. for files, 
     printf() for printing, and redo/simplify in general. It will NOT use the old file table system.
 	Could also try to change it to be more of a modal editor, line oriented editor, use terminal
     escape sequences for cursor/etc., and/or add an editor state struct to keep track of cursor X/Y
@@ -75,7 +77,7 @@ Shorter Term / Next Up
 
 [ ] Make a 'chgprompt' or similar command, to set the prompt from user input, to change from the default '>'
 
-?[ ] Add parent inode id as a new field to inode_t struct, to simplify setting/getting parent directories for files and 
+? [ ] Add parent inode id as a new field to inode_t struct, to simplify setting/getting parent directories for files and 
     other fs logic.
 	[ ] Remove "size_sectors" field to make room, as it is redundant with size_bytes, and can be computed where needed
 	[ ] Remove adding explicit "." and ".." entries to directories, they can be implicit for resolving paths, but no need to 
@@ -131,6 +133,10 @@ Shorter Term / Next Up
         Will rename the file in path to new name only.
 	[ ] ...
 
+! [ ] Fix 'chgfont' command, by either renaming font files at runtime, working with any files, not 
+    just .fnt, or by changing makefile/make_disk.c to use '.fnt' as the font name extension, and 
+    not '.bin'.
+
 [ ] Hex "monitor" program? Command line/interactive mode. This could be a replacement for the hex mode
     of the editor, or as an additional similar feature. It would be started from a "hexmon" or "monitor" command 
     or similar, and allow typing in an address or range of addresses to view contents of memory. Can have the 
@@ -168,6 +174,7 @@ Longer term
     start of chosen drive. Then reboot or shutdown so user can boot from the ATA drive, and have the OS work as normal.
 
 [ ] <Viewer Requested> SMT, SMP, scheduling (priorities w/ priority queue?, time slices, round robin, etc.)
+    [ ] Use PIT, HPET, APIC/IOAPIC/LAPIC, TSC, other timers?
 
 [ ] 2ndstage: when checking VBE graphics modes, use the highest mode found for X-res/Y-res/bpp as
     the default, _not_ 1920x1080 32bpp. Change default text to say something similar to "highest 
@@ -202,6 +209,14 @@ Longer term
 	the filesystem e.g. /dev/fb or similar? Implement graphics in userland, not in kernel, or otherwise remove floating point math from
 	ellipses and other places so they can be added back in.
 
+[ ] Use interrupts & interrupt handlers for disk reading/loading for the PIC, or in general, for 
+    more async disk I/O. Can also look into DMA things.
+
+[ ] For ATA, implement IDENTIFY command to get info on installed disks.
+
+[ ] Switch to using 48 bit LBA for ATA disk I/O, instead of 28 bit LBA (or could detect feature 
+    and use either as needed).
+
 [ ] Assembler &| compiler for x86 asm (16 bit real mode, 32 bit protected mode, and 64 bit long mode), a subset of C, maybe a forth or lisp,
 	other languages...
 
@@ -222,6 +237,8 @@ Longer term
         if found then get the actual command name and run that. May need to use a pointer
         to the commands array element itself, rather than a pointer to a string for
         the actual command.
+
+[ ] Add a way for the user to add custom commands.
 
 [ ] Soundblaster 16 or ac97 or hd audio, or other audio support
 
@@ -254,13 +271,61 @@ Longer term
 	etc. and pass a struct with that info to the kernel. Ideally the kernel will stay the same for both OS versions, 32 & 64 bit, only the 
 	pre-kernel setup including bootloader will be different.
 
+    [ ] For 64 bit: Add PAE (Physical Address Extension) support, 5 level paging, etc.
+
+? [ ] Maintain separate OS versions for 32 bit BIOS booting and 64 bit UEFI booting.
+? [ ] Separate OS versions all in assembly instead of C/asm. Would be mainly for edification and 
+    testing/trying out SIMD, macros, code structuring, etc.
+
+? [ ] Maintain separate OS versions per architecture; x86, x86_64/amd64, ARM, PPC, etc. Using 
+    "arch" folders or equivalent for platorm specific code e.g. assembly, CPUID discovery and 
+    features, etc.
+
 [ ] Network stack? NIC driver, ARP, IP, TCP, UDP, QUIC?, etc.
+
+[ ] Other device drivers; USB, SATA hdd/sdd (AHCI, XHCI?), NVMe, mouse, etc.
+
+[ ] Window system or UI system; Probably tiling window manager-esque, as that's what I'm used to
+    and like to use. Mainly keyboard driven, vertical & horizontal splits, other things.
+
+[ ] Convert 32 bit OS bootsector and bootloader (bootSect, 2ndstage) to all C code, as possible.
+    This would remove the need for a separate assembler as a dependency for the OS, but is 
+    difficult as generating 16 bit code also comes with 32 bit addresses by default in gcc/clang.
+
+    ? [ ] Could try using all inline assembly and "naked" functions in a C file first, and see if 
+        that would work.
+
+    ? [ ] Alternatively, use gas syntax to not need a seperate assembler like nasm.
 
 [ ] IRC?
 
 [ ] (Text mode) browser? No JS, can do simple html/text, maybe some CSS, maybe not. Maybe a gopher browser or similar.
 
+[ ] Font editor, at least for bitmapped fonts.
+    [ ] Smaller window with actual size of character(s), and large editing window with scaled 
+        pixels and mouse & keyboard support to design characer(s).
+
+[ ] Other font support than plain bdf or bitmapped fonts; PC Screen Font (PSF), OTF, TTF, etc.
+
+[ ] Other miscellaneous C standard library implementations; string functions/abstractions, type 
+    conversions, varargs.h macros, etc.
+
+[ ] Other custom C library code/files to help with strings, SIMD, or other things.
+    [ ] e.g. typedef struct { char *data; uint32_t length; } String;
+
 [ ] Port doom? (it can't be a viable system until it runs DOOM!)
 
-[ ] 16 bit real mode emulator, at least to run simple games "virtualized" within the OS. Could use real virtualization with intel VT-d, etc.
+[ ] Other homemade games, maybe game engines or development environments. Or text games.
 
+[ ] 16 bit real mode emulator, at least to run simple games "virtualized" within the OS. 
+    Could use real virtualization with intel VT-d, etc. or even virtual 8086 mode on the 32 bit OS.
+
+[ ] Get to the point where the user can edit and update the OS within itself; for the true
+    dogfooding experience. Updates can use versioning and should not require rebooting; Maybe some 
+    form of hot reloading the kernel or different subsystems would suffice.
+
+[ ] Finish all current TODOs in the source files (This is a joke task, it will never be done...)
+
+[ ] Every so often, go through and look for potential refactors, performance improvements, 
+    simplifications, clarifications, adding documentation, and overall less lines of code as 
+    possible.
