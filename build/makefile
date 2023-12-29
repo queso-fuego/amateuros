@@ -24,6 +24,7 @@ FONTS_BDF != find $(FONTDIR) -name "*.bdf" -exec basename -s ".bdf" {} \;
 
 # Make final OS.bin binary - padding out to full 1.44MB "floppy" img
 OS: $(FONTS_BDF) asm_files $(C_FILES) $(EXES)
+	@mkdir -p $(BINDIR)fs_root/sys/bin
 	@mv $(BINDIR)[!OS]*.bin $(BINDIR)fs_root/sys/bin
 	@$(CC) ./make_disk.c -o ./make_disk.bin -I../include	
 	@./make_disk.bin
