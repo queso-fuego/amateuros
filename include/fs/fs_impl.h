@@ -238,6 +238,45 @@ void set_bit_in_disk_block(const uint32_t block, uint32_t bit) {
     rw_sectors(SECTORS_PER_BLOCK, block * SECTORS_PER_BLOCK, (uint32_t)temp_block, WRITE_WITH_RETRY);
 }
 
+// Generic helper function to clear a given bit in a chunk of data
+void clear_bit_in_disk_block(const uint32_t block, uint32_t bit) {
+    // Load block to memory
+    rw_sectors(SECTORS_PER_BLOCK, block * SECTORS_PER_BLOCK, (uint32_t)temp_block, READ_WITH_RETRY);
+
+    // Set bit in block, using correct 4 byte chunk of bits
+    bit %= BITS_PER_BLOCK; // Constrain bit number to this BITS_PER_BLOCK sized block
+    uint32_t *chunk = (uint32_t *)temp_block;
+
+    chunk[bit / 32] &= ~(1 << (bit % 32));
+
+    // Write updated block back to disk
+    rw_sectors(SECTORS_PER_BLOCK, block * SECTORS_PER_BLOCK, (uint32_t)temp_block, WRITE_WITH_RETRY);
+}
+
+// Set a bit in the inode bitmap
+void set_bit_in_inode_bitmap(const uint32_t bit) {
+    set_bit_in_disk_block(superblock.first_inode_bitmap_block + (bit / BITS_PER_BLOCK),
+                          bit % BITS_PER_BLOCK);
+}
+
+// Set a bit in the data bitmap
+void set_bit_in_data_bitmap(const uint32_t bit) {
+    set_bit_in_disk_block(superblock.first_data_bitmap_block + (bit / BITS_PER_BLOCK),
+                            bit % BITS_PER_BLOCK);
+}
+
+// Clear a bit in the inode bitmap
+void clear_bit_in_inode_bitmap(const uint32_t bit) {
+    clear_bit_in_disk_block(superblock.first_inode_bitmap_block + (bit / BITS_PER_BLOCK),
+                            bit % BITS_PER_BLOCK);
+}
+
+// Clear a bit in the data bitmap
+void clear_bit_in_data_bitmap(const uint32_t bit) {
+    clear_bit_in_disk_block(superblock.first_data_bitmap_block + (bit / BITS_PER_BLOCK),
+                            bit % BITS_PER_BLOCK);
+}
+
 // Generic helper function to find the first unset bit within
 //  a chunk of data
 uint32_t find_first_free_bit_in_disk_blocks(const uint32_t start_block, const uint32_t length_blocks) {
@@ -560,8 +599,36 @@ bool print_dir(const char *path) {
 }
 
 // Create a new directory file in the filesystem given a file path
-bool fs_make_dir(char *path) {
+bool fs_make_dir(char *argv[]) {
+    char *path = argv[1];   // argv[0] would be the shell command itself e.g. mkdir
     if (!path) return false;
+
+    // TODO: Add error if file doesn't exist and not using flag "-p" or similar
+
+    // TODO: Create multiple directories in path if not exist?
+    // e.g.: mkdir /multiple/dirs/for/new/path 
+
+    // if (!strncmp(argv[1], "-p", 3) {
+    //     // Make intermediate "parent" directories; Don't error if exists,
+    //     //   and make each non-existing directory in path
+    //     char *pos = path;
+    //     if (*pos == '/') pos++;  // Starting at root, move past initial slash
+    //
+    //     while (true) {
+    //         pos = strchr(pos, '/');  // Search for end of next dir in path
+    //         if (*pos != '/') break;
+    //         *pos = '/0';     // End current dir path with null
+    //
+    //         // Create new dir if not exists; 
+    //         //   This function is new and does what fs_make_dir does,
+    //         //     but is a callee that does the actual work.
+    //         //   Could also put this code within this function anyway,
+    //         //     as an alternative?
+    //         inode_t inode = inode_from_path(path);
+    //         if (inode.id == 0 && !fs_make_dir_internal(path)) return false; 
+    //         *pos++ = '/';    // Restore path separator, and move on to next dir
+    //     }
+    // }
 
     // Create new empty default file
     int32_t fd = open(path, O_CREAT | O_WRONLY);
@@ -604,10 +671,9 @@ bool fs_make_dir(char *path) {
 }
 
 // Change current directory
-bool fs_change_dir(char *path) {
+bool fs_change_dir(char *argv[]) {
+    char *path = argv[1];
     if (!path) return false;
-
-    // TODO: Create multiple directories in path if not exist?
 
     // Change directory to current directory
     if (!strncmp(path, ".", 2)) return true;
@@ -663,4 +729,236 @@ bool fs_change_dir(char *path) {
 
     return true;
 }
+
+// Delete a single file
+bool fs_delete_file(char *argv[]) {
+    char *path = argv[1];
+
+    if (!path) return false;
+
+    // Error on special paths
+    if (!strncmp(path, "/", 2) ||
+        !strncmp(path, ".", 2) ||
+        !strncmp(path, "..", 3)) {
+
+        printf("\r\nError: Cannot delete %s", path);
+
+        return false;
+    }
+
+    inode_t inode = inode_from_path(path);
+    inode_t parent_inode = parent_inode_from_path(path);
+    if (inode.id == 0 || parent_inode.id == 0) return false;    // Files/dirs don't exist
+    if (inode.type != FILETYPE_FILE) return false;              // Only delete a file, not dir
+
+    if (inode.ref_count > 0) inode.ref_count--;   // Reduce open uses of this file by 1
+
+    if (inode.ref_count > 0) return true;   // File is still open somewhere else, don't delete
+
+    // Clear out file data by clearing all data blocks in all extents used for file
+    memset(temp_block, 0, sizeof temp_block);
+    for (uint32_t i = 0; i < superblock.direct_extents_per_inode; i++) {
+        for (uint32_t j = 0; j < inode.extent[i].length_blocks; j++) {
+            rw_sectors(SECTORS_PER_BLOCK, 
+                       (inode.extent[i].first_block + j) * SECTORS_PER_BLOCK, 
+                       (uint32_t)temp_block, 
+                       WRITE_WITH_RETRY);
+
+            // Clear out data bit in data bitmap blocks for disk blocks
+            clear_bit_in_data_bitmap(inode.extent[i].first_block + j);
+        }
+    }
+    // TODO: Also go through single/double indirect extents?
+
+    // Clear inode in inode blocks
+    rw_sectors(1, 
+               (superblock.first_inode_block * SECTORS_PER_BLOCK) + 
+                   (inode.id / INODES_PER_SECTOR),
+               (uint32_t)temp_sector,
+               READ_WITH_RETRY);
+
+    inode_t *tmp_inode = (inode_t *)temp_sector + (inode.id % INODES_PER_SECTOR);
+    memset(tmp_inode, 0, sizeof inode);
+
+    rw_sectors(1, 
+               (superblock.first_inode_block * SECTORS_PER_BLOCK) + 
+                   (inode.id / INODES_PER_SECTOR),
+               (uint32_t)temp_sector,
+               WRITE_WITH_RETRY);
+
+    // Clear inode bit in inode bitmap blocks
+    clear_bit_in_inode_bitmap(inode.id);
+
+    // Clear dir_entry for file in parent dir's data blocks 
+    bool found_file = false;
+    uint32_t data_block = 0;
+    for (uint32_t i = 0; i < superblock.direct_extents_per_inode; i++) {
+        for (uint32_t j = 0; j < parent_inode.extent[i].length_blocks; j++) {
+            rw_sectors(SECTORS_PER_BLOCK, 
+                       (parent_inode.extent[i].first_block + j) * SECTORS_PER_BLOCK, 
+                       (uint32_t)temp_block, 
+                       READ_WITH_RETRY);
+
+            // Search this block for dir_entry corresponding to inode for file
+            dir_entry_t *dir_entry = (dir_entry_t *)temp_block;
+            uint32_t count = DIR_ENTRIES_PER_BLOCK;
+            while (dir_entry->id != inode.id && count > 0) {
+                dir_entry++;
+                count--;
+            }
+
+            if (dir_entry->id == inode.id) {
+                // Found dir_entry for file, clear it on disk
+                memset(dir_entry, 0, sizeof(dir_entry_t));
+
+                rw_sectors(SECTORS_PER_BLOCK, 
+                           (parent_inode.extent[i].first_block + j) * SECTORS_PER_BLOCK, 
+                           (uint32_t)temp_block, 
+                           WRITE_WITH_RETRY);
+
+                data_block = parent_inode.extent[i].first_block + j;
+
+                found_file = true;
+                goto done;
+            }
+        }
+    }
+    done:
+    if (!found_file) return false;
+
+    // Update parent dir's inode to reduce size by sizeof dir_entry
+    parent_inode.size_bytes -= sizeof(dir_entry_t);
+    parent_inode.size_sectors = bytes_to_sectors(parent_inode.size_bytes);
+    update_inode_on_disk(parent_inode);
+
+    // If this file reduces parent's size to a multiple of FS_BLOCK_SIZE,
+    //   then can clear out that disk block and data bitmap bit
+    if (parent_inode.size_bytes % FS_BLOCK_SIZE == 0) {
+        // Check if full block is empty
+        bool is_clear = true;
+        for (uint32_t i = 0; i < FS_BLOCK_SIZE / 4; i++) {
+           if ((uint32_t)temp_block[i] != 0) {
+               is_clear = false;
+               break;
+           }
+        }
+
+        if (is_clear) clear_bit_in_data_bitmap(data_block);
+    }
+
+    // Update current dir inode and root dir inode, in case file
+    //   was deleted from either
+    if (current_dir_inode.id == parent_inode.id)
+        current_dir_inode = parent_inode;
+
+    if (root_inode.id == parent_inode.id)
+        root_inode = parent_inode;
+
+    return true;
+}
+
+// Delete a directory along with all nested files/directories within it
+bool fs_delete_dir(char *argv[]) {
+    (void)argv;
+    // TODO:
+    return true;
+}
+
+// Rename a file 
+// Example argv[]/command: "ren /folderA/fileA.txt fileB.txt"
+bool fs_rename_file(char *argv[]) {
+    char *path = argv[1];
+    char *new_name = argv[2];
+
+    if (!path || !new_name) {
+        printf("\r\nUsage: ren <path/to/file/filename.ext> <new_name.ext>");
+        return false;
+    }
+
+    // Error on special paths
+    if (!strncmp(path, "/", 2) ||
+        !strncmp(path, ".", 2) ||
+        !strncmp(path, "..", 3)) {
+
+        printf("\r\nError: Cannot rename %s", path);
+
+        return false;
+    }
+
+    inode_t inode = inode_from_path(path);
+    inode_t parent_inode = parent_inode_from_path(path);
+
+    if (inode.id == 0) {
+        printf("\r\nError: Could not get inode for %s", path);
+        return false;
+    }
+
+    if (parent_inode.id == 0) {
+        printf("\r\nError: Could not get parent dir inode for %s", path);
+        return false;
+    }
+
+    bool renamed_file = false;
+    for (uint32_t i = 0; i < superblock.direct_extents_per_inode; i++) {
+        for (uint32_t j = 0; j < parent_inode.extent[i].length_blocks; j++) {
+            rw_sectors(SECTORS_PER_BLOCK, 
+                       (parent_inode.extent[i].first_block + j) * SECTORS_PER_BLOCK, 
+                       (uint32_t)temp_block, 
+                       READ_WITH_RETRY);
+
+            // Search this block for dir_entry corresponding to inode for file
+            dir_entry_t *dir_entry = (dir_entry_t *)temp_block;
+            uint32_t count = DIR_ENTRIES_PER_BLOCK;
+            while (dir_entry->id != inode.id && count > 0) {
+                dir_entry++;
+                count--;
+            }
+
+            if (dir_entry->id == inode.id) {
+                // Found dir_entry for file, rename it
+                memset(dir_entry, 0, sizeof(dir_entry_t));
+                dir_entry->id = inode.id;   // Use same id 
+                strcpy(dir_entry->name, new_name);
+
+                rw_sectors(SECTORS_PER_BLOCK, 
+                           (parent_inode.extent[i].first_block + j) * SECTORS_PER_BLOCK, 
+                           (uint32_t)temp_block, 
+                           WRITE_WITH_RETRY);
+
+                renamed_file = true;
+                goto done;
+            }
+        }
+    }
+    done:
+    if (!renamed_file) {
+        printf("\r\nError: Could not find file '%s' in disk blocks to rename.", path);
+        return false;
+    }
+
+    return true;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

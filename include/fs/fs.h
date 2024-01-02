@@ -74,7 +74,7 @@ typedef struct {
     extent_t extent[4];                     // Direct file extents
     uint32_t single_indirect_block;         // Disk block for holding more extents
     uint32_t double_indirect_block;         // Disk block for holding more extents
-    uint8_t ref_count;
+    uint8_t ref_count;                      // # of open uses of this file
 
     uint8_t padding[2];                     // Unused
 } __attribute__ ((packed)) inode_t;         // sizeof(inode_t) should = 64

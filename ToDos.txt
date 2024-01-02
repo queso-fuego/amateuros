@@ -21,10 +21,10 @@ Shorter Term / Next Up
     just 1 char* parm for path. That way each function for a command can 
     interpret flags, multiple paths, etc. and act more like actual shell 
     commands or program calls.
-    [ ] bool (*command_functions[])(char **)    // char** for *argv[]
-    [ ] if (!command_functions[i](argv)) {
-    [ ] fs_make_dir(char *argv[]) // or (char **argv)
-    [ ] fs_change_dir(char *argv[]) // or (char **argv)
+    [X] bool (*command_functions[])(char **)    // char** for *argv[]
+    [X] if (!command_functions[i](argv)) {
+    [X] fs_make_dir(char *argv[]) // or (char **argv)
+    [X] fs_change_dir(char *argv[]) // or (char **argv)
     [ ] ...
 
 [ ] Make create file command e.g. "touch" or similar. 
@@ -118,24 +118,61 @@ Shorter Term / Next Up
     [ ] Can alias a single '?' to be the same command as 'help'
 
 [ ] In addition to or as an alternative to the 'help' command, a "man" command or other documentation
-    retriever ("docs?"). Can be as simple as reading file(s) under 
+    retriever ("docs?"). 
+    Can be as simple as reading file(s) under 
     /system/docs/further/path/to/thing/which/has/man/pages/documentation.txt, or similar.
 
-[ ] Delete file function & rm/del command
-	[ ] ...
-
 [ ] Delete directory function & rmdir command
-	[ ] ...
+	[ ] Call fs_delete_file() for all files found in the input directory. 
+        Check inode.type == FILETYPE_FILE?
+    [ ] If type == FILETYPE_DIR, instead call this function recursively, or use other logic.
+        This would be depth first search, may have to be careful with stack usage for many nested 
+        directories.
+    [ ] After deleting all files in directory, clear out last data block and data bitmap bit   
+        for this directory's "." and ".." dir entries.
 
-[ ] Rename file/dir function & ren or mov command
-    [ ] mov/move can take in a 'before' path and 'after' path
-    [ ] ren/rename can take in a 'before' path and 'after' name (not path!). 
-        Will rename the file in path to new name only.
-	[ ] ...
+    Then do similar logic as in fs_delete_file():
+    [ ] Clear inode in inode blocks
+    [ ] Clear inode bit in inode bitmap
+    [ ] Clear dir_entry in parent dir's data blocks, update parent dir's inode for new size,
+        and update parent dir's inode on disk.
+    [ ] Update root dir and/or current dir, if parent dir is one of those two.
+
+    [ ] ...
+
+[ ] Change 'type' command to 'read', as that might make more (intuitive?) sense.
+
+[ ] 'write' command, to go with 'read' command above, similar to linux "echo" but without writing 
+    the default newline after.
+    [ ] In lieu of pipes, the default case can be to overwrite file data, or create the file if
+        it doesn't exist.
+        Can use "open(<filepath>, O_CREAT | O_WRONLY)" ?
+
+    [ ] Optional flag -a --append, to instead write at the end of the current file data.
+        Can use "open(<filepath>, O_WRONLY | O_APPEND)" ?
+
+[ ] Move file/dir command and function. Should not need to mess with file data at all, only the
+    parent folder's dir_entry for the file.
+    e.g. "mv folderA/fileB.txt folderC/fileD.txt"
+    [ ] mv/mov/move can take in a 'before' path and 'after' path
+        [ ] If after path ends with an existing directory, move file with same name to that 
+            directory. 
+            If after path ends in non-existing file name, move file to that new name in
+            that directory.
+
+    [ ] Get dir_entry from before path parent_inode's data blocks.
+	[ ] Delete dir_entry from before path parent directory's data blocks.
+        [ ] Update parent inode's size and data blocks (and update inode on disk), similarly to 
+            fs_delete_file.
+	[ ] Add dir_entry to after path parent directory's data blocks.
+        [ ] Update parent inode's size and data blocks (and update inode on disk).
 
 ! [ ] Fix 'chgfont' command, by either renaming font files at runtime, working with any files, not 
     just .fnt, or by changing makefile/make_disk.c to use '.fnt' as the font name extension, and 
     not '.bin'.
+
+[ ] Command similar to linux 'df' to print disk block or overall filesystem information.
+    Kind of like the current 'prtmemmap' command.
 
 [ ] Hex "monitor" program? Command line/interactive mode. This could be a replacement for the hex mode
     of the editor, or as an additional similar feature. It would be started from a "hexmon" or "monitor" command 
@@ -282,6 +319,23 @@ Longer term
     features, etc.
 
 [ ] Network stack? NIC driver, ARP, IP, TCP, UDP, QUIC?, etc.
+    [ ] <Naveen Chaudhary> Add networking support, at least for a basic ping.
+
+    - As info: https://wiki.osdev.org/Network_Stack
+
+    - This will probably include: 
+        + PCI scanning to find a NIC for e.g. ethernet (RTL8139, Intel E1000, etc.)
+        + Ethernet protocol
+        + Address Resolution Protocol (ARP); Convert MAC address to/from IPv4 and/or IPv6 address
+        + Internet Protocol (IP), can use IPv4 and/or IPv6
+        + Internet Control Message Protocol (ICMP), used by 'ping' or other networking tools
+        + User Datagram Protocol (UDP)
+            ++ Dynamic Host Configuration Protocol (DHCP)
+            ++ Domain Name System (DNS)
+        + Transmission Control Protocol (TCP)
+            ++ SSL/TLS; for security
+            ++ HyperText Transfer Protocol (HTTP); Also HTTPS for security, if using SSL/TLS
+            ++ Telnet
 
 [ ] Other device drivers; USB, SATA hdd/sdd (AHCI, XHCI?), NVMe, mouse, etc.
 

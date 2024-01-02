@@ -128,16 +128,28 @@ bool write_superblock(void) {
 // Write Inode bitmap blocks
 // ============================================================
 bool write_inode_bitmap_blocks(void) {
-    uint8_t sector[FS_SECTOR_SIZE];
+    uint64_t bit_chunk = 0;
+    uint32_t total_blocks = superblock.num_inodes / 32;
+    uint32_t bytes_written = 0;
 
     // Set number of bits = number of inodes
-    *(uint32_t *)sector |= (2 << (superblock.num_inodes - 1)) - 1;
+    while (total_blocks > 0) {
+        bit_chunk = 0xFFFFFFFF;  // Set 32 bits at a time
+        total_blocks--;
+        assert(fwrite(&bit_chunk, 4, 1, IMAGE_PTR) == 1);
+        bytes_written += 4;
+    }
 
-    // Write to disk
-    assert(fwrite(sector, FS_SECTOR_SIZE, 1, IMAGE_PTR) == 1);
+    // Check special case for bits % 32 == 0, or multiple of 32;
+    if ((superblock.num_inodes % 32) > 0) {
+        // Set last partial amount of < 32 bits
+        bit_chunk = (2 << ((superblock.num_inodes % 32) - 1)) - 1;
+        assert(fwrite(&bit_chunk, 4, 1, IMAGE_PTR) == 1);
+        bytes_written += 4;
+    }
 
     // Pad out to end of block
-    assert(fwrite(null_block, num_padding_bytes(FS_SECTOR_SIZE, FS_BLOCK_SIZE), 1, IMAGE_PTR) == 1);
+    assert(fwrite(null_block, num_padding_bytes(bytes_written, FS_BLOCK_SIZE), 1, IMAGE_PTR) == 1);
 
     return true;
 }
@@ -158,10 +170,13 @@ bool write_data_bitmap_blocks(void) {
         bytes_written += 4;
     }
 
-    // Set last partial amount of < 32 bits
-    bit_chunk = (2 << ((superblock.num_data_blocks % 32) - 1)) - 1;
-    assert(fwrite(&bit_chunk, 4, 1, IMAGE_PTR) == 1);
-    bytes_written += 4;
+    // Check special case for bits % 32 == 0, or multiple of 32;
+    if ((superblock.num_data_blocks % 32) > 0) {
+        // Set last partial amount of < 32 bits
+        bit_chunk = (2 << ((superblock.num_data_blocks % 32) - 1)) - 1;
+        assert(fwrite(&bit_chunk, 4, 1, IMAGE_PTR) == 1);
+        bytes_written += 4;
+    }
 
     // Pad out to end of block
     assert(fwrite(null_block, num_padding_bytes(bytes_written, FS_BLOCK_SIZE), 1, IMAGE_PTR) == 1);
@@ -246,7 +261,7 @@ bool write_file_data(char *dir_path, uint32_t curr_inode_id, uint32_t parent_ino
 
     // Add dir inode
     inode_t dir_inode = {0};
-    dir_inode.id = curr_inode_id;   // TODO: Ensure this doesn't ever = 2
+    dir_inode.id = curr_inode_id;  
     dir_inode.type = FILETYPE_DIR;
     dir_inode.size_bytes = dir_size;
     dir_inode.size_sectors = bytes_to_sectors(dir_size);

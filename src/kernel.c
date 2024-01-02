@@ -67,7 +67,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     char *cmdCls	      = "cls";          // Clear screen by scrolling
     char *cmdShutdown     = "shutdown";     // Close QEMU emulator
     char *cmdDelFile      = "del";		    // Delete a file from disk
-    char *cmdRenFile      = "ren";          // Rename a file in the file table
     char *cmdPrtmemmap    = "prtmemmap";    // Print physical memory map info
     char *cmdChgColors    = "chgcolors";    // Change current fg/bg colors
     char *cmdChgFont      = "chgfont";      // Change current font
@@ -81,14 +80,30 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     // TODO: Move all commands to this array 
     // !NOTE!: All commands here need to have their own functions at the 
     //   exact same array offset/element in the command_functions array below
-    char *commands[] = {
-        "mkdir",
-        "chdir",
+    enum {
+        MKDIR,
+        CHDIR,
+        RM,
+        RMDIR,
+        REN,
     };
 
-    bool (*command_functions[])(char *) = {
-        fs_make_dir,
-        fs_change_dir,
+    char *commands[] = {
+        [MKDIR] = "mkdir",
+        [CHDIR] = "chdir",
+        [RM]    = "rm",
+        [RMDIR] = "rmdir",
+        [REN]   = "ren", 
+    };
+
+    // Commands will be similar to programs in that they will be called
+    //   with the full argument vector or argv[]
+    bool (*command_functions[])(char **) = {
+        [CHDIR] = fs_change_dir,
+        [MKDIR] = fs_make_dir,
+        [RM]    = fs_delete_file,
+        [RMDIR] = fs_delete_dir,
+        [REN]   = fs_rename_file,
     };
 
     uint8_t fileExt[3];
@@ -292,7 +307,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             if (!strncmp(argv[0], commands[i], strlen(commands[i]))) {
                 found_command = true;
 
-                if (!command_functions[i](argv[1])) {
+                if (!command_functions[i](argv)) {
                     printf("\r\nError: command %s failed\r\n", argv[0]);
                 }
                 break;
@@ -543,23 +558,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             if (!delete_file(argv[1], strlen(argv[1]))) {
                 //	;; TODO: Add error message or code here
                 printf("ERROR: Delete file failed!");
-            }
-
-            // Print newline when done
-            printf("\r\n");
-
-            continue;
-        }
-
-        if (strncmp(argv[0], cmdRenFile, strlen(cmdRenFile)) == 0) {
-            // --------------------------------------------------------------------
-            // Rename a file in the file table
-            // --------------------------------------------------------------------
-            // 1 - File to rename
-            // 2 - Length of name to rename
-            // 3 - New file name // 4 - New file name length
-            if (rename_file(argv[1], strlen(argv[1]), argv[2], strlen(argv[2])) != 0) {
-                //	;; TODO: Add error message or code here
             }
 
             // Print newline when done
@@ -956,7 +954,7 @@ void init_open_inode_table(void) {
     current_open_inodes = 0;
 
     open_inode_table = malloc(sizeof(inode_t) * max_open_inodes);
-    memset(open_inode_table, 0, sizeof(open_file_table_t) * max_open_files);
+    memset(open_inode_table, 0, sizeof(open_file_table_t) * max_open_inodes);
 
     *open_inode_table = (inode_t){0};
 }

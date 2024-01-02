@@ -21,6 +21,7 @@ enum {
 // Output 1: Error Code 0-success, 1-Fail
 //       (2): File pointer will point to start of file table entry if found
 //-------------------------------------
+// TODO: Remove this function, as it's not used anymore?
 uint8_t *check_filename(uint8_t *filename, const uint16_t filename_length)
 {
     uint16_t i; 
@@ -48,8 +49,7 @@ uint8_t *check_filename(uint8_t *filename, const uint16_t filename_length)
 //   3: Address to Read/Write data from/to
 //   4: Command to perform (Reading or Writing)
 //-----------------------------------------------
-void rw_sectors(const uint32_t size_in_sectors, uint32_t starting_sector, uint32_t address, const uint8_t command)
-{
+void rw_sectors(const uint32_t size_in_sectors, uint32_t starting_sector, uint32_t address, const uint8_t command) {
     //uint8_t head = 0;
     //uint16_t cylinder = 0;
 

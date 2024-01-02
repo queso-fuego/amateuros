@@ -63,6 +63,9 @@ uint8_t *strcpy(uint8_t *dst, const uint8_t *src)
     for (uint8_t i = 0; src[i]; i++)
         dst[i] = src[i];
 
+    // TODO: This should also set last byte to null in the dst string?
+    //  dst[i] = '\0';
+
     return dst;
 }
 
@@ -70,6 +73,8 @@ uint8_t *strcpy(uint8_t *dst, const uint8_t *src)
 char *strchr(const char *str, const char c) {
     char *p = (char *)str;
     while (*p != '\0' && *p != c) p++;
+
+    // TODO: If input char is not a null, return NULL, not p
 
     return p;
 }
@@ -83,6 +88,8 @@ char *strrchr(const char *str, const char c) {
         if (*p == c) result = p;
         p++;
     }
+
+    // TODO: If input char is not a null, return NULL, not p
 
     return result;
 }
@@ -103,8 +110,7 @@ uint8_t *strncpy(uint8_t *dst, const uint8_t *src, const uint8_t len)
 //
 // Returns:
 //   buffer
-void *memset(void *buffer, const uint8_t byte, const uint32_t len)
-{
+void *memset(void *buffer, const uint8_t byte, const uint32_t len) {
     uint8_t *ptr = (uint8_t *)buffer;
 
     for (uint32_t i = 0; i < len; i++)
@@ -141,4 +147,52 @@ void *memcpy32(void *dst, const void *src, const uint32_t len) {
 
     return dst;
 }
+
+// The memcmp() function compares the first n bytes (each interpreted as
+//   uint8_t) of the memory areas s1 and s2.
+//
+// Returns: 
+// an integer less than, equal to, or greater than zero if the first len 
+// bytes of s1 is found, respectively, to be less than, to match, or be 
+// greater than the first len bytes of s2.
+//
+// For a nonzero return value, the sign is determined by the sign of the
+// difference between the first pair of bytes (interpreted as uint8_t)
+// that differ in s1 and s2.
+//
+// If n is zero, the return value is zero.
+int32_t memcmp(const void *s1, const void *s2, uint32_t len) {
+    if (len == 0) return 0;
+
+    while (len > 0 && *(uint8_t *)s1 == *(uint8_t *)s2) {
+        s1++;
+        s2++;
+        len--;
+    }
+
+    return *(uint8_t *)s1 - *(uint8_t *)s2;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
