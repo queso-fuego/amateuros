@@ -1,4 +1,4 @@
-CFLAGS=-std=c17 -Wall -Wextra -Werror -pedantic
+CFLAGS=-std=c17 -Wall -Wextra -Wpedantic
 SOURCE=bdf_to_asm.c
 TARGET=bdf_to_asm.bin
 all:

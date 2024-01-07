@@ -39,113 +39,104 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    char buffer[256] = {0};
-
     // Write font file "title" 
-    fputs(";;;\n;;; ", output_file);
-    fputs(output_name, output_file);
-    fputs("\n;;;\n", output_file);
-
-    // Write font width/height: "db <font_width>, <font_height>\n"
-    fputs("\n;; Font width, height\ndb ", output_file);
+    fprintf(output_file, 
+            ";;;\n"
+            ";;; %s\n"
+            ";;;\n\n",
+            output_name);
 
     // Get font size line: "FONTBOUNDINGBOX <width> <height> <something> <something>"
+    char buffer[256] = {0};
     read_until(font_file, buffer, sizeof buffer, "FONTBOUNDINGBOX"); 
-    char *font_num = strtok(buffer, " \n");
 
-    font_num = strtok(NULL, " \n");   // Width
-    fputs(font_num, output_file);
-    fputs(", ", output_file);
+    // Write font width/height: "db <font_width>, <font_height>\n"
+    char *font_w = strtok(buffer, " \n");
+    font_w = strtok(NULL, " \n");           // Width
+    char *font_h = strtok(NULL, " \n");     // Height
 
-    const long font_width = strtol(font_num, NULL, 10);
-
-    font_num = strtok(NULL, " \n");   // Height
-    fputs(font_num, output_file);
-    fputs("\n\n", output_file);
-
-    const long font_height = strtol(font_num, NULL, 10);
+    fprintf(output_file,
+            ";; Font width, height\n"
+            "db %s, %s\n\n", 
+            font_w, font_h);
 
     // Write initial padding: "times 31*<font_height> - 2 db 0\n"
-    fputs(";; Initial padding\n", output_file);
-    fputs("times 31*", output_file);
+    const int font_width  = (int)strtol(font_w, NULL, 10);
+    const int font_height = (int)strtol(font_h, NULL, 10);
 
-    if (font_width <= 8)
-        fprintf(output_file, "%lu", font_height);
-    else if (font_width <= 16)
-        fprintf(output_file, "%lu", font_height*2);
+    // Set db/dw/dd/etc. from font width;
+    //   1-8 = 1 byte, 9-16 = 2 bytes (word), etc.
+    char *define_width = NULL;
+    switch (((font_width-1) / 8) + 1) {
+        case 1: define_width = "db"; break;
+        case 2: define_width = "dw"; break;
+        case 4: define_width = "dd"; break;
+        default: 
+            fprintf(stderr, "Error: Unsupported font width: %s\n", font_w);
+            goto cleanup;
+            break;
+    }
 
-    fputs(" - 2 db 0\n", output_file);
-    fputc('\n', output_file);
+    fprintf(output_file,
+            ";; Initial padding\n"
+            "times 31*%u - 2 db 0\n\n", 
+            font_height * (((font_width-1) / 8) + 1));  // Font height in width bytes
 
     // Start adding characters at space/ascii 32
     read_until(font_file, buffer, sizeof buffer, "STARTCHAR space");  
-    fseek(font_file, -strlen("STARTCHAR space\n"), SEEK_CUR);    // Move back before line
+    fseek(font_file, -16, SEEK_CUR);    // Move back before line
                                                                           
     // Loop for next character
     while (true) {
+        // Write name and number string: ";; <name> <num>\n"  
         read_until(font_file, buffer, sizeof buffer, "STARTCHAR");  // STARTCHAR <name> line
 
-        // Get next character name
+        char ascii_name[32];
         char *name_pos = strtok(buffer, " \n");   // "STARTCHAR"
         name_pos = strtok(NULL, " \n");           // <name>
-                                                  
-        // Name and number string: ";; <name> <num>\n"             
-        char ascii_name_num[25]; 
-        strcpy(ascii_name_num, name_pos);
+        strcpy(ascii_name, name_pos);
                                                   
         fgets(buffer, sizeof buffer, font_file);    // Get ENCODING <num> line
         char *num_pos = strtok(buffer, " \n");      // "ENCODING"
         num_pos = strtok(NULL, " \n");              // <num>
-        if (strtol(num_pos, NULL, 10) > 126)
-            break;  // Stop reading characters when past ascii range 0-127
+
+        // Stop reading characters after ascii range 0-127
+        if (strtol(num_pos, NULL, 10) > 126) break;  
                     
-        strcat(ascii_name_num, " ");
-        strcat(ascii_name_num, num_pos);
+        fprintf(output_file,
+                ";; %s %s\n",
+                ascii_name, num_pos);
 
-        // Write character name/number 
-        fputs(";; ", output_file);
-        fwrite(ascii_name_num, strlen(ascii_name_num), 1, output_file);
-        fputc('\n', output_file);
-
-        // Write bitmap lines
+        // Write bitmap lines: "db/dw/etc. 0x<bitmap>\n"
         read_until(font_file, buffer, sizeof buffer, "BITMAP");
 
-        while (fgets(buffer, sizeof buffer, font_file))
-            if (!strncmp(buffer, "ENDCHAR", strlen("ENDCHAR")))
+        while (fgets(buffer, sizeof buffer, font_file)) {
+            if (!strncmp(buffer, "ENDCHAR", strlen("ENDCHAR"))) 
                 break;  // Reached end of bitmap
-            else {
-                // Add next bitmap bytes: "db(/dw/etc.) 0x<bitmap>\n"
-                if (font_width <= 8)
-                    fputs("db 0x", output_file);
-                else if (font_width <= 16)
-                    fputs("dw 0x", output_file);
-                
-                fwrite(buffer, strlen(buffer), 1, output_file); 
-            }
+            else 
+                fprintf(output_file, "%s 0x%s", define_width, buffer);
+        }
     }
 
-    // Add final character for cursor line
+    // Add cursor line as final character 
     fputs(";; Cursor Line 127\n",output_file);
-    for (long i = 0; i < font_height-1; i++)
-        if (font_width <= 8)
-            fputs("db 0x00\n", output_file);
-        else if (font_width <= 16)
-            fputs("dw 0x0000\n", output_file);
-
-    if (font_width <= 8)
-        fputs("db 0xFF\n", output_file);  // Full line at bottom of character
-    else if (font_width <= 16)
-        fputs("dw 0xFFFF\n", output_file);  // Full line at bottom of character
+    for (int i = 0; i < font_height; i++) {
+        fprintf(output_file, "%s 0x%.*s\n", 
+                define_width, 
+                (((font_width-1) / 8) + 1) * 2,                 // 2 nibbles per byte
+                i < font_height-1 ? "00000000" : "FFFFFFFF");   // Up to width 32, expand as needed
+    }
 
     // Add sector padding to next 512 byte boundary
-    fputs("\n;; Sector padding\n", output_file);
-    const long current_size = ftell(output_file);
+    const long current_size     = ftell(output_file);
     const long next_sector_size = current_size - (current_size % 512) + 512;
-    fputs("times ",output_file);
-    fprintf(output_file, "%lu", next_sector_size);
-    fputs("-($-$$) db 0\n", output_file);
-    
+    fprintf(output_file,
+            "\n;; Sector padding\n"
+            "times %lu-($-$$) db 0\n",
+            next_sector_size);
+
     // File cleanup
+    cleanup:
     fclose(font_file);
     fclose(output_file);
 
