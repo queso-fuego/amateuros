@@ -304,7 +304,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         // TODO: Move all commands to commands and functions array
         bool found_command = false;
         for (uint32_t i = 0; i < sizeof commands / sizeof commands[0]; i++) {
-            if (!strncmp(argv[0], commands[i], strlen(commands[i]))) {
+            if (!strncmp(argv[0], commands[i], strlen(argv[0]))) {
                 found_command = true;
 
                 if (!command_functions[i](argv)) {
@@ -318,7 +318,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         if (found_command) continue;
 
         // Get first token (command to run) & second token (if applicable e.g. file name)
-        if (strncmp(argv[0], cmdDir, strlen(cmdDir)) == 0) {
+        if (strncmp(argv[0], cmdDir, strlen(argv[0])) == 0) {
             if (!argv[1]) {
                 if (!print_dir(current_dir))
                     printf("\r\nError printing dir %s\r\n", current_dir);
@@ -331,7 +331,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         }
 
         // Run test functions and present results
-        if (strncmp(argv[0], cmdRunTests, strlen(cmdRunTests)) == 0) {
+        if (strncmp(argv[0], cmdRunTests, strlen(argv[0])) == 0) {
             typedef struct {
                 //char name[256];
                 char *name;
@@ -371,14 +371,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             continue;
         }
 
-        if (strncmp(argv[0], cmdReboot, strlen(cmdReboot)) == 0) {
+        if (strncmp(argv[0], cmdReboot, strlen(argv[0])) == 0) {
             // --------------------------------------------------------------------
             // Reboot: Reboot the PC
             // --------------------------------------------------------------------
             outb(0x64, 0xFE);  // Send "Reset CPU" command to PS/2 keyboard controller port
         }
 
-        if (strncmp(argv[0], cmdPrtreg, strlen(cmdPrtreg)) == 0) {
+        if (strncmp(argv[0], cmdPrtreg, strlen(argv[0])) == 0) {
             // --------------------------------------------------------------------
             // Print Register Values
             // --------------------------------------------------------------------
@@ -386,7 +386,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             continue;   
         }
 
-        if (strncmp(argv[0], cmdGfxtst, strlen(cmdGfxtst)) == 0) {
+        if (strncmp(argv[0], cmdGfxtst, strlen(argv[0])) == 0) {
             // --------------------------------------------------------------------
             // Graphics Mode Test(s)
             // --------------------------------------------------------------------
@@ -523,14 +523,14 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             continue;
         }
 
-        if (strncmp(argv[0], cmdHlt, strlen(cmdHlt)) == 0) {
+        if (strncmp(argv[0], cmdHlt, strlen(argv[0])) == 0) {
             // --------------------------------------------------------------------
             // End Program  
             // --------------------------------------------------------------------
             __asm__ ("cli;hlt");   // Clear interrupts & Halt cpu
         }
 
-        if (strncmp(argv[0], cmdCls, strlen(cmdCls)) == 0) {
+        if (strncmp(argv[0], cmdCls, strlen(argv[0])) == 0) {
             // --------------------------------------------------------------------
             // Clear Screen
             // --------------------------------------------------------------------
@@ -539,7 +539,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             continue;
         }
 
-        if (strncmp(argv[0], cmdShutdown, strlen(cmdShutdown)) == 0) {
+        if (strncmp(argv[0], cmdShutdown, strlen(argv[0])) == 0) {
             // --------------------------------------------------------------------
             // Shutdown (QEMU)
             // --------------------------------------------------------------------
@@ -548,7 +548,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             // TODO: Get shutdown command for bochs, user can uncomment which one they want to use
         }
 
-        if (strncmp(argv[0], cmdDelFile, strlen(cmdDelFile)) == 0) {
+        if (strncmp(argv[0], cmdDelFile, strlen(argv[0])) == 0) {
             // TODO: Fix deleting erasing filetable from "dir" command until reboot
             // --------------------------------------------------------------------
             // Delete a file from the disk
@@ -567,7 +567,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         }
 
         // Print memory map command
-        if (strncmp(argv[0], cmdPrtmemmap, strlen(cmdPrtmemmap)) == 0) {
+        if (strncmp(argv[0], cmdPrtmemmap, strlen(argv[0])) == 0) {
             // Print out physical memory map info
             printf("\r\n-------------------\r\nPhysical Memory Map"
                    "\r\n-------------------\r\n\r\n");
@@ -577,7 +577,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
 
         // Change colors command
         // TODO: Change to use terminal control codes to change FG/BG color when debugged
-        if (strncmp(argv[0], cmdChgColors, strlen(cmdChgColors)) == 0) {
+        if (strncmp(argv[0], cmdChgColors, strlen(argv[0])) == 0) {
             uint32_t fg_color = 0;
             uint32_t bg_color = 0;
 
@@ -635,7 +635,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         }
 
         // Change font command; Usage: chgFont <name of font>
-        if (strncmp(argv[0], cmdChgFont, strlen(cmdChgFont)) == 0) {
+        if (strncmp(argv[0], cmdChgFont, strlen(argv[0])) == 0) {
             // First check if font exists - name is 2nd token
             file_ptr = check_filename(argv[1], strlen(argv[1]));
             if (*file_ptr == 0) {  
@@ -667,7 +667,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         }
 
         // Sleep command - sleep for given number of seconds
-        if (strncmp(argv[0], cmdSleep, strlen(cmdSleep)) == 0) {
+        if (strncmp(argv[0], cmdSleep, strlen(argv[0])) == 0) {
             sleep_seconds(atoi(argv[1]));  
 
             printf("\r\n");
@@ -675,7 +675,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         }
 
         // MSleep command - sleep for given number of milliseconds
-        if (strncmp(argv[0], cmdMSleep, strlen(cmdMSleep)) == 0) {
+        if (strncmp(argv[0], cmdMSleep, strlen(argv[0])) == 0) {
             sleep_milliseconds(atoi(argv[1]));
 
             printf("\r\n");
@@ -683,7 +683,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         }
 
         // Show CMOS RTC date/time values
-        if (strncmp(argv[0], cmdShowDateTime, strlen(cmdShowDateTime)) == 0) {
+        if (strncmp(argv[0], cmdShowDateTime, strlen(argv[0])) == 0) {
             fs_datetime_t now = current_timestamp();
             printf("\r\n%d-%d-%d %d:%d:%d\r\n",
                     now.year, now.month, now.day, now.hour, now.minute, now.second);
@@ -691,7 +691,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         }
 
         // Test Sound
-        if (strncmp(argv[0], cmdSoundTest, strlen(cmdSoundTest)) == 0) {
+        if (strncmp(argv[0], cmdSoundTest, strlen(argv[0])) == 0) {
             enable_pc_speaker();
 
             /* ADD SOUND THINGS HERE */
@@ -710,7 +710,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         }
 
         // Type out a file to screen
-        if (strncmp(argv[0], cmdType, strlen(cmdType)) == 0) {
+        if (strncmp(argv[0], cmdType, strlen(argv[0])) == 0) {
             // Check if text file
             if (strncmp(argv[1] + strlen(argv[1]) - 4, ".txt", 4) != 0) {
                 printf("\r\nError: File %s is not a text file\r\n", argv[1]);
