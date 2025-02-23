@@ -13,8 +13,6 @@
 #include "C/stdbool.h"
 #include "sys/syscall_wrappers.h" 
 #include "gfx/2d_gfx.h"
-#include "screen/cursor.h"
-#include "screen/clear_screen.h"
 #include "keyboard/keyboard.h"
 
 void parse_buffer(void);    // Function declarations
@@ -28,19 +26,17 @@ int8_t match_char(uint8_t in_char);
 
 // TODO: Change how ERRORs are handled and percolated back up through function calls
 //   because getting a -1 result will print Syntax Error regardless - BUG
-const int8_t  ERROR = -1;
-const uint8_t TRUE  = 1;
-const uint8_t FALSE = 0;
+const int8_t ERROR = -1;
 
-uint8_t buffer[80];
-uint16_t scan;
+char buffer[80];
+uint32_t scan;
 int32_t parse_num = 0;
 bool interactive = false;
 
 //__attribute__ ((section ("calc_entry"))) int32_t calc_main(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
-    uint8_t input_char;
-    const uint8_t valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
+    char input_char;
+    const char valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
     uint8_t idx;
     key_info_t *key_info = (key_info_t *)KEY_INFO_ADDRESS;
 
@@ -74,10 +70,11 @@ int main(int argc, char *argv[]) {
 
         input_char = get_key();
 
-        for (idx = 0; idx < 20 && valid_input[idx] != input_char; idx++) ;
+        // TODO: Use "strcspn" to check against valid_input string instead?
+        for (idx = 0; idx < 20 && valid_input[idx] != input_char; idx++) 
+            ;
 
-        if (idx == 20)  // Not valid input character
-            continue;
+        if (idx == 20) continue;    // Invalid input character
 
         // Enter key with some input or buffer is full
         if ((input_char == '\r' && scan > 0) || scan == 80) {    
@@ -86,9 +83,7 @@ int main(int argc, char *argv[]) {
             scan = 0;
 
             // Clear buffer for next line of input
-            for (uint8_t i = 0; i < 80; i++) 
-                buffer[i] = 0;
-
+            memset(buffer, 0, sizeof buffer); 
             continue;
         }
 
@@ -117,9 +112,7 @@ void parse_buffer(void)
         printf("\r\n%d", num);
     }
 
-    if (interactive) { 
-        printf("\r\n");
-    }
+    if (interactive) printf("\r\n");
 }
 
 int32_t parse_sum(void)
@@ -128,7 +121,7 @@ int32_t parse_sum(void)
 
 	if ((num = parse_product()) == ERROR) return ERROR;
 
-	while (TRUE) {
+	while (true) {
 		skip_blanks();
 
 		if (match_char('+')) {
@@ -151,7 +144,7 @@ int32_t parse_product(void)
 
     if ((num = parse_term()) == ERROR) return ERROR;
 
-	while (TRUE) {
+	while (true) {
 		skip_blanks();
 
 		if (match_char('*')) {
@@ -212,16 +205,16 @@ int8_t is_digit(int32_t *num)
     if (buffer[scan] >= '0' && buffer[scan] <= '9') {
         *num = (*num * 10) + (buffer[scan] - '0');
         scan++;
-        return TRUE;
+        return true;
 
-    } else return FALSE;
+    } else return false;
 }
 
 int8_t match_char(uint8_t in_char)
 {
     if (in_char == buffer[scan]) {
         scan++;
-        return TRUE;
+        return true;
 
-    } else return FALSE;
+    } else return false;
 }

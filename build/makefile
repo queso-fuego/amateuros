@@ -31,28 +31,32 @@ USR_SRCS != ls $(PGM_DIR)/*.c
 FONT_PGM ::= $(FONT_DIR)/bdf_to_asm.bin
 DISK_PGM ::= make_disk.bin
 
+UTILS    ::= $(FONT_PGM) $(DISK_PGM)
+
 ASM_BINS ::= $(ASM_SRCS:$(SRC_DIR)%.asm=$(BIN_DIR)%.bin)
 SYS_BINS ::= $(SYS_SRCS:$(SRC_DIR)%.c=$(BIN_DIR)%.bin)
 USR_BINS ::= $(USR_SRCS:$(PGM_DIR)%.c=$(BIN_DIR)%.bin)
 
 ALL_BINS ::= $(ASM_BINS) $(SYS_BINS) $(USR_BINS)
 
+OS       ::= $(BIN_DIR)/OS.bin
+
 # Make final OS.bin binary 
-all: $(FONT_PGM) $(DISK_PGM) make_dirs $(ALL_BINS)
+all: $(UTILS) make_dirs $(ALL_BINS) $(OS)
 
 # If any programs/binaries changed, recreate disk image
-$(DISK_PGM): $(ALL_BINS)
+$(OS): $(ALL_BINS)
 	./$(DISK_PGM)
 
-# Make program(s) to convert fonts
-$(FONT_DIR)/%.bin: $(FONT_DIR)/%.c
-	$(CC) -std=c17 -Wall -Wextra -Wpedantic $< -o $@ 
-
-# Make any programs needed in this directory (disk image program, etc.)
+# Create any programs needed in this directory like make_disk, etc.
 ./%.bin: ./%.c
-	$(CC) -std=c17 -Wall -Wextra -Wpedantic $< -o $@ -I../include	
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -o $@ -I../include $<
 
-# Create OS filesystem directories
+# Make program to convert fonts
+$(FONT_DIR)/%.bin: $(FONT_DIR)/%.c
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic -o $@ $<
+
+# Create OS filesystem directories if they don't exist yet
 make_dirs: $(FS_BIN_DIR)
 
 $(FS_BIN_DIR):
@@ -68,7 +72,7 @@ $(BIN_DIR)/%.bin: $(SRC_DIR)/%.asm
 	@nasm -f bin -o $@ $< 1>/dev/null; \
 	size=$$(($$(wc -c < $@))); \
 	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors)";
-	cp $@ $(FS_BIN_DIR)
+	@cp $@ $(FS_BIN_DIR)
 
 # Compile user program C source files into PIE executable files, and pad out their size to next 512 byte sector 
 $(BIN_DIR)/%.bin: $(PGM_DIR)/%.c 
@@ -79,7 +83,7 @@ $(BIN_DIR)/%.bin: $(PGM_DIR)/%.c
 	newsize=$$((size - $$((size % 512)) + 512));\
 	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors) ->" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
 	dd if=/dev/zero of=$@ bs=1 seek=$$size count=$$((newsize - size)) status=none;
-	cp $@ $(FS_BIN_DIR)
+	@cp $@ $(FS_BIN_DIR)
 
 # Compile system C source files into binary files, and pad out their size to next 512 byte sector 
 $(BIN_DIR)/%.bin: $(SRC_DIR)/%.c 
@@ -90,7 +94,7 @@ $(BIN_DIR)/%.bin: $(SRC_DIR)/%.c
 	newsize=$$((size - $$((size % 512)) + 512));\
 	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors) ->" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
 	dd if=/dev/zero of=$@ bs=1 seek=$$size count=$$((newsize - size)) status=none;
-	cp $@ $(FS_BIN_DIR)
+	@cp $@ $(FS_BIN_DIR)
 
 # Launch OS with qemu 
 # NOTE: Remove driftfix=slew if not needed

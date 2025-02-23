@@ -1,6 +1,7 @@
 /*
  * build/make_disk.c: Build disk image for filesystem & OS
  */
+#define _DEFAULT_SOURCE // DT_DIR & DT_REG definitions for dirent->d_type
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -433,7 +434,7 @@ bool write_inode_and_data_blocks() {
 // M A I N
 // ============================================
 // TODO: Pass in user input disk size? Or default value from makefile, don't hardcode 1.44MB
-int main(int argc, char *argv[]) {
+int main(void) {
     // Get pointer to output image
     IMAGE_PTR = fopen(IMAGE_NAME, "wb");
 
