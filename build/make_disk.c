@@ -33,7 +33,6 @@ const uint32_t BOOTLOADER_INODE_ID = 2;
 // =============================================================
 uint32_t num_padding_bytes(const uint32_t bytes, const uint32_t boundary) {
     if (bytes % boundary == 0) return 0;
-
     return (bytes - (bytes % boundary) + boundary) - bytes;
 }
 
@@ -76,7 +75,6 @@ bool write_boot_block(void) {
 
     // Write boot block to disk image
     assert(fwrite(&boot_block, FS_BLOCK_SIZE, 1, IMAGE_PTR) == 1);
-
     return true;
 }
 
@@ -118,9 +116,8 @@ bool write_superblock(void) {
 
     assert(fwrite(&superblock, sizeof(superblock_t), 1, IMAGE_PTR) == 1);
 
-    //   Pad out to end of block
+    // Pad out to end of block
     assert(fwrite(&null_block, num_padding_bytes(sizeof(superblock_t), FS_BLOCK_SIZE), 1, IMAGE_PTR) == 1);
-
     return true;
 }
 
@@ -150,7 +147,6 @@ bool write_inode_bitmap_blocks(void) {
 
     // Pad out to end of block
     assert(fwrite(null_block, num_padding_bytes(bytes_written, FS_BLOCK_SIZE), 1, IMAGE_PTR) == 1);
-
     return true;
 }
 
@@ -180,7 +176,6 @@ bool write_data_bitmap_blocks(void) {
 
     // Pad out to end of block
     assert(fwrite(null_block, num_padding_bytes(bytes_written, FS_BLOCK_SIZE), 1, IMAGE_PTR) == 1);
-
     return true;
 }
 
@@ -237,7 +232,6 @@ bool get_file_info(char *dir_path) {
 
     // Get size for this directory in blocks
     file_blocks += bytes_to_blocks(dir_entries * sizeof(dir_entry_t));
-
     return true;
 }
 
@@ -348,10 +342,10 @@ bool write_file_data(char *dir_path, uint32_t curr_inode_id, uint32_t parent_ino
             file_inode.last_modified_timestamp = (fs_datetime_t){
                 .second = 0,
                 .minute = 37,
-                .hour = 13,
-                .day = 20,
-                .month = 4,
-                .year = 2023,
+                .hour   = 13,
+                .day    = 20,
+                .month  = 4,
+                .year   = 2025,
             };
             file_inode.extent[0] = (extent_t){
                 .first_block = first_block,
@@ -411,7 +405,6 @@ bool write_file_data(char *dir_path, uint32_t curr_inode_id, uint32_t parent_ino
 
     printf("Wrote dir %s, %u (%u dir entries + 2, %u blocks)\n", 
            dir_path, dir_size, (dir_size / (uint32_t)sizeof(dir_entry_t))-2, bytes_to_blocks(dir_size));
-
     return true;
 }
 
@@ -433,7 +426,6 @@ bool write_inode_and_data_blocks() {
 
     for (uint32_t i = 0; i < diff; i++)
       assert(fwrite(null_block, FS_BLOCK_SIZE, 1, IMAGE_PTR) == 1);
-
     return true;
 }
 

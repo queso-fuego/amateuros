@@ -64,8 +64,20 @@ __attribute__ ((interrupt)) void default_int_handler(int_frame_32_t *int_frame_3
     print_string(&x, &y, "DEFAULT INTERRUPT HANDLER");
 }
 
-// Add an ISR to the IDT
-void set_idt_descriptor_32(uint8_t entry_number, void *isr, uint8_t flags)
+// Add an ISR to the IDT: no error code
+void set_idt_descriptor_no_err_32(uint8_t entry_number, void (*isr)(int_frame_32_t *), uint8_t flags)
+{
+    idt_entry_32_t *descriptor = &idt32[entry_number];
+
+    descriptor->isr_address_low  = (uint32_t)isr & 0xFFFF;  // Low 16 bits of ISR address 
+    descriptor->kernel_cs        = 0x08;                    // Kernel code segment containing this isr
+    descriptor->reserved         = 0;                       // Reserved, must be set to 0
+    descriptor->attributes       = flags;                   // Type & attributes (INT_GATE, TRAP_GATE, etc.)
+    descriptor->isr_address_high = ((uint32_t)isr >> 16) & 0xFFFF;  // High 16 bits of ISR address 
+}
+
+// Add an ISR to the IDT: including error code
+void set_idt_descriptor_err_32(uint8_t entry_number, void (*isr)(int_frame_32_t *, uint32_t), uint8_t flags)
 {
     idt_entry_32_t *descriptor = &idt32[entry_number];
 
@@ -87,16 +99,16 @@ void init_idt_32(void)
         if (entry == 8  || entry == 10 || entry == 11 || entry == 12 || 
             entry == 13 || entry == 14 || entry == 17 || entry == 21) {
             // Exception takes an error code
-            set_idt_descriptor_32(entry, default_excp_handler_err_code, TRAP_GATE_FLAGS);
+            set_idt_descriptor_err_32(entry, default_excp_handler_err_code, TRAP_GATE_FLAGS);
         } else {
             // Exception does not take an error code
-            set_idt_descriptor_32(entry, default_excp_handler, TRAP_GATE_FLAGS);
+            set_idt_descriptor_no_err_32(entry, default_excp_handler, TRAP_GATE_FLAGS);
         }
     }
 
     // Set up regular interrupts (ISRs 32-255)
     for (uint16_t entry = 32; entry < 256; entry++) {
-        set_idt_descriptor_32(entry, default_int_handler, INT_GATE_FLAGS);
+        set_idt_descriptor_no_err_32(entry, default_int_handler, INT_GATE_FLAGS);
     }
 
     __asm__ __volatile__ ("lidt %0" : : "memory"(idtr32)); // Load IDT to IDT register

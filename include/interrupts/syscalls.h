@@ -520,7 +520,7 @@ int32_t (*syscalls[MAX_SYSCALLS])(syscall_regs_t) = {
 
 // Syscall dispatcher
 // naked attribute means no function prologue/epilogue, and only allows inline asm
-__attribute__ ((naked)) void syscall_dispatcher(void) {
+__attribute__ ((naked)) void syscall_dispatcher(__attribute__((unused)) int_frame_32_t *frame) {
     // "basic" syscall handler, push everything we want to save, call the syscall by
     //   offsetting into syscalls table with value in eax, then pop everything back 
     //   and return using "iret" (d/q), NOT regualar "ret" as this is technically

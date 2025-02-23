@@ -106,14 +106,14 @@ static uint32_t sixteenth_note_duration = 0;
 static uint32_t thirty2nd_note_duration = 0;
 
 // Enable PC Speaker
-void enable_pc_speaker() 
+void enable_pc_speaker(void) 
 {
     uint8_t temp = inb(PC_SPEAKER_PORT);
     outb(PC_SPEAKER_PORT, temp | 3);  // Set first 2 bits to turn on speaker
 }
 
 // Disable PC Speaker
-void disable_pc_speaker() 
+void disable_pc_speaker(void) 
 {
     uint8_t temp = inb(PC_SPEAKER_PORT);
     outb(PC_SPEAKER_PORT, temp & 0xFC);  // Clear first 2 bits to turn off speaker

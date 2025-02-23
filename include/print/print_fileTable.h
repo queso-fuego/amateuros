@@ -8,7 +8,7 @@
 
 #include "C/stdio.h"
 
-void print_fileTable()
+void print_fileTable(void)
 {
     uint8_t *fileTable_name = "fileTable ";
     uint8_t *filetable_ptr;

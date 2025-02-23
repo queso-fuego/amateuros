@@ -136,11 +136,11 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     init_idt_32();  
 
     // Set up exception handlers (ISRs 0-31)
-    set_idt_descriptor_32(0, div_by_0_handler, TRAP_GATE_FLAGS); // Divide by 0 error #DE, ISR 0
-    set_idt_descriptor_32(14, page_fault_handler, TRAP_GATE_FLAGS); // Page fault #PF errors, ISR 14
+    set_idt_descriptor_no_err_32(0, div_by_0_handler, TRAP_GATE_FLAGS); // Divide by 0 error #DE, ISR 0
+    set_idt_descriptor_err_32(14, page_fault_handler, TRAP_GATE_FLAGS); // Page fault #PF errors, ISR 14
     
     // Set up software interrupts
-    set_idt_descriptor_32(0x80, syscall_dispatcher, INT_GATE_USER_FLAGS);  // System call handler/dispatcher
+    set_idt_descriptor_no_err_32(0x80, syscall_dispatcher, INT_GATE_USER_FLAGS);  // System call handler/dispatcher
 
     // Mask off all hardware interrupts (disable the PIC)
     disable_pic();
@@ -149,9 +149,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     remap_pic();
 
     // Add ISRs for PIC hardware interrupts
-    set_idt_descriptor_32(0x20, timer_irq0_handler, INT_GATE_FLAGS);  
-    set_idt_descriptor_32(0x21, keyboard_irq1_handler, INT_GATE_FLAGS);
-    set_idt_descriptor_32(0x28, cmos_rtc_irq8_handler, INT_GATE_FLAGS);
+    set_idt_descriptor_no_err_32(0x20, timer_irq0_handler, INT_GATE_FLAGS);  
+    set_idt_descriptor_no_err_32(0x21, keyboard_irq1_handler, INT_GATE_FLAGS);
+    set_idt_descriptor_no_err_32(0x28, cmos_rtc_irq8_handler, INT_GATE_FLAGS);
     
     // Clear out PS/2 keyboard buffer: check status register and read from data port
     //   until clear
@@ -205,12 +205,12 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     // Set intial colors
     while (!user_gfx_info->fg_color) {
         if (gfx_mode->bits_per_pixel > 8) {
-            printf("\eFG%xBG%x;", convert_color(0x00EEEEEE), convert_color(0x00222222)); 
+            printf("\033FG%xBG%x;", convert_color(0x00EEEEEE), convert_color(0x00222222)); 
             user_gfx_info->fg_color = convert_color(0x00EEEEEE);
             user_gfx_info->bg_color = convert_color(0x00222222);
         } else {
             // Assuming VGA palette
-            printf("\eFG%xBG%x;", convert_color(0x02), convert_color(0x00)); 
+            printf("\033FG%xBG%x;", convert_color(0x02), convert_color(0x00)); 
             user_gfx_info->fg_color = convert_color(0x02);
             user_gfx_info->bg_color = convert_color(0x00);
         }
@@ -220,7 +220,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     clear_screen_esc();
 
     // Print OS boot message
-    printf("\eCSROFF;%s", menuString);
+    printf("\033CSROFF;%s", menuString);
 
     // --------------------------------------------------------------------
     // Get user input, print to screen & run command/program  
@@ -239,7 +239,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             input_char = get_key();     // Get ascii char from scancode from keyboard data port 60h
 
             if (input_char == '\r') {   // enter key?
-                printf("\eCSROFF; ");   // TODO: Add automatic newline here after prompt
+                printf("\033CSROFF; ");   // TODO: Add automatic newline here after prompt
                 break;                  // go on to tokenize user input line
             }
 
@@ -250,7 +250,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
                     cmdString[input_length] = '\0';    // Blank out character    					
 
                     // Do a "visual" backspace; Move cursor back 1 space, print 2 spaces, move back 2 spaces
-                    printf("\eBS;  \eBS;\eBS;");
+                    printf("\033BS;  \033BS;\033BS;");
                 }
 
                 continue;   // Get next character
@@ -581,7 +581,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             uint32_t fg_color = 0;
             uint32_t bg_color = 0;
 
-            printf("\eCSROFF;\r\nCurrent colors (32bpp ARGB):");
+            printf("\033CSROFF;\r\nCurrent colors (32bpp ARGB):");
             printf("\r\nForeground: %x", user_gfx_info->fg_color);
             printf("\r\nBackground: %x", user_gfx_info->bg_color);
 
@@ -591,7 +591,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             else
                 printf("\r\nNew Foregound (0xNN): 0x");
 
-            printf("\eCSRON;");
+            printf("\033CSRON;");
 
             while ((input_char = get_key()) != '\r') {
                 if (input_char >= 'a' && input_char <= 'f') input_char -= 0x20; // Convert lowercase to Uppercase
@@ -603,7 +603,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
                 else if (input_char >= 'A' && input_char <= 'F') fg_color += (input_char - 'A') + 10;   // Convert hex ascii 10-15 to integer
             }
 
-            printf("\eCSROFF;");
+            printf("\033CSROFF;");
 
             // Background color
             if (gfx_mode->bits_per_pixel > 8)
@@ -611,7 +611,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             else
                 printf("\r\nNew Backgound (0xNN): 0x");
 
-            printf("\eCSRON;");
+            printf("\033CSRON;");
 
             while ((input_char = get_key()) != '\r') {
                 if (input_char >= 'a' && input_char <= 'f') input_char -= 0x20; // Convert lowercase to Uppercase
@@ -624,9 +624,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
                 else if (input_char >= 'A' && input_char <= 'F') bg_color += (input_char - 'A') + 10;   // Convert hex ascii 10-15 to integer
             }
 
-            printf("\eCSROFF;");
+            printf("\033CSROFF;");
 
-            printf("\eFG%xBG%x;", convert_color(fg_color), convert_color(bg_color));
+            printf("\033FG%xBG%x;", convert_color(fg_color), convert_color(bg_color));
             user_gfx_info->fg_color = convert_color(fg_color);  // Convert colors first before setting new values
             user_gfx_info->bg_color = convert_color(bg_color);
 
@@ -769,7 +769,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         // Determine what type of executable this is
         uint8_t *magic = (uint8_t *)open_file_table[fd].address;
 
-        int32_t (*program)(int argc, char *argv[]); 
+        typedef int32_t program(int argc, char *argv[]); 
         int32_t return_code = 0;
 
         // Save current kernel malloc values
@@ -816,8 +816,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         // Run the executable
         printf("Entry point: %x\r\n", (uint32_t)entry_point);
 
-        program = (int32_t (*)(int, char**))entry_point;
-        return_code = program(argc, argv);
+        program *pgm = NULL;
+        *(void **)&pgm = entry_point;
+        return_code = pgm(argc, argv);
 
         printf("Return Code: %d\r\n", return_code);
 

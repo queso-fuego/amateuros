@@ -1,64 +1,98 @@
-#-----------------------------------------
+.POSIX:
+#-----------------------------------------------------
 # MakeFile should be in <OS>/build/ folder
-#-----------------------------------------
-# Make variables
-CC = gcc
-#CC = clang
+# NOTE: Needs gnu make (e.g. gmake) for pattern rules
+#   and support for posix style ::= macros
+#-----------------------------------------------------
+# C files setup
+CC ::= gcc
+#CC ::= clang
 
-# TODO: Add flag -Wshadow to check for shadowed variables
-# TODO: Add -pedantic or -Wpedantic for extra warnings for non C std compliance
-CFLAGS = -std=c17 -m32 -march=i386 -mgeneral-regs-only -ffreestanding -fno-stack-protector \
-	-fno-builtin -nostdinc -fno-pie \
-	-Wall -Wextra -Wno-pointer-sign -Wno-interrupt-service-routine -I../include/
+CFLAGS ::= -std=c17 -m32 -march=i386 -mgeneral-regs-only \
+		 -ffreestanding -fno-stack-protector -fno-builtin \
+	     -Wall -Wextra -Wpedantic -Wshadow -Wno-pointer-sign \
+		 -nostdinc -I../include/
 
-EXE_CFLAGS = -std=c17 -m32 -march=i386 -mgeneral-regs-only -ffreestanding -fno-stack-protector \
-	-fno-builtin -nostdinc -fPIE \
-	-Wall -Wextra -Wno-pointer-sign -Wno-interrupt-service-routine -I../include/
-	
-SRCDIR = ../src/
-BINDIR = ../bin/
-FONTDIR = ../src/fonts/
-C_FILES != find $(SRCDIR) -maxdepth 1 -name "*.c" ! -name "calculator.c" ! -name "editor.c" -exec basename -s ".c" {} \;
-EXES = calculator editor
-FONTS_BDF != find $(FONTDIR) -name "*.bdf" -exec basename -s ".bdf" {} \;
+# Directories
+SRC_DIR    ::= ../src
+BIN_DIR    ::= ../bin
+PGM_DIR    ::= $(SRC_DIR)/pgms
+FONT_DIR   ::= $(SRC_DIR)/fonts
+FS_BIN_DIR ::= $(BIN_DIR)/fs_root/sys/bin
 
-# Make final OS.bin binary - padding out to full 1.44MB "floppy" img
-OS: $(FONTS_BDF) asm_files $(C_FILES) $(EXES)
-	@mkdir -p $(BINDIR)fs_root/sys/bin
-	@mv $(BINDIR)[!OS]*.bin $(BINDIR)fs_root/sys/bin
-	@$(CC) ./make_disk.c -o ./make_disk.bin -I../include	
-	@./make_disk.bin
+# Source files
+FONTS    != ls $(FONT_DIR)/*.bdf
+ASM_SRCS != ls $(SRC_DIR)/*.asm
+ASM_SRCS += $(FONTS:$(FONT_DIR)%.bdf=$(SRC_DIR)%.asm)  # Fonts will be converted to .asm files 
+SYS_SRCS != ls $(SRC_DIR)/*.c
+USR_SRCS != ls $(PGM_DIR)/*.c
 
-# Assemble assembly source files into binary files,
-#   as fonts or other targets can make additional .asm files, need to process at runtime
-asm_files: 
-	@for file in `find $(SRCDIR) -maxdepth 1 -name "*.asm" -exec basename -s ".asm" {} \;`; do \
-		nasm -f bin -o $(BINDIR)$$file.bin $(SRCDIR)$$file.asm 1>/dev/null;\
-		size=$$(($$(wc -c < $(BINDIR)$$file.bin)));\
-		echo "$$file" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors)";\
-	done
+# Binaries/programs/build targets
+FONT_PGM ::= $(FONT_DIR)/bdf_to_asm.bin
+DISK_PGM ::= make_disk.bin
 
-# Compile C source files into PIE executable files, and pad out their size to next 512 byte sector 
-$(EXES):
-	@$(CC) -c $(EXE_CFLAGS) -o $@.o $(SRCDIR)$@.c
-	@ld -melf_i386 -e main -pie $@.o -o $(BINDIR)$@.bin
-	@rm -f $@.o
-	@size=$$(($$(wc -c < $(BINDIR)$@.bin)));\
+ASM_BINS ::= $(ASM_SRCS:$(SRC_DIR)%.asm=$(BIN_DIR)%.bin)
+SYS_BINS ::= $(SYS_SRCS:$(SRC_DIR)%.c=$(BIN_DIR)%.bin)
+USR_BINS ::= $(USR_SRCS:$(PGM_DIR)%.c=$(BIN_DIR)%.bin)
+
+ALL_BINS ::= $(ASM_BINS) $(SYS_BINS) $(USR_BINS)
+
+# Make final OS.bin binary 
+all: $(FONT_PGM) $(DISK_PGM) make_dirs $(ALL_BINS)
+
+# If any programs/binaries changed, recreate disk image
+$(DISK_PGM): $(ALL_BINS)
+	./$(DISK_PGM)
+
+# Make program(s) to convert fonts
+$(FONT_DIR)/%.bin: $(FONT_DIR)/%.c
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic $< -o $@ 
+
+# Make any programs needed in this directory (disk image program, etc.)
+./%.bin: ./%.c
+	$(CC) -std=c17 -Wall -Wextra -Wpedantic $< -o $@ -I../include	
+
+# Create OS filesystem directories
+make_dirs: $(FS_BIN_DIR)
+
+$(FS_BIN_DIR):
+	mkdir -p $@
+
+# Convert .bdf fonts to custom OS .asm files
+$(SRC_DIR)/%.asm: $(FONT_DIR)/%.bdf
+	$(FONT_PGM) $<
+	mv $(FONT_DIR)/$(<:.bdf=.asm) $@
+
+# Assemble .asm files into .bin binaries
+$(BIN_DIR)/%.bin: $(SRC_DIR)/%.asm 
+	@nasm -f bin -o $@ $< 1>/dev/null; \
+	size=$$(($$(wc -c < $@))); \
+	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors)";
+	cp $@ $(FS_BIN_DIR)
+
+# Compile user program C source files into PIE executable files, and pad out their size to next 512 byte sector 
+$(BIN_DIR)/%.bin: $(PGM_DIR)/%.c 
+	@$(CC) -c $(CFLAGS) -fPIE -o $*.o $<
+	@ld -melf_i386 -e main -pie $*.o -o $@
+	@rm -f $*.o
+	@size=$$(($$(wc -c < $@)));\
 	newsize=$$((size - $$((size % 512)) + 512));\
 	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors) ->" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
-	dd if=/dev/zero of=$(BINDIR)$@.bin bs=1 seek=$$size count=$$((newsize - size)) status=none;
+	dd if=/dev/zero of=$@ bs=1 seek=$$size count=$$((newsize - size)) status=none;
+	cp $@ $(FS_BIN_DIR)
 
-# Compile C source files into binary files, and pad out their size to next 512 byte sector 
-$(C_FILES):
-	@$(CC) -c $(CFLAGS) -o $@.o $(SRCDIR)$@.c
-	@ld -melf_i386 -T$@.ld $@.o --oformat binary -o $(BINDIR)$@.bin
-	@rm -f $@.o
-	@size=$$(($$(wc -c < $(BINDIR)$@.bin)));\
+# Compile system C source files into binary files, and pad out their size to next 512 byte sector 
+$(BIN_DIR)/%.bin: $(SRC_DIR)/%.c 
+	@$(CC) -c $(CFLAGS) -fno-pie -o $*.o $<
+	@ld -melf_i386 -T$*.ld $*.o --oformat binary -o $@
+	@rm -f $*.o
+	@size=$$(($$(wc -c < $@)));\
 	newsize=$$((size - $$((size % 512)) + 512));\
 	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors) ->" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
-	dd if=/dev/zero of=$(BINDIR)$@.bin bs=1 seek=$$size count=$$((newsize - size)) status=none;
+	dd if=/dev/zero of=$@ bs=1 seek=$$size count=$$((newsize - size)) status=none;
+	cp $@ $(FS_BIN_DIR)
 
-# Launch OS through qemu 
+# Launch OS with qemu 
 # NOTE: Remove driftfix=slew if not needed
 # NOTE: -enable-kvm makes RTC and disk accesses slow for me, but can be better accuracy
 # NOTE: Change or remove audiodev and related audio lines depending on platform and sound setup
@@ -66,25 +100,16 @@ run:
 	qemu-system-i386 \
 	-monitor stdio \
 	-m 128M \
-	-drive format=raw,file=$(BINDIR)OS.bin,if=ide,index=0,media=disk \
+	-drive format=raw,file=$(BIN_DIR)/OS.bin,if=ide,index=0,media=disk \
 	-rtc base=localtime,clock=host,driftfix=slew \
 	-audiodev id=alsa,driver=alsa \
 	-machine pcspk-audiodev=alsa
 	#-enable-kvm \
 
-# Launch OS through bochs
+# Launch OS with bochs
 bochs:
-	bochs -qf $(BINDIR).bochsrc
+	bochs -qf $(BIN_DIR).bochsrc
 
 clean:
-	rm -f $(BINDIR)*.bin ./*.o 
-
-# Make program to convert fonts
-make_font_pgm:
-	@make -C $(FONTDIR) 1>/dev/null
-
-# Convert bdf fonts to OS asm font files
-$(FONTS_BDF): make_font_pgm
-	@$(FONTDIR)bdf_to_asm.bin $(FONTDIR)$@.bdf
-	@mv $(FONTDIR)$@.asm $(SRCDIR)
+	rm -f $(BIN_DIR)/*.bin ./*.o 
 

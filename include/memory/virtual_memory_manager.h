@@ -146,17 +146,13 @@ bool map_page(void *phys_address, void *virt_address)
     // Get page table
     pd_entry *entry = &pd->entries[PD_INDEX((uint32_t)virt_address)];
 
-    // TODO: Use TEST_ATTRIBUTE for this check?
-    if ((*entry & PTE_PRESENT) != PTE_PRESENT) {
+    if ((*entry & PDE_PRESENT) != PDE_PRESENT) {
         // Page table not present allocate it
         page_table *table = (page_table *)allocate_blocks(1);
         if (!table) return false;   // Out of memory
 
         // Clear page table
         memset(table, 0, sizeof(page_table));
-
-        // Create new entry
-        pd_entry *entry = &pd->entries[PD_INDEX((uint32_t)virt_address)];
 
         // Map in the table & enable attributes
         SET_ATTRIBUTE(entry, PDE_PRESENT);

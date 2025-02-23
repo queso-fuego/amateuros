@@ -161,16 +161,17 @@ void *memcpy32(void *dst, const void *src, const uint32_t len) {
 // that differ in s1 and s2.
 //
 // If n is zero, the return value is zero.
-int32_t memcmp(const void *s1, const void *s2, uint32_t len) {
+int32_t memcmp(void *s1, void *s2, uint32_t len) {
     if (len == 0) return 0;
 
-    while (len > 0 && *(uint8_t *)s1 == *(uint8_t *)s2) {
-        s1++;
-        s2++;
+    uint8_t *a = s1, *b = s2;
+    while (len > 0 && *a == *b) {
+        a++;
+        b++;
         len--;
     }
 
-    return *(uint8_t *)s1 - *(uint8_t *)s2;
+    return *a - *b;
 }
 
 

@@ -22,5 +22,5 @@ void clear_screen(uint32_t color)
 
 void clear_screen_esc(void)
 {
-    write(1, "\eCLS;", 5);
+    write(1, "\033CLS;", 5);
 }

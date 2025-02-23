@@ -52,7 +52,7 @@ void malloc_init(const uint32_t bytes)
 //   the size of the difference of original block and requested size
 void malloc_split(malloc_block_t *node, const uint32_t size)
 {
-    malloc_block_t *new_node = (malloc_block_t *)((void *)node + size + sizeof(malloc_block_t));
+    malloc_block_t *new_node = (malloc_block_t *)((char *)node + size + sizeof(malloc_block_t));
 
     new_node->size = node->size - size - sizeof(malloc_block_t);
     new_node->free = true;
@@ -113,7 +113,7 @@ void *malloc_next_block(const uint32_t size)
         
     // Return node pointing to requested bytes, casted to void * to remove pointer
     //   arithmetic
-    return (void *)cur + sizeof(malloc_block_t);
+    return (char *)cur + sizeof(malloc_block_t);
 }
 
 // Merge consecutive free list nodes to prevent (some) memory fragmentation
@@ -133,7 +133,7 @@ void merge_free_blocks(void)
 void malloc_free(void *ptr)
 {
     for (malloc_block_t *cur = malloc_list_head; cur->next; cur = cur->next) 
-        if ((void *)cur + sizeof(malloc_block_t) == ptr) {
+        if ((char *)cur + sizeof(malloc_block_t) == ptr) {
             cur->free = true;
             merge_free_blocks();
             break;

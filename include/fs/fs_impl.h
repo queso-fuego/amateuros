@@ -531,7 +531,7 @@ done:
     update_superblock();
     
     return new_inode;
-};
+}
 
 // Read a given directory's file data, and print to screen
 bool print_dir(const char *path) {

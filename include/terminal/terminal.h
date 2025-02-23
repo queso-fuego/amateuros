@@ -67,7 +67,7 @@ int32_t terminal_write(void *buf, const uint32_t len)
                // Clear screen to background color, and set cursor X/Y position to 0 
                framebuffer = (uint8_t *)gfx_mode->physical_base_pointer;
 
-                for (uint32_t i = 0; i < gfx_mode->x_resolution * gfx_mode->y_resolution; i++) {
+                for (uint32_t j = 0; j < gfx_mode->x_resolution * gfx_mode->y_resolution; j++) {
                     if (bytes_per_pixel > 2) {
                         *((uint32_t *)framebuffer) = user_gfx_info->bg_color;
                     } else if (bytes_per_pixel == 2) {
