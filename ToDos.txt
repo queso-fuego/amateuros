@@ -41,17 +41,18 @@ Shorter Term / Next Up
 [ ] Add PATH "environment variable" or equivalent. Probably semicolon 
     delimited? 
     [ ] Read all directories in PATH or equivalent to check for input 
-        command/program, in each one, stop if found input command/program, 
-        and execute it.
+        command/program, stop at earliest found input command/program, 
+        execute it, then exit.
 
 ! [ ] Fix/refactor editor, using new system calls for open(), read(), write(), etc. for files, 
-    printf() for printing, and redo/simplify in general. It will NOT use the old file table system.
-	Could also try to change it to be more of a modal editor, line oriented editor, use terminal
+    printf() for printing, and redo/simplify in general. 
+    It will NOT use the old flat file table system.
+	Could also try to make it more of a modal editor or line oriented editor, use terminal
     escape sequences for cursor/etc., and/or add an editor state struct to keep track of cursor X/Y
     and other things.
 
     [ ] Alternatively, might redo the whole thing and make it more of an 'ed' like editor, 
-        i.e. line oriented. The hex editor could be remade into its own separate "monitor" program.
+        i.e. fully line oriented. The hex editor could be remade into its own separate "monitor" program.
 
     [ ]<Paul Wratt> If going the "ed" route, have it function similarly to the calculator for input,
         where it allows interactive and non-interactive use (e.g. "sed") for scripting.
@@ -62,11 +63,7 @@ Shorter Term / Next Up
         as a script like the string arguments. Can iterate through all given input arguments and
         run each one in order, then exit. If no input args then run an interactive session.
 
-[ ] Refactor makefile to use posix compliance, suffixes, actual inference rules, and prerequisites for recipes. Use those for all source files and
-	object files, to make the final executables/bin files. This way, other than building the final image, building and compilation can be faster 
-	and incremental, no reason to rebuild everything every time. It should also (hopefully) be less code and with wider portability due to posix.
-	Should be able to use directories and have suffix/inference rules work fine, but only if both suffix ruled files are in the same directory.
-	It may also be worse from included header files, and having to use those in the prerequisites.
+[ ] Change makefile/build process to not run make_disk program if nothing has changed.
 
 [ ] Change printf() to allow fixed width and left/right justification
 	ex:
@@ -117,10 +114,10 @@ Shorter Term / Next Up
 	[ ] Read command/program help info from standard files e.g. "/sys/doc/commands/cmdA/help.txt" ?
     [ ] Can alias a single '?' to be the same command as 'help'
 
-[ ] In addition to or as an alternative to the 'help' command, a "man" command or other documentation
-    retriever ("docs?"). 
+[ ] In addition to or as an alternative to the "help" command, add a "man" or "doc/docs" command, 
+    to retrieve and print documentation.
     Can be as simple as reading file(s) under 
-    /system/docs/further/path/to/thing/which/has/man/pages/documentation.txt, or similar.
+    /system/docs/further/path/to/thing/which/has/man/pages/documentation.txt
 
 [ ] Delete directory function & rmdir command
 	[ ] Call fs_delete_file() for all files found in the input directory. 
@@ -199,12 +196,13 @@ Shorter Term / Next Up
 ==================================================================================
 Longer term
 ==================================================================================
-[ ] README.md: update screenshots & wording/descriptions in each part to be simpler/more succinct and up to date
+[ ] Recurring:
+    [ ] README.md: update screenshots & wording/descriptions in each part to be simpler/more succinct and up to date
 
-[ ] makefile: 
-	[ ] add -Wpedantic to CFLAGS, fix all warnings/errors as possible. Also add -Werror to hate life.
-	[ ] Research implicit rules, inference rules, and .SUFFIXES to try and simplify converting .c to .o and .bin files, and .asm to .bin files,
-		if possible.
+    [ ] Look for potential refactors, performance improvements, simplifications, clarifications, 
+        add documentation, and overall get less lines of code as possible.
+
+    [ ] Finish all current TODOs in the source files (This is a joke task, it will never be done...)
 
 [ ] In bootsector or 2ndstage, find any ATA hard drives installed. If this OS is on a usb or otherwise not on an ATA drive,
     ask user to choose which drive to install to. Use bios interrupts to read the OS sectors from USB, and write to 
@@ -254,30 +252,31 @@ Longer term
 [ ] Switch to using 48 bit LBA for ATA disk I/O, instead of 28 bit LBA (or could detect feature 
     and use either as needed).
 
-[ ] Assembler &| compiler for x86 asm (16 bit real mode, 32 bit protected mode, and 64 bit long mode), a subset of C, maybe a forth or lisp,
-	other languages...
+[ ] Language support & tooling: assembler &| compiler for x86 asm (16 bit real mode, 32 bit protected mode, and 64 bit long mode), 
+    a subset of C, maybe a forth or lisp, other languages...
 
-[ ] Implement Processes; make the "shell" a separate program and first program started up in kernel, PID 1
+[ ] Implement Processes; make the "shell" a separate program and first program started up in kernel, 
+    i.e. PID 1
 
 [ ] Better 'global' error handling; either global error codes & strings, or consistent error code
     (-1? any negative number?) and a global error string/error buffer. Could have the 
     "last error string" as a buffer in the process struct (sort of like Plan9).
 
-[ ] 8 bit pcm audio using pc speaker & PIT. Works by PWM/Pulse width modulation.
+[ ] Sound/Audio: 
+    [ ] 8 bit pcm audio using pc speaker & PIT. Works by PWM/Pulse width modulation.
+    [ ] Soundblaster 16 or ac97 or hd audio, or other audio support
 
-[ ] "Alias" commands, that are the same as current commands but with a different name.
-    A simple implementation could be simply forwarding the call to the actual command that is
-    aliased, or have a soft/hard link system a la unix.
-    Ex: 'alias cd = chdir' or 'alias ls = dir' 
-    [ ] Maybe can start with another array of alias_commands that are structs ("tuples" here?)
-        with char *alias_name and char *actual_command. First search the alias array,
-        if found then get the actual command name and run that. May need to use a pointer
-        to the commands array element itself, rather than a pointer to a string for
-        the actual command.
-
-[ ] Add a way for the user to add custom commands.
-
-[ ] Soundblaster 16 or ac97 or hd audio, or other audio support
+[ ] Shell:
+    [ ] "Alias" commands, that are the same as current commands but with a different name.
+        A simple implementation could be simply forwarding the call to the actual command that is
+        aliased, or have a soft/hard link system a la unix.
+        Ex: 'alias cd = chdir' or 'alias ls = dir' 
+        [ ] Maybe can start with another array of alias_commands that are structs ("tuples" here?)
+            with char *alias_name and char *actual_command. First search the alias array,
+            if found then get the actual command name and run that. May need to use a pointer
+            to the commands array element itself, rather than a pointer to a string for
+            the actual command.
+    [ ] Custom user-added commands.
 
 [ ] editor.c: rewrite/overhaul to use terminal escape sequences for cursor movement and printing? 
     [ ] New terminal escape sequences for moving the cursor: 1 col left (X-1 if > 0), 1 col right (X+1 if < 80 or <max_X>),
@@ -293,30 +292,34 @@ Longer term
     [ ] Gif? Animated gifs?
     [ ] Jpg?
     [ ] Png?
+    [ ] Others...
 
-[ ] Page swapping and algorithms for it
+[ ] Virtual memory:
+    [ ] Page swapping and algorithms for it
+    [ ] Page cache
 
-[ ] Page cache
+[ ] Update OS files within itself, without rebooting, if possible. 
+    Might have backups on disk for prior OS versions in case user wants to roll back changes. 
+    Otherwise new OS programs or full kernel/full OS can be loaded to memory and jumped to at kernel entry to re-initialize.
 
-[ ] Update OS files within itself, without rebooting, if possible. Might have backups on disk for prior OS versions in case user wants to 
-	roll back changes. Otherwise new OS programs or full kernel/full OS can be loaded to memory and jumped to at kernel entry to re-initialize.
-
-[ ] UEFI bootloader option, for 64 bit only. 32 bit can use legacy/BIOS booting with current boot sector, 2nd stage, and 3rd stage bootloaders.
-	will add a struct to be passed to the kernel, if wanted, with devices discovered and machine state. Can add printing to screen/terminal from
-	3rd stage, where 3rd stage will handle all initialization before handing off to the kernel.
-	UEFI would be a replacement for boot sector/2nd stage/3rd stage, where it will handle device discovery, memory map, framebuffer set up, 
-	etc. and pass a struct with that info to the kernel. Ideally the kernel will stay the same for both OS versions, 32 & 64 bit, only the 
-	pre-kernel setup including bootloader will be different.
+[ ] Multi-architecture/machine types:
+    [ ] UEFI bootloader option, for 64 bit only. 32 bit can use legacy/BIOS booting with current boot sector, 2nd stage, and 3rd stage bootloaders.
+        will add a struct to be passed to the kernel, if wanted, with devices discovered and machine state. Can add printing to screen/terminal from
+        3rd stage, where 3rd stage will handle all initialization before handing off to the kernel.
+        UEFI would be a replacement for boot sector/2nd stage/3rd stage, where it will handle device discovery, memory map, framebuffer set up, 
+        etc. and pass a struct with that info to the kernel. Ideally the kernel will stay the same for both OS versions, 32 & 64 bit, only the 
+        pre-kernel setup including bootloader will be different.
 
     [ ] For 64 bit: Add PAE (Physical Address Extension) support, 5 level paging, etc.
 
-? [ ] Maintain separate OS versions for 32 bit BIOS booting and 64 bit UEFI booting.
-? [ ] Separate OS versions all in assembly instead of C/asm. Would be mainly for edification and 
-    testing/trying out SIMD, macros, code structuring, etc.
+    ? [ ] Separate OS versions for 32 bit BIOS booting and 64 bit UEFI booting.
 
-? [ ] Maintain separate OS versions per architecture; x86, x86_64/amd64, ARM, PPC, etc. Using 
-    "arch" folders or equivalent for platorm specific code e.g. assembly, CPUID discovery and 
-    features, etc.
+    ? [ ] Separate OS versions all in assembly instead of C/asm. Would be mainly for edification and 
+        testing/trying out SIMD, macros, code structuring, etc.
+
+    ? [ ] Separate OS versions per architecture; x86, x86_64/amd64, ARM, PPC, etc. Using 
+        "arch" folders or equivalent for platorm specific code e.g. assembly, CPUID discovery and 
+        features, etc.
 
 [ ] Network stack? NIC driver, ARP, IP, TCP, UDP, QUIC?, etc.
     [ ] <Naveen Chaudhary> Add networking support, at least for a basic ping.
@@ -337,7 +340,7 @@ Longer term
             ++ HyperText Transfer Protocol (HTTP); Also HTTPS for security, if using SSL/TLS
             ++ Telnet
 
-[ ] Other device drivers; USB, SATA hdd/sdd (AHCI, XHCI?), NVMe, mouse, etc.
+[ ] Device drivers: USB, SATA hdd/sdd (AHCI, XHCI?), NVMe, mouse, etc.
 
 [ ] Window system or UI system; Probably tiling window manager-esque, as that's what I'm used to
     and like to use. Mainly keyboard driven, vertical & horizontal splits, other things.
@@ -359,7 +362,7 @@ Longer term
     [ ] Smaller window with actual size of character(s), and large editing window with scaled 
         pixels and mouse & keyboard support to design characer(s).
 
-[ ] Other font support than plain bdf or bitmapped fonts; PC Screen Font (PSF), OTF, TTF, etc.
+[ ] Font support: PC Screen Font (PSF), OTF, TTF, etc.
 
 [ ] Other miscellaneous C standard library implementations; string functions/abstractions, type 
     conversions, varargs.h macros, etc.
@@ -367,19 +370,9 @@ Longer term
 [ ] Other custom C library code/files to help with strings, SIMD, or other things.
     [ ] e.g. typedef struct { char *data; uint32_t length; } String;
 
-[ ] Port doom? (it can't be a viable system until it runs DOOM!)
+[ ] Port doom? It can't be a viable system until it runs DOOM!
 
 [ ] Other homemade games, maybe game engines or development environments. Or text games.
 
 [ ] 16 bit real mode emulator, at least to run simple games "virtualized" within the OS. 
     Could use real virtualization with intel VT-d, etc. or even virtual 8086 mode on the 32 bit OS.
-
-[ ] Get to the point where the user can edit and update the OS within itself; for the true
-    dogfooding experience. Updates can use versioning and should not require rebooting; Maybe some 
-    form of hot reloading the kernel or different subsystems would suffice.
-
-[ ] Finish all current TODOs in the source files (This is a joke task, it will never be done...)
-
-[ ] Every so often, go through and look for potential refactors, performance improvements, 
-    simplifications, clarifications, adding documentation, and overall less lines of code as 
-    possible.
