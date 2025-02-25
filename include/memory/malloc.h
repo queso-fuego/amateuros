@@ -37,7 +37,6 @@ void malloc_init(const uint32_t bytes)
         map_page((void *)(malloc_phys_address + i*PAGE_SIZE), (void *)virt);
 
         pt_entry *page = get_page(virt);
-
         SET_ATTRIBUTE(page, PTE_READ_WRITE); // Read/write access for malloc-ed pages
     }
 

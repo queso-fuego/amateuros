@@ -10,8 +10,9 @@ CC ::= gcc
 
 CFLAGS ::= -std=c17 -m32 -march=i386 -mgeneral-regs-only \
 		 -ffreestanding -fno-stack-protector -fno-builtin \
+		 -fno-asynchronous-unwind-tables \
 	     -Wall -Wextra -Wpedantic -Wshadow -Wno-pointer-sign \
-		 -nostdinc -I../include/
+		 -nostdinc -nostdlib -static -I../include/ -g
 
 # Directories
 SRC_DIR    ::= ../src
@@ -41,8 +42,20 @@ ALL_BINS ::= $(ASM_BINS) $(SYS_BINS) $(USR_BINS)
 
 OS       ::= $(BIN_DIR)/OS.bin
 
+# NOTE: Remove driftfix=slew if not needed
+# NOTE: -enable-kvm makes RTC and disk accesses slow for me, but can be better accuracy
+# NOTE: Change or remove audiodev and related audio lines depending on platform and sound setup
+QEMU     ::= qemu-system-i386 \
+             -monitor stdio \
+             -m 128M \
+             -drive format=raw,file=$(OS),if=ide,index=0,media=disk \
+             -rtc base=localtime,clock=host,driftfix=slew \
+             -audiodev id=alsa,driver=alsa \
+             -machine pcspk-audiodev=alsa
+             #-enable-kvm \
+
 # Make final OS.bin binary 
-all: $(UTILS) make_dirs $(ALL_BINS) $(OS)
+all: $(UTILS) make_dirs $(OS)
 
 # If any programs/binaries changed, recreate disk image
 $(OS): $(ALL_BINS)
@@ -76,44 +89,35 @@ $(BIN_DIR)/%.bin: $(SRC_DIR)/%.asm
 
 # Compile user program C source files into PIE executable files, and pad out their size to next 512 byte sector 
 $(BIN_DIR)/%.bin: $(PGM_DIR)/%.c 
-	@$(CC) -c $(CFLAGS) -fPIE -o $*.o $<
-	@ld -melf_i386 -e main -pie $*.o -o $@
-	@rm -f $*.o
+	@$(CC) $(CFLAGS) -fPIE -Wl,-e,main -o $@ $<
 	@size=$$(($$(wc -c < $@)));\
 	newsize=$$((size - $$((size % 512)) + 512));\
-	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors) ->" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
+	echo "$@" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
 	dd if=/dev/zero of=$@ bs=1 seek=$$size count=$$((newsize - size)) status=none;
 	@cp $@ $(FS_BIN_DIR)
 
 # Compile system C source files into binary files, and pad out their size to next 512 byte sector 
 $(BIN_DIR)/%.bin: $(SRC_DIR)/%.c 
-	@$(CC) -c $(CFLAGS) -fno-pie -o $*.o $<
-	@ld -melf_i386 -T$*.ld $*.o --oformat binary -o $@
-	@rm -f $*.o
+	@$(CC) $(CFLAGS) -fno-pie -Wl,-T$*.ld,--build-id=none -o $*.elf $<
+	@objcopy -O binary --strip-debug $*.elf $@
 	@size=$$(($$(wc -c < $@)));\
 	newsize=$$((size - $$((size % 512)) + 512));\
-	echo "$@" "$$size ($$(printf '0x%02X' $$((size / 512))) sectors) ->" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
+	echo "$@" "$$newsize ($$(printf '0x%02X' $$((newsize / 512))) sectors)";\
 	dd if=/dev/zero of=$@ bs=1 seek=$$size count=$$((newsize - size)) status=none;
 	@cp $@ $(FS_BIN_DIR)
 
 # Launch OS with qemu 
-# NOTE: Remove driftfix=slew if not needed
-# NOTE: -enable-kvm makes RTC and disk accesses slow for me, but can be better accuracy
-# NOTE: Change or remove audiodev and related audio lines depending on platform and sound setup
 run:
-	qemu-system-i386 \
-	-monitor stdio \
-	-m 128M \
-	-drive format=raw,file=$(BIN_DIR)/OS.bin,if=ide,index=0,media=disk \
-	-rtc base=localtime,clock=host,driftfix=slew \
-	-audiodev id=alsa,driver=alsa \
-	-machine pcspk-audiodev=alsa
-	#-enable-kvm \
+	$(QEMU)
+
+# Use .gdbinit and autoload gdb for debugging
+debug:
+	$(QEMU) -S -s & gdb
 
 # Launch OS with bochs
 bochs:
 	bochs -qf $(BIN_DIR).bochsrc
 
 clean:
-	rm -f $(BIN_DIR)/*.bin ./*.o 
+	rm -f $(BIN_DIR)/*.bin $(FONT_DIR)/*.bin $(FS_BIN_DIR)/*.bin *.bin *.elf *.o 
 

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "C/stdint.h"
+#include "C/string.h"
 #include "sys/syscall_numbers.h"
 
 #define EXIT_SUCCESS 0
@@ -27,6 +28,16 @@ void *malloc(const uint32_t size) {
 
     __asm__ __volatile__ ("int $0x80" : "=d"(ptr) : "a"(SYSCALL_MALLOC), "b"(size) );
 
+    return ptr;
+}
+
+// Allocate memory and initialize to 0, uses syscall
+void *calloc(const uint32_t num, const uint32_t size) {
+    void *ptr = 0;
+
+    __asm__ __volatile__ ("int $0x80" : "=d"(ptr) : "a"(SYSCALL_MALLOC), "b"(num*size) );
+
+    memset(ptr, 0, num*size);
     return ptr;
 }
 

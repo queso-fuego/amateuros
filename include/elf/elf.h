@@ -157,13 +157,13 @@ void *load_elf_file(uint8_t *file_address, void *exe_buffer) {
         // In PE files this should be equivalent to the "RVA"
         uint32_t relative_offset = phdr[i].p_vaddr - mem_min;
 
-        // Read in p_memsz amount of data from p_offset into original file buffer,
-        //   to p_vaddr (offset by a relative amount) into new buffer
+        // Read in p_filesz amount of data from p_offset in original file buffer,
+        //   to p_vaddr (offset by same relative amount) in new buffer
         uint8_t *dst = (uint8_t *)exe_buffer + relative_offset; 
         uint8_t *src = file_address + phdr[i].p_offset;
-        uint32_t len = phdr[i].p_memsz;
+        uint32_t len = phdr[i].p_filesz;
 
-        printf("MEMCPY dst: %x, src: %x, len: %x\r\n", (uint32_t)dst, (uint32_t)src, len);
+        printf("MEMCPY dst: %#x, src: %#x, len: %#x\r\n", (uint32_t)dst, (uint32_t)src, len);
 
         memcpy(dst, src, len);
     }

@@ -412,7 +412,7 @@ bool write_file_data(char *dir_path, uint32_t curr_inode_id, uint32_t parent_ino
 // ============================================
 // Write inode and data blocks to disk image
 // ============================================
-bool write_inode_and_data_blocks() {
+bool write_inode_and_data_blocks(void) {
     // 1st available position on disk to start writing new file data
     first_block = superblock.first_data_block;  
 

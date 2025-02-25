@@ -11,14 +11,11 @@
 #include "global/global_addresses.h"
 #include "gfx/2d_gfx.h"
 #include "screen/clear_screen.h"
-#include "screen/cursor.h"
 #include "print/print_registers.h"
 #include "memory/physical_memory_manager.h"
 #include "memory/virtual_memory_manager.h"
 #include "memory/malloc.h"
 #include "disk/file_ops.h"
-#include "print/print_fileTable.h"
-#include "type_conversions/hex_to_ascii.h"
 #include "interrupts/idt.h"
 #include "interrupts/exceptions.h"
 #include "interrupts/pic.h"
@@ -26,7 +23,6 @@
 #include "ports/io.h"
 #include "keyboard/keyboard.h"
 #include "sound/pc_speaker.h"
-#include "sys/syscall_numbers.h"
 #include "sys/syscall_wrappers.h"
 #include "fs/fs_impl.h"
 #include "elf/elf.h"
@@ -47,6 +43,8 @@ void print_physical_memory_info(void);  // Print information from the physical m
 void init_open_file_table(void);                                        
 void init_open_inode_table(void);                                        
 void init_fs_vars(void);
+
+bool cmd_touch(int32_t argc, char *argv[]);
 
 bool test_open_close(void); // Test functions...
 bool test_seek(void);
@@ -86,6 +84,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         RM,
         RMDIR,
         REN,
+        TOUCH,
     };
 
     char *commands[] = {
@@ -94,16 +93,18 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         [RM]    = "rm",
         [RMDIR] = "rmdir",
         [REN]   = "ren", 
+        [TOUCH] = "touch",
     };
 
-    // Commands will be similar to programs in that they will be called
-    //   with the full argument vector or argv[]
-    bool (*command_functions[])(char **) = {
+    // Commands will be similar to programs, and be called
+    //   with the same argc/argv[]
+    bool (*command_functions[])(int32_t argc, char **) = {
         [CHDIR] = fs_change_dir,
         [MKDIR] = fs_make_dir,
         [RM]    = fs_delete_file,
         [RMDIR] = fs_delete_dir,
         [REN]   = fs_rename_file,
+        [TOUCH] = cmd_touch,
     };
 
     uint8_t fileExt[3];
@@ -118,7 +119,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
 
     uint8_t font_width  = *(uint8_t *)FONT_WIDTH;
     uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
-    int argc = 0;
+    int32_t argc = 0;
     char *argv[10] = {0};
 
     // --------------------------------------------------------------------
@@ -133,14 +134,15 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     used_blocks = *(uint32_t *)PHYS_MEM_USED_BLOCKS;
 
     // Set up interrupts
-    init_idt_32();  
+    init_idt_32();
 
     // Set up exception handlers (ISRs 0-31)
-    set_idt_descriptor_no_err_32(0, div_by_0_handler, TRAP_GATE_FLAGS); // Divide by 0 error #DE, ISR 0
-    set_idt_descriptor_err_32(14, page_fault_handler, TRAP_GATE_FLAGS); // Page fault #PF errors, ISR 14
+    set_idt_descriptor_32(0, (uint32_t)div_by_0_handler, TRAP_GATE_FLAGS); // Divide by 0 error #DE, ISR 0
+    set_idt_descriptor_32(13, (uint32_t)protection_fault_handler, TRAP_GATE_FLAGS); // General protection fault #GP errors, ISR 13
+    set_idt_descriptor_32(14, (uint32_t)page_fault_handler, TRAP_GATE_FLAGS); // Page fault #PF errors, ISR 14
     
-    // Set up software interrupts
-    set_idt_descriptor_no_err_32(0x80, syscall_dispatcher, INT_GATE_USER_FLAGS);  // System call handler/dispatcher
+    // Set up software interrupt system call handler/dispatcher
+    set_idt_descriptor_32(0x80, (uint32_t)syscall_dispatcher, INT_GATE_USER_FLAGS);  
 
     // Mask off all hardware interrupts (disable the PIC)
     disable_pic();
@@ -149,9 +151,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     remap_pic();
 
     // Add ISRs for PIC hardware interrupts
-    set_idt_descriptor_no_err_32(0x20, timer_irq0_handler, INT_GATE_FLAGS);  
-    set_idt_descriptor_no_err_32(0x21, keyboard_irq1_handler, INT_GATE_FLAGS);
-    set_idt_descriptor_no_err_32(0x28, cmos_rtc_irq8_handler, INT_GATE_FLAGS);
+    set_idt_descriptor_32(0x20, (uint32_t)timer_irq0_handler, INT_GATE_FLAGS);  
+    set_idt_descriptor_32(0x21, (uint32_t)keyboard_irq1_handler, INT_GATE_FLAGS);
+    set_idt_descriptor_32(0x28, (uint32_t)cmos_rtc_irq8_handler, INT_GATE_FLAGS);
     
     // Clear out PS/2 keyboard buffer: check status register and read from data port
     //   until clear
@@ -217,7 +219,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     }
 
     // Clear the screen
-    clear_screen_esc();
+    printf("\033CLS;");
 
     // Print OS boot message
     printf("\033CSROFF;%s", menuString);
@@ -260,13 +262,12 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             input_length++;                         // Increment byte counter of input
 
             // Print input character to screen
-            putc(input_char);
+            putchar(input_char);
         }
 
         if (input_length == 0) {
             // No input or command not found! boo D:
             printf(failure);
-
             continue;
         }
 
@@ -307,9 +308,8 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             if (!strncmp(argv[0], commands[i], strlen(argv[0]))) {
                 found_command = true;
 
-                if (!command_functions[i](argv)) {
+                if (!command_functions[i](argc, argv)) 
                     printf("\r\nError: command %s failed\r\n", argv[0]);
-                }
                 break;
             }
         }
@@ -326,7 +326,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
                 if (!print_dir(argv[1])) 
                     printf("\r\nError printing dir %s\r\n", argv[1]);
             }
-
             continue;
         }
 
@@ -519,7 +518,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
 
             input_char = get_key(); 
             clear_screen_esc();
-
             continue;
         }
 
@@ -535,7 +533,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             // Clear Screen
             // --------------------------------------------------------------------
             clear_screen_esc();
-
             continue;
         }
 
@@ -555,22 +552,16 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             // --------------------------------------------------------------------
             //	Input 1 - File name to delete
             //	      2 - Length of file name
-            if (!delete_file(argv[1], strlen(argv[1]))) {
-                //	;; TODO: Add error message or code here
+            if (!delete_file(argv[1], strlen(argv[1]))) 
                 printf("ERROR: Delete file failed!");
-            }
 
             // Print newline when done
             printf("\r\n");
-
             continue;
         }
 
         // Print memory map command
         if (strncmp(argv[0], cmdPrtmemmap, strlen(argv[0])) == 0) {
-            // Print out physical memory map info
-            printf("\r\n-------------------\r\nPhysical Memory Map"
-                   "\r\n-------------------\r\n\r\n");
             print_physical_memory_info();
             continue;
         }
@@ -596,7 +587,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             while ((input_char = get_key()) != '\r') {
                 if (input_char >= 'a' && input_char <= 'f') input_char -= 0x20; // Convert lowercase to Uppercase
 
-                putc(input_char);
+                putchar(input_char);
 
                 fg_color *= 16;
                 if      (input_char >= '0' && input_char <= '9') fg_color += input_char - '0';          // Convert hex ascii 0-9 to integer
@@ -616,7 +607,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             while ((input_char = get_key()) != '\r') {
                 if (input_char >= 'a' && input_char <= 'f') input_char -= 0x20; // Convert lowercase to Uppercase
 
-                putc(input_char);
+                putchar(input_char);
 
                 bg_color *= 16;
 
@@ -640,7 +631,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             file_ptr = check_filename(argv[1], strlen(argv[1]));
             if (*file_ptr == 0) {  
                 printf(fontNotFound);  // File not found in filetable, error
-
                 continue;
             }
 
@@ -653,7 +643,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             // File is a valid font, try to load it to memory
             if (!load_file(argv[1], strlen(argv[1]), (uint32_t)FONT_ADDRESS, fileExt)) {
                 printf("\r\nError: file could not be loaded\r\n"); 
-
                 continue;
             }
 
@@ -662,7 +651,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             font_height = *(uint8_t *)FONT_HEIGHT;
             printf("\r\nFont loaded: %s\r\n", argv[1]);
             printf("\r\nWidth: %d Height: %d\r\n", font_width, font_height);
-
             continue;
         }
 
@@ -728,15 +716,11 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             }
 
             char buf[256] = {0}; 
+            int32_t len = 0;
+            while ((len = read(fd, buf, sizeof buf)) > 0) 
+                write(1, buf, len); // Write to stdout
 
-            while (read(fd, buf, sizeof buf) > 0) {
-                printf("%s", buf);
-            }
-            printf("\r\n");
-
-            // File cleanup
-            close(fd);
-
+            close(fd);  // File cleanup
             continue;
         }
 
@@ -769,7 +753,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         // Determine what type of executable this is
         uint8_t *magic = (uint8_t *)open_file_table[fd].address;
 
-        typedef int32_t program(int argc, char *argv[]); 
+        typedef int32_t program(int32_t argc, char *argv[]); 
         int32_t return_code = 0;
 
         // Save current kernel malloc values
@@ -786,14 +770,12 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         // TODO: Change this, possibly using a virtual address map to get the next available 
         //   virtual address
         malloc_virt_address = next_available_file_virtual_address;
-        next_available_file_virtual_address += PAGE_SIZE;
         malloc_phys_address = 0;
         total_malloc_pages  = 0;
 
         if (magic[0] == 'M' && magic[1] == 'Z') {
             // PE32 File
             printf("PE32 Executable\r\n");
-
             // ...
 
         } else if (magic[0] == 0x7F && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F') {
@@ -817,54 +799,51 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         printf("Entry point: %x\r\n", (uint32_t)entry_point);
 
         program *pgm = NULL;
-        *(void **)&pgm = entry_point;
+        *(void **)&pgm = entry_point;   // Get around object pointer to function pointer warning
         return_code = pgm(argc, argv);
-
-        printf("Return Code: %d\r\n", return_code);
-
-        // If used malloc(), free remaining malloc-ed memory to prevent memory leaks
-        for (uint32_t i = 0, virt = malloc_virt_address; i < total_malloc_pages; i++, virt += PAGE_SIZE) {
-            pt_entry *page = get_page(virt);
-
-            if (PAGE_PHYS_ADDRESS(page) && TEST_ATTRIBUTE(page, PTE_PRESENT)) {
-                free_page(page);
-                unmap_page((uint32_t *)virt);
-                flush_tlb_entry(virt);  // Invalidate page as it is no longer present
-            }
-        }
-
-        // Reset malloc variables after calling program
-        malloc_list_head    = save_malloc_head;
-        malloc_virt_address = save_malloc_virt_address;
-        malloc_phys_address = save_malloc_phys_address;
-        total_malloc_pages  = save_malloc_pages;
-            
-        // Free memory for exe
-        free(exe_buffer);
 
         // Close file when done
         close(fd);
 
+        printf("Return Code: %d\r\n", return_code);
+
+        // If used malloc(), free remaining malloc-ed memory to prevent memory leaks
+        for (uint32_t i = 0, virt = malloc_virt_address; 
+             i < total_malloc_pages; 
+             i++, virt += PAGE_SIZE) {
+
+            pt_entry *page = get_page(virt);
+            if (PAGE_PHYS_ADDRESS(page) && TEST_ATTRIBUTE(page, PTE_PRESENT)) {
+                free_page(page);
+                unmap_page((void *)virt);
+                flush_tlb_entry(virt);  // Invalidate page as it is no longer present
+            }
+        }
+
+        // Reset malloc variables, exe buffer was loaded from this starting point
+        malloc_list_head    = save_malloc_head;
+        malloc_virt_address = save_malloc_virt_address;
+        malloc_phys_address = save_malloc_phys_address;
+        total_malloc_pages  = save_malloc_pages;
+
+        // Free malloc-ed memory for exe
+        free(exe_buffer);
+
         // TODO: In the future, if using a backbuffer, restore screen data from that buffer here instead
         //  of clearing
             
-        // Clear the screen and reset cursor position before going back
-        //clear_screen_esc();  // TODO: Probably remove this
-
-        if (return_code < 0) {
+        if (return_code < 0) 
             printf("Error running program; Return code: %d\r\n", return_code);
-        }
 
         continue;   // Loop back to prompt for next input
     }
 }
 
 // Print information from the physical memory map (SMAP)
-void print_physical_memory_info(void)  
-{
+void print_physical_memory_info(void)  {
     // Physical memory map entry from Bios Int 15h EAX E820h
     typedef struct SMAP_entry {
-        uint64_t base_address;
+        uint64_t base_address; 
         uint64_t length;
         uint32_t type;
         uint32_t acpi;
@@ -873,37 +852,33 @@ void print_physical_memory_info(void)
     uint32_t num_entries = *(uint32_t *)SMAP_NUMBER_ADDRESS;          // Number of SMAP entries
     SMAP_entry_t *SMAP_entry = (SMAP_entry_t *)SMAP_ENTRIES_ADDRESS;  // Memory map entries start point
 
-    for (uint32_t i = 0; i < num_entries; i++) {
-        printf("Region: %x", i);
-        printf(" base: %x", SMAP_entry->base_address);
-        printf(" length: %x", SMAP_entry->length);
-        printf(" type: %x", SMAP_entry->type);
+    char *entry_type_strings[] = {
+        "Unknown",         // 0
+        "Available",       // 1
+        "Reserved",        // 2
+        "ACPI Reclaim",    // 3
+        "ACPI NVS Memory", // 4 
+    };
 
-        switch(SMAP_entry->type) {
-            case 1:
-                printf(" (Available)");
-                break;
-            case 2: 
-                printf(" (Reserved)");
-                break;
-            case 3: 
-                printf(" (ACPI Reclaim)");
-                break;
-            case 4: 
-                printf(" (ACPI NVS Memory)");
-                break;
-            default: 
-                printf(" (Reserved)");
-                break;
-        }
+    printf("\r\n-------------------"
+           "\r\nPhysical Memory Map"
+           "\r\n-------------------\r\n");
 
-        printf("\r\n");
-        SMAP_entry++;   // Go to next entry
+    for (uint32_t i = 0; i < num_entries; i++, SMAP_entry++) {
+        printf("Region: %#x ", i);
+        printf("base: %#x ", (uint32_t)SMAP_entry->base_address);
+        printf("length: %#x ", (uint32_t)SMAP_entry->length);
+        printf("type: %#x ", SMAP_entry->type);
+
+        printf("(%s)\r\n", 
+               (SMAP_entry->type <= 4) ? entry_type_strings[SMAP_entry->type]
+                                       : "Reserved");
     }
 
     // Print total amount of memory
     SMAP_entry--;   // Get last SMAP entry
-    printf("\r\nTotal memory in bytes: %x", SMAP_entry->base_address + SMAP_entry->length - 1);
+    printf("\r\nTotal memory in bytes: %#x", 
+           SMAP_entry->base_address + SMAP_entry->length - 1);
 
     // Print out memory manager block info:
     //   total memory in 4KB blocks, total # of used blocks, total # of free blocks
@@ -927,9 +902,7 @@ void init_fs_vars(void) {
     superblock.root_inode_pointer = (uint32_t)&root_inode;
 
     // Set filesystem starting point
-    current_dir = malloc(1024); // Set starting size of current working directory string
-    memset(current_dir, 0, 1024); // Initialize memory
-
+    current_dir = calloc(1, 1024); // Set starting size of current working directory string
     strcpy(current_dir, "/");   // Start in 'root' directory by default
     current_dir_inode = root_inode;
     current_parent_inode = root_inode;  // Root's parent is itself
@@ -960,12 +933,21 @@ void init_open_inode_table(void) {
     *open_inode_table = (inode_t){0};
 }
 
+// Touch command: Create new empty file
+bool cmd_touch(int32_t argc, char *argv[]) {
+    if (argc < 1) return false;
+
+    int32_t fd = open(argv[1], O_CREAT);
+    if (fd < 0) return false;
+    if (close(fd) != 0) return false;
+    return true;
+}
+
 // Probably should move these to a separate file or something later...
 // Test open() & close() syscalls
 bool test_open_close(void) {
-    const char file[] = "openclosetest.txt";
-    const int32_t fd = open(file, O_CREAT);
-
+    char *file = "openclosetest.txt";
+    int32_t fd = open(file, O_CREAT);
     if (fd < 0) {
         printf("\r\nError: could not create file %s\r\n", file);
         return false;
@@ -976,7 +958,6 @@ bool test_open_close(void) {
         printf("Error: could not close file %s\r\n", file);
         return false;
     }
-
     return true;
 }
 
@@ -985,8 +966,8 @@ bool test_seek(void) {
     // TODO: Add more to this after read() and write() are filled out,
     //   to be able to actually write data to a file
 
-    const char file[] = "seektest.txt";
-    const int32_t fd = open(file, O_CREAT);
+    char *file = "seektest.txt";
+    int32_t fd = open(file, O_CREAT);
     int32_t seek_val = 0;
 
     if (fd < 0) {
@@ -1042,21 +1023,20 @@ bool test_seek(void) {
     }
 
     close(fd);
-
     return true;
 }
 
 // Test write() syscall
 bool test_write(void) {
-    const char file[] = "writetest.txt";
-    const int32_t fd = open(file, O_CREAT | O_WRONLY); 
+    char *file = "writetest.txt";
+    int32_t fd = open(file, O_CREAT | O_WRONLY); 
 
     if (fd < 0) {
         printf("\r\nError: could not create file %s\r\n", file);
         return false;
     }
 
-    const char buf[] = "Hello, World!";
+    char *buf = "Hello, World!";
 
     if (14 != write(fd, buf, sizeof buf)) {
         printf("\r\nError: could not write \"%s\" to file %s\r\n", 
@@ -1067,21 +1047,20 @@ bool test_write(void) {
     // TODO: Test O_APPEND
 
     close(fd);
-
     return true;
 }
 
 // Test read() syscall
 bool test_read(void) {
-    const char file[] = "readtest.txt";
-    const int32_t fd = open(file, O_CREAT | O_RDWR);
+    char *file = "readtest.txt";
+    int32_t fd = open(file, O_CREAT | O_RDWR);
 
     if (fd < 0) {
         printf("\r\nError: could not create file %s\r\n", file);
         return false;
     }
 
-    const char str_buf[] = "Hello, World!";
+    char *str_buf = "Hello, World!";
 
     if (14 != write(fd, str_buf, sizeof str_buf)) {
         printf("\r\nError: could not write \"%s\" to file %s\r\n", 

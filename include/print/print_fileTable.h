@@ -35,7 +35,7 @@ void print_fileTable(void)
     while (*filetable_ptr != 0) {
         // Print file name
         for (uint8_t i = 0; i < 10; i++) {
-            putc(*filetable_ptr);
+            putchar(*filetable_ptr);
             filetable_ptr++;             // Get next byte at file table
         }
 
@@ -44,7 +44,7 @@ void print_fileTable(void)
 
         // Print file ext bytes
         for (uint8_t i = 0; i < 3; i++) {
-            putc(*filetable_ptr);
+            putchar(*filetable_ptr);
             filetable_ptr++;
         }
 

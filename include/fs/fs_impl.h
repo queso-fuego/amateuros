@@ -67,7 +67,7 @@ bool fs_save_file(inode_t *inode, uint32_t address) {
 }
 
 // Get inode for a given string/file name contained in a given directory inode
-inode_t inode_for_name_in_directory(const inode_t directory_inode, const char *file_name) {
+inode_t inode_for_name_in_directory(const inode_t directory_inode, char *file_name) {
     uint32_t total_blocks = bytes_to_blocks(directory_inode.size_bytes);
     dir_entry_t *dir_entry = 0;
 
@@ -115,7 +115,7 @@ inode_t inode_for_name_in_directory(const inode_t directory_inode, const char *f
 
 // Get inode for last file in given path
 // e.g. /folderA/./.././fileB -> fileB's inode
-inode_t inode_from_path(const char *starting_path) {
+inode_t inode_from_path(char *starting_path) {
     char *pos = (char *)starting_path;  
     inode_t current_inode;
 
@@ -155,7 +155,7 @@ inode_t inode_from_path(const char *starting_path) {
         char *name = pos; 
         while (*pos != '/' && *pos != '\0') pos++; 
 
-        const char temp = *pos;
+        char temp = *pos;
         *pos = '\0';    // Set to null to properly null-terminate name string as needed
         
         current_inode = inode_for_name_in_directory(current_inode, name);
@@ -182,7 +182,7 @@ inode_t inode_from_id(const uint32_t id) {
 
 // Get inode for parent directory of last file in given path
 // e.g. /folderA/./.././folderB/folderC -> folderB's inode
-inode_t parent_inode_from_path(const char *starting_path) {
+inode_t parent_inode_from_path(char *starting_path) {
     char *pos = (char *)starting_path;
 
     pos = strrchr(pos, '/'); // Get end of last directory in path
@@ -206,7 +206,7 @@ inode_t parent_inode_from_path(const char *starting_path) {
 }
 
 // Grab the last file name from a path (string)
-char *last_name_in_path(const char *path) {
+char *last_name_in_path(char *path) {
     char *pos = (char *)path;
     pos = strrchr(path, '/'); // End of last dir in path
                               
@@ -336,11 +336,11 @@ void update_inode_on_disk(const inode_t inode) {
 // including: new inode, updating inode bitmap blocks, data bitmap blocks,
 // inode blocks, and data blocks for new file. Will probably need to also
 // update superblock
-inode_t fs_create_file(const char *path) {
+inode_t fs_create_file(char *path) {
     // Disallow creating files with special names 
-    if (!strncmp(path, ".", strlen(path))  || 
-        !strncmp(path, "..", strlen(path)) ||
-        !strncmp(path, "/", strlen(path)))
+    if (!memcmp(path, ".", 2)  || 
+        !memcmp(path, "..", 3) ||
+        !memcmp(path, "/", 2))
         return (inode_t){0};
 
     // Get parent directory of file at path
@@ -349,10 +349,8 @@ inode_t fs_create_file(const char *path) {
     if (parent_inode.id == 0) 
         return (inode_t){0};  // Did not find containing dir, error
                               
-    char *file_name = last_name_in_path(path); // Will use later for dir_entry->name
-    if (!file_name) {
-        return (inode_t){0}; // No final name in path or other error
-    }
+    char *file_name = last_name_in_path(path);  // Will use later for dir_entry->name
+    if (!file_name) return (inode_t){0};        // No final name in path or other error
 
     // Make new inode for file
     inode_t new_inode = {0};
@@ -526,15 +524,14 @@ done:
     if (root_inode.id == parent_inode.id)
         root_inode = parent_inode;
 
-    // Update superblock info, at least for inode/data bitmap info,
-    //   if not other stuff
+    // Update superblock info, at least for inode/data bitmap info
     update_superblock();
     
     return new_inode;
 }
 
 // Read a given directory's file data, and print to screen
-bool print_dir(const char *path) {
+bool print_dir(char *path) {
     const inode_t dir = inode_from_path(path);
     if (dir.id == 0) return false;
 
@@ -573,9 +570,9 @@ bool print_dir(const char *path) {
 
                     inode_t *inode = (inode_t *)temp_sector + (dir_entry->id % INODES_PER_SECTOR);
 
-                    if (inode->type == FILETYPE_DIR) puts("[DIR] ");
+                    if (inode->type == FILETYPE_DIR) printf("[DIR] ");
 
-                    printf("%d %d-%d-%d %d:%d:%d  %d", 
+                    printf("%d %.2d-%.2d-%d %.2d:%.2d:%.2d  %d", 
                            inode->size_bytes, 
 
                            inode->last_modified_timestamp.month,
@@ -599,7 +596,8 @@ bool print_dir(const char *path) {
 }
 
 // Create a new directory file in the filesystem given a file path
-bool fs_make_dir(char *argv[]) {
+bool fs_make_dir(int32_t argc, char *argv[]) {
+    (void)argc;
     char *path = argv[1];   // argv[0] would be the shell command itself e.g. mkdir
     if (!path) return false;
 
@@ -671,7 +669,8 @@ bool fs_make_dir(char *argv[]) {
 }
 
 // Change current directory
-bool fs_change_dir(char *argv[]) {
+bool fs_change_dir(int32_t argc, char *argv[]) {
+    (void)argc;
     char *path = argv[1];
     if (!path) return false;
 
@@ -731,7 +730,8 @@ bool fs_change_dir(char *argv[]) {
 }
 
 // Delete a single file
-bool fs_delete_file(char *argv[]) {
+bool fs_delete_file(int32_t argc, char *argv[]) {
+    (void)argc;
     char *path = argv[1];
 
     if (!path) return false;
@@ -858,15 +858,16 @@ bool fs_delete_file(char *argv[]) {
 }
 
 // Delete a directory along with all nested files/directories within it
-bool fs_delete_dir(char *argv[]) {
-    (void)argv;
+bool fs_delete_dir(int32_t argc, char *argv[]) {
+    (void)argc, (void)argv;
     // TODO:
     return true;
 }
 
 // Rename a file 
 // Example argv[]/command: "ren /folderA/fileA.txt fileB.txt"
-bool fs_rename_file(char *argv[]) {
+bool fs_rename_file(int32_t argc, char *argv[]) {
+    (void)argc;
     char *path = argv[1];
     char *new_name = argv[2];
 
@@ -938,27 +939,4 @@ bool fs_rename_file(char *argv[]) {
 
     return true;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

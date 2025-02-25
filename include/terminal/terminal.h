@@ -207,11 +207,9 @@ int32_t terminal_write(void *buf, const uint32_t len)
         }
 
         // Increment cursor 
-        if (++X < X_LIMIT)    // at end of line?
-            continue;
+        if (++X < X_LIMIT) continue;    // At end of line?
 
-        // Yes, at end of line, do a CR/LF
-        // CR
+        // Yes, at end of line, do CR/LF
         X = 0;      // New cursor X position = 0 / start of line
 
         // LF

@@ -33,7 +33,6 @@ uint32_t scan;
 int32_t parse_num = 0;
 bool interactive = false;
 
-//__attribute__ ((section ("calc_entry"))) int32_t calc_main(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     char input_char;
     const char valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
@@ -94,7 +93,7 @@ int main(int argc, char *argv[]) {
         scan++;
 
         // Print char to screen
-        putc(input_char);
+        putchar(input_char);
     }
 }
 

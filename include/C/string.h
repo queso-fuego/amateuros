@@ -11,13 +11,11 @@
 //   negative value if string1 is less than string2
 //   0 if string1 = string2
 //   positive value if string1 is greater than string2
-int16_t strcmp(const uint8_t *string1, const uint8_t *string2)
-{
-    while (*string1 && *string1 == *string2) {
+int32_t strcmp(const char *string1, const char *string2) {
+    while (*string1 && *string2 && *string1 == *string2) {
         string1++;
         string2++;
     }
-
     return *string1 - *string2;
 }
 
@@ -27,9 +25,8 @@ int16_t strcmp(const uint8_t *string1, const uint8_t *string2)
 //   negative value if string1 is less than string2
 //   0 if string1 = string2
 //   positive value if string1 is greater than string2
-int32_t strncmp(const uint8_t *string1, const uint8_t *string2, uint8_t len)
-{
-    while (len > 0 && *string1 == *string2) {
+int32_t strncmp(const char *string1, const char *string2, uint8_t len) {
+    while (len > 0 && *string1 && *string2 && *string1 == *string2) {
         string1++;
         string2++;
         len--;
@@ -42,15 +39,12 @@ int32_t strncmp(const uint8_t *string1, const uint8_t *string2, uint8_t len)
 //
 // Returns:
 //   length (255 max)
-uint8_t strlen(const uint8_t *string)
-{
-    uint8_t len = 0;
-
+uint32_t strlen(const char *string) {
+    uint32_t len = 0;
     while (*string) {
         string++;
         len++;
     }
-
     return len;
 }
 
@@ -58,15 +52,11 @@ uint8_t strlen(const uint8_t *string)
 //
 // Returns:
 //   dst string 
-uint8_t *strcpy(uint8_t *dst, const uint8_t *src)
-{
-    for (uint8_t i = 0; src[i]; i++)
-        dst[i] = src[i];
-
-    // TODO: This should also set last byte to null in the dst string?
-    //  dst[i] = '\0';
-
-    return dst;
+char *strcpy(char *dst, const char *src) {
+    char *rtn = dst;
+    while (*src) *dst++ = *src++; 
+    *dst = '\0';
+    return rtn;
 }
 
 // strchr: return pointer to first occurrence of char in string
@@ -98,8 +88,7 @@ char *strrchr(const char *str, const char c) {
 //
 // Returns:
 //   dst string 
-uint8_t *strncpy(uint8_t *dst, const uint8_t *src, const uint8_t len)
-{
+char *strncpy(char *dst, const char *src, const uint8_t len) {
     for (uint8_t i = 0; src[i] && i < len; i++)
         dst[i] = src[i];
 
@@ -110,12 +99,9 @@ uint8_t *strncpy(uint8_t *dst, const uint8_t *src, const uint8_t len)
 //
 // Returns:
 //   buffer
-void *memset(void *buffer, const uint8_t byte, const uint32_t len) {
-    uint8_t *ptr = (uint8_t *)buffer;
-
-    for (uint32_t i = 0; i < len; i++)
-        ptr[i] = byte;
-
+void *memset(void *buffer, const uint8_t byte, uint32_t len) {
+    uint8_t *p = buffer;
+    while (len--) *p++ = byte;
     return buffer;
 }
 
@@ -123,11 +109,9 @@ void *memset(void *buffer, const uint8_t byte, const uint32_t len) {
 //
 // Returns:
 //  buffer
-void *memcpy(void *dst, const void *src, const uint32_t len)
-{
+void *memcpy(void *dst, const void *src, const uint32_t len) {
     for (uint32_t i = 0; i < len; i++)
         ((uint8_t *)dst)[i] = ((uint8_t *)src)[i];
-
     return dst;
 }
 
