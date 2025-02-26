@@ -409,24 +409,20 @@ void text_editor(char *in_filename) {
             case LEFTARROW:
                 // Move 1 byte left (till beginning of line)
                 if (cursor_x != 0) {
-                    printf("\033CSROFF;");
-
                     file_ptr--;     // Move file data to previous byte
                     file_offset--;
                     cursor_x--;     // Move cursor to previous character
-                    printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
+                    printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
                 }
                 break;
 
             case RIGHTARROW:
                 // Move 1 byte right (till end of line)
                 if (cursor_x < current_line_length) { 
-                    printf("\033CSROFF;");
-
                     file_ptr++;
                     file_offset++;
                     cursor_x++;
-                    printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
+                    printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
                 }
                 break;
 
@@ -434,7 +430,6 @@ void text_editor(char *in_filename) {
                 if (cursor_y == 0)  continue;   // On 1st line, can't go up
 
                 // Move cursor up 1 line 
-                printf("\033CSROFF;");
                 cursor_y--;  
                 current_line_length = 0;
                 file_ptr--;
@@ -452,7 +447,7 @@ void text_editor(char *in_filename) {
                 current_line_length++;  // Include newline as end of current line
 
                 // Search for either start of file (if 1st line) or end of line above
-                //  previous line
+                //   previous line
                 // TODO: End of line could be char position 80, not always a line feed
                 while (*file_ptr != '\n' && file_offset != 0) {
                     file_ptr--;
@@ -469,19 +464,18 @@ void text_editor(char *in_filename) {
                 }
 
                 // If line is shorter than where cursor is, move cursor to end of shorter line
-                if (current_line_length < (uint32_t)cursor_x + 1)  // Cursor is 0-based
+                if (current_line_length < cursor_x + 1)  // Cursor is 0-based
                     cursor_x = current_line_length - 1;
 
                 file_ptr    += cursor_x;      // offset into line
                 file_offset += cursor_x;
-                printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
+                printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
                 break;
 
             case DOWNARROW:
                 if (cursor_y == file_length_lines) continue;    // On last line of file
 
                 // Move cursor down 1 line
-                printf("\033CSROFF;\n");
                 cursor_y++;  
                 current_line_length = 0;
 
@@ -509,7 +503,7 @@ void text_editor(char *in_filename) {
                 current_line_length++;
 
                 // If line is shorter than where cursor is, move cursor to end of shorter line
-                if (current_line_length < (uint32_t)cursor_x + 1)  // Cursor is 0-based
+                if (current_line_length < cursor_x + 1)  // Cursor is 0-based
                     cursor_x = current_line_length - 1;
 
                 // Move to start of current line
@@ -519,31 +513,25 @@ void text_editor(char *in_filename) {
                 file_ptr    += cursor_x;   // Move to cursor position in line
                 file_offset += cursor_x;
 
-                printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
+                printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
                 break;
 
             case HOMEKEY:
                 // Move to beginning of line
-                printf("\033CSROFF;");
-
                 file_ptr    -= cursor_x;   // Move file data to start of line
                 file_offset -= cursor_x;
-
                 cursor_x = 0;           
-                printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
+                printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
                 break;
 
             case ENDKEY:
                 // Move to end of line
-                printf("\033CSROFF;");
-
                 // Get difference of current_line_length and cursor_x (0-based),
                 //   add this difference to cursor_x, and file data
                 file_ptr    += ((current_line_length - 1) - cursor_x);
                 file_offset += ((current_line_length - 1) - cursor_x);
                 cursor_x    += ((current_line_length - 1) - cursor_x);
-
-                printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
+                printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
                 break;
 
             default:
@@ -605,12 +593,9 @@ void text_editor(char *in_filename) {
                         current_line_length++;
                     }
 
-                    // Include end of line or end of file byte
-                    current_line_length++;
-
                     // Move file data to start of line
-                    file_ptr    -= current_line_length - 1;
-                    file_offset -= current_line_length - 1;
+                    file_ptr    -= current_line_length;
+                    file_offset -= current_line_length;
 
                 } else cursor_x++;
 
@@ -691,78 +676,66 @@ void hex_editor(void) {
         
         // Check navigation keys (arrows + home/end)
         if (input_char == LEFTARROW) {     // Left arrow key
-            printf("\033CSROFF;");
-
             // Move 1 byte left (till beginning of line)
             if (cursor_x >= 3) {
                 cursor_x -= 3;
                 file_ptr--;     // Move file data to previous byte
                 file_offset--;
             }
-            printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
+            printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
             continue;
         }
 
         if (input_char == RIGHTARROW) {    // Right arrow key
-            printf("\033CSROFF;");
-
             // Move 1 byte right (till end of line)
             if (cursor_x <= 75) {
                 cursor_x += 3;
                 file_ptr++;             // Move file data to next byte
                 file_offset++;
             }
-            printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
+            printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
             continue;
         }
 
         if (input_char == UPARROW) {     // Up arrow key
-            printf("\033CSROFF;");
-
             // Move 1 line up
             if (cursor_y != 0) {
                 cursor_y--;
                 file_ptr -= 27;  // # of hex bytes (2 nibbles + space) in 1 line
                 file_offset -= 27;
             }
-            printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
+            printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
             continue;
         }
 
         if (input_char == DOWNARROW) {   // Down arrow key
-            printf("\033CSROFF;");
-
             // Move 1 line down
             if (cursor_y != ((uint32_t)gfx_mode->y_resolution / 16) - 1) {  // At bottom row of screen?
                 cursor_y++;
                 file_ptr += 27;		// # of hex bytes (2 nibbles + space) in 1 line
                 file_offset += 27;
             }
-            printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
+            printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
             continue;
         }
 
         if (input_char == HOMEKEY) {     // Home key pressed
-            printf("\033CSROFF;");
-
             // Move to beginning of line
             file_ptr -= (cursor_x / 3);       // Each hex byte on screen is 2 nibbles + space
             file_offset -= (cursor_x / 3);
             cursor_x = 0;
             
-            printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
+            printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
             continue;
         }
 
         if (input_char == ENDKEY) {       // End key pressed
-            printf("\033CSROFF;");
-
             // Move to end of line
             file_ptr += (79 - cursor_x / 3);  // Each hex byte on screen is 2 nibbles + space
             file_offset += (79 - cursor_x / 3);
             cursor_x = 78;
 
-            printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
+            printf("\033CSROFF;\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
             continue;
         }
 
