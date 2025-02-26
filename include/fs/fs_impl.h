@@ -6,6 +6,7 @@
 #include "C/stdbool.h"
 #include "C/stdio.h"
 #include "fs/fs.h"
+#include "disk/file_ops.h"              // rw_sectors(), etc.
 #include "sys/syscall_wrappers.h" 
 
 #define MAX_PATH_SIZE 256
@@ -880,7 +881,6 @@ bool fs_rename_file(int32_t argc, char *argv[]) {
         !strncmp(path, "..", 3)) {
 
         printf("\r\nError: Cannot rename %s", path);
-
         return false;
     }
 

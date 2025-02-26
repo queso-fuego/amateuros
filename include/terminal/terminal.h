@@ -9,6 +9,13 @@
 #include "gfx/2d_gfx.h"
 #include "global/global_addresses.h"
 
+// Persistent terminal variables affected by control/escape sequences
+uint32_t X = 0, Y = 0;
+uint32_t fg_color = 0x00DDDDDD, bg_color = 0x00222222;
+bool show_cursor = true;
+
+void draw_cursor(bool draw);
+
 /* Write len bytes from buf to screen
  * Supported escape sequences:
  * -----------------------------------------
@@ -30,11 +37,6 @@ int32_t terminal_write(void *buf, const uint32_t len)
     const uint32_t Y_LIMIT = gfx_mode->y_resolution / FONT_H;
     const uint8_t bytes_per_pixel = (gfx_mode->bits_per_pixel+1) / 8;             // Get # of bytes per pixel, add 1 to fix 15bpp modes
     
-    // Persistent terminal variables affected by control/escape sequences
-    static uint32_t X = 0, Y = 0;
-    static uint32_t fg_color = 0x00DDDDDD, bg_color = 0x00222222;
-    static bool show_cursor = true;
-
     uint8_t *str = (uint8_t *)buf;
     uint8_t *scroll, *scroll2;
     uint8_t *font_char;
@@ -123,11 +125,13 @@ int32_t terminal_write(void *buf, const uint32_t len)
             } else if (!strncmp(&str[i], "CSRON;", 6)) {
                 // Turn cursor on
                 show_cursor = true;
+                draw_cursor(show_cursor);
                 i += 5;     // Skip rest of escape sequence
 
             } else if (!strncmp(&str[i], "CSROFF;", 7)) {
                 // Turn cursor off
                 show_cursor = false;
+                draw_cursor(show_cursor);
                 i += 6;     // Skip rest of escape sequence
 
             } else if (!strncmp(&str[i], "BS;", 3)) {
@@ -227,32 +231,39 @@ int32_t terminal_write(void *buf, const uint32_t len)
         }
     }
 
-    // Draw cursor
-    if (show_cursor) {
-        font_char = (uint8_t *)(FONT_ADDRESS + ((127 * char_size) - bytes_per_char_line));
-
-        // Go to last row of cursor character 
-        framebuffer = (uint8_t *)gfx_mode->physical_base_pointer +
-        ((Y * FONT_H * gfx_mode->x_resolution) * bytes_per_pixel) + 
-        ((X * FONT_W) * bytes_per_pixel);
-
-        framebuffer += (gfx_mode->x_resolution * (FONT_H - 1)) * bytes_per_pixel;   // Last line of character data
-
-        uint8_t px_drawn = 0;
-        for (int8_t byte = bytes_per_char_line - 1; byte >= 0; byte--) {
-            for (int8_t bit = 7; bit >= 0 && px_drawn < FONT_W; bit--, px_drawn++) {
-                // If bit is set draw text color pixel, if not draw background color
-                if (font_char[byte] & (1 << bit)) { 
-                    *((uint32_t *)framebuffer) = user_gfx_info->fg_color;
-                } else {
-                    *((uint32_t *)framebuffer) = user_gfx_info->bg_color;
-                }
-
-                framebuffer += bytes_per_pixel;  // Next pixel position
-            }
-        }
-    }
+    draw_cursor(show_cursor);
 
     return i;   // Number of bytes written
+}
+
+void draw_cursor(bool draw) {
+    const uint8_t FONT_W = *(uint8_t *)FONT_WIDTH; 
+    const uint8_t FONT_H = *(uint8_t *)FONT_HEIGHT;
+    const uint8_t bytes_per_pixel = (gfx_mode->bits_per_pixel+1) / 8;             // Get # of bytes per pixel, add 1 to fix 15bpp modes
+
+    uint8_t bytes_per_char_line = ((FONT_W - 1) / 8) + 1;
+    uint8_t char_size = bytes_per_char_line * FONT_H;
+    uint8_t *font_char = (uint8_t *)(FONT_ADDRESS + ((127 * char_size) - bytes_per_char_line));
+
+    // Go to last row of cursor character 
+    uint8_t *framebuffer = (uint8_t *)gfx_mode->physical_base_pointer +
+    ((Y * FONT_H * gfx_mode->x_resolution) * bytes_per_pixel) + 
+    ((X * FONT_W) * bytes_per_pixel);
+
+    framebuffer += (gfx_mode->x_resolution * (FONT_H - 1)) * bytes_per_pixel;   // Last line of character data
+
+    uint8_t px_drawn = 0;
+    for (int8_t byte = bytes_per_char_line - 1; byte >= 0; byte--) {
+        for (int8_t bit = 7; bit >= 0 && px_drawn < FONT_W; bit--, px_drawn++) {
+            // If bit is set draw text color pixel, if not draw background color
+            if ((font_char[byte] & (1 << bit)) && draw) { 
+                *((uint32_t *)framebuffer) = user_gfx_info->fg_color;
+            } else {
+                *((uint32_t *)framebuffer) = user_gfx_info->bg_color;
+            }
+
+            framebuffer += bytes_per_pixel;  // Next pixel position
+        }
+    }
 }
 

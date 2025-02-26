@@ -232,7 +232,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         memset(cmdString, 0, sizeof cmdString);
 
         // Print prompt
-        printf("\r\n\033CSRON;%s%s", current_dir, prompt);
+        printf("\r\n%s%s\033CSRON;", current_dir, prompt);
         
         input_length = 0;   // reset byte counter of input
 
@@ -569,8 +569,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         // Change colors command
         // TODO: Change to use terminal control codes to change FG/BG color when debugged
         if (strncmp(argv[0], cmdChgColors, strlen(argv[0])) == 0) {
-            uint32_t fg_color = 0;
-            uint32_t bg_color = 0;
+            uint32_t fg = 0, bg = 0;
 
             printf("\033CSROFF;\r\nCurrent colors (32bpp ARGB):");
             printf("\r\nForeground: %x", user_gfx_info->fg_color);
@@ -589,9 +588,9 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
 
                 putchar(input_char);
 
-                fg_color *= 16;
-                if      (input_char >= '0' && input_char <= '9') fg_color += input_char - '0';          // Convert hex ascii 0-9 to integer
-                else if (input_char >= 'A' && input_char <= 'F') fg_color += (input_char - 'A') + 10;   // Convert hex ascii 10-15 to integer
+                fg *= 16;
+                if      (input_char >= '0' && input_char <= '9') fg += input_char - '0';          // Convert hex ascii 0-9 to integer
+                else if (input_char >= 'A' && input_char <= 'F') fg += (input_char - 'A') + 10;   // Convert hex ascii 10-15 to integer
             }
 
             printf("\033CSROFF;");
@@ -609,17 +608,17 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
 
                 putchar(input_char);
 
-                bg_color *= 16;
+                bg *= 16;
 
-                if      (input_char >= '0' && input_char <= '9') bg_color += input_char - '0';          // Convert hex ascii 0-9 to integer
-                else if (input_char >= 'A' && input_char <= 'F') bg_color += (input_char - 'A') + 10;   // Convert hex ascii 10-15 to integer
+                if      (input_char >= '0' && input_char <= '9') bg += input_char - '0';          // Convert hex ascii 0-9 to integer
+                else if (input_char >= 'A' && input_char <= 'F') bg += (input_char - 'A') + 10;   // Convert hex ascii 10-15 to integer
             }
 
             printf("\033CSROFF;");
 
-            printf("\033FG%xBG%x;", convert_color(fg_color), convert_color(bg_color));
-            user_gfx_info->fg_color = convert_color(fg_color);  // Convert colors first before setting new values
-            user_gfx_info->bg_color = convert_color(bg_color);
+            printf("\033FG%xBG%x;", convert_color(fg), convert_color(bg));
+            user_gfx_info->fg_color = convert_color(fg);  // Convert colors first before setting new values
+            user_gfx_info->bg_color = convert_color(bg);
 
             printf("\r\n");
             continue;
@@ -717,9 +716,12 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
 
             char buf[256] = {0}; 
             int32_t len = 0;
-            while ((len = read(fd, buf, sizeof buf)) > 0) 
-                write(1, buf, len); // Write to stdout
-
+            while ((len = read(fd, buf, sizeof buf)) > 0) {
+                for (int32_t i = 0; i < len; i++) {
+                    if (buf[i] == '\n') { putchar('\r'); putchar('\n'); } 
+                    else putchar(buf[i]);
+                }
+            }
             close(fd);  // File cleanup
             continue;
         }
@@ -805,7 +807,7 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         // Close file when done
         close(fd);
 
-        printf("Return Code: %d\r\n", return_code);
+        printf("\033CSROFF;Return Code: %d\r\n", return_code);
 
         // If used malloc(), free remaining malloc-ed memory to prevent memory leaks
         for (uint32_t i = 0, virt = malloc_virt_address; 
