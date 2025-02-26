@@ -65,7 +65,6 @@ uint8_t hex_count = 0;
 uint8_t hex_byte = 0;   // 1 byte/2 hex digits
 int32_t editor_filetype;
 char editor_filename[32];
-char blank_line[80];
 uint8_t font_height;
 uint32_t screen_rows;
 static char *load_file_error_msg = "Load file error occurred, press any key to go back...";
@@ -74,9 +73,6 @@ static char *digits              = "0123456789ABCDEF";
 
 int main(int argc, char *argv[]) {
     // Initialize global variables
-    memset(blank_line, ' ', sizeof blank_line-1);
-    blank_line[sizeof blank_line-1] = '\0';
-
     font_height = *(uint8_t *)FONT_HEIGHT;
     screen_rows = gfx_mode->y_resolution / font_height;
 
@@ -268,11 +264,11 @@ void text_editor(char *in_filename) {
         if (unsaved) putchar('*');  // Unsaved changes
         printf("%s", (file_mode == NEW) ? "NEW" : "UPD");
 
-        printf("\033X%uY%u;", 1u, screen_rows-1);
-        printf("Ctrl-R: Return | Ctrl-S: Save | Ctrl-C: Chg name/ext | Ctrl-D: Del line");
+        write_bottom_screen_message(
+            "Ctrl-R: Return | Ctrl-S: Save | Ctrl-C: Chg name/ext | Ctrl-D: Del line");
 
-        // Restore cursor position
-        printf("\033CSRON;\033X%uY%u;", cursor_x, cursor_y);
+        // Restore cursor position: show cursor for user input
+        printf("\033CSRON;\033X%uY%u; \033BS;", cursor_x, cursor_y);
 
 		// Get next key, check text editor keybinds
         input_char = get_key();
@@ -283,7 +279,6 @@ void text_editor(char *in_filename) {
                 // If new file, input file name and extension
                 if (file_mode == NEW) {
                     printf("\033CSROFF;");  // Erase cursor 
-                    write_bottom_screen_message(blank_line);
                     write_bottom_screen_message("Enter file name: "); 
                     printf("\033CSRON;");  
 
@@ -313,7 +308,6 @@ void text_editor(char *in_filename) {
             // Ctrl-C: Change file name 
             if (input_char == 'c') {
                 printf("\033CSROFF;");  // Remove cursor
-                write_bottom_screen_message(blank_line);
                 write_bottom_screen_message("Enter file name: "); 
                 printf("\033CSRON;");  
 
@@ -895,7 +889,6 @@ void save_hex_program(void) {
     memset(file_ptr, 0, 512 - (editor_filesize % 512)); 
 
 	// Print filename string
-    write_bottom_screen_message(blank_line);
     write_bottom_screen_message("Enter file name: ");
     printf("\033CSRON;");
 
@@ -931,7 +924,7 @@ void input_file_name(void) {
     editor_filename[i] = '\0';
 }
 
-// Write message at bottom of screen
+// Blank out bottom line of screen, then write message 
 void write_bottom_screen_message(char *msg) {
-    printf("\033X%uY%u;%s", 0u, screen_rows - 1, msg);
+    printf("\033X%uY%u;%80s\r%s", 0u, screen_rows - 1, "", msg);
 }

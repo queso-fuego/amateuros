@@ -557,11 +557,7 @@ bool print_dir(char *path) {
                 if (dir_entry->id != 0) {
                     num_entries++;
 
-                    // Print out file name from this dir 
-                    // TODO: Change printf() to be able to use fixed width with padding and left/right adjust
-                    printf("\r\n%s ", dir_entry->name);
-
-                    // Print out inode info for file
+                    // Get inode info for file
                     rw_sectors(1,
                                (superblock.first_inode_block * SECTORS_PER_BLOCK) + 
                                    (dir_entry->id / INODES_PER_SECTOR),
@@ -570,9 +566,13 @@ bool print_dir(char *path) {
 
                     inode_t *inode = (inode_t *)temp_sector + (dir_entry->id % INODES_PER_SECTOR);
 
-                    if (inode->type == FILETYPE_DIR) printf("[DIR] ");
+                    // Name/directory type
+                    printf("\r\n%-20s%-5s ", 
+                           dir_entry->name, 
+                           inode->type == FILETYPE_DIR ? "[DIR]" : "");
 
-                    printf("%d %.2d-%.2d-%d %.2d:%.2d:%.2d  %d", 
+                    // Size, date/time, reference count
+                    printf("%-10d %.2d-%.2d-%d %.2d:%.2d:%.2d  %d", 
                            inode->size_bytes, 
 
                            inode->last_modified_timestamp.month,
@@ -590,8 +590,6 @@ bool print_dir(char *path) {
 
     // TODO: Also load single/double indirect extents for inode
 
-    // Ended without errors
-    puts("\r\n"); 
     return true;
 }
 
