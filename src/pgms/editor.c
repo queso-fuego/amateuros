@@ -13,7 +13,6 @@
 #include "global/global_addresses.h"
 #include "fs/fs_impl.h"
 
-#define ENDOFLINE  80
 #define ESCAPE     0x1B  // Escape Key
 #define SPACE      0x20  // ASCII space
 #define LEFTARROW  0x4B	 // Keyboard scancodes...
@@ -183,8 +182,8 @@ void editor_load_file(char *filename) {
             }
         }
 
-        hex_count = 0;      // Reset byte counter
-        file_ptr = file_address;  // Reset pointer to file 
+        hex_count = 0;              // Reset byte counter
+        file_ptr = file_address;    // Reset pointer to start of file 
         file_offset = 0;
         
         hex_editor();
@@ -364,16 +363,16 @@ void text_editor(char *in_filename) {
             case '\b':      // Backspace
             case DELKEY:    // Delete
                 // TODO: May be inconsistent with multiple lines and deleting at different positions
-                if (input_char == '\b' && cursor_x == 0) continue;  // Skip backspace at start of line
+                if (input_char == '\b' && cursor_x == 0) break; // Skip backspace at start of line
 
                 // TODO: Handle newline deletion
-                if (*file_ptr == '\n') continue;
+                if (*file_ptr == '\n') break;
 
-                // At end of file? Move cursor back
+                printf("\033CSROFF;");
+
+                // At end of file? Move back 1 and go on
                 if (*file_ptr == 0x00 && file_offset != 0) {
-                    printf("\033CSROFF;");
-
-                    // Go back 1 character
+                    printf("\033BS; \033BS;"); // Erase character with space, left/space/left
                     cursor_x--;
                     file_ptr--;
                     file_offset--;
@@ -383,6 +382,7 @@ void text_editor(char *in_filename) {
 
                 // Backspace, move back 1 character/byte
                 if (input_char == '\b') {
+                    printf("\033BS; \033BS;"); // Erase character with space, left/space/left
                     cursor_x--;
                     file_ptr--;
                     file_offset--;
@@ -394,14 +394,14 @@ void text_editor(char *in_filename) {
                 file_length_bytes--;    // Deleted a char/byte from file data
 
                 // Redraw line until end of line or end of file
-                for (uint8_t *p = file_ptr - cursor_x; *p != '\n' && *p != 0x00; p++) 
+                for (uint8_t *p = file_ptr; *p != '\n' && *p != 0x00; p++) 
                     putchar(*p);
                 
                 putchar(' ');   // Previous end of line is now a space
                 current_line_length--;
 
                 // Restore cursor position
-                printf("\033X%uY%u;", cursor_x, cursor_y);
+                printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
 
                 unsaved = true;    // File now has unsaved changes
                 break;
@@ -550,31 +550,35 @@ void text_editor(char *in_filename) {
                 // Insert new character
                 printf("\033CSROFF;");
 
-                // Print out user input character to screen
-                current_line_length++;  // Update line length
-                file_length_bytes++;    // Update file length
-                if (input_char == '\r') file_length_lines++;  // Update file length
+                // Move all file data forward 1 byte 
+                uint8_t *to = file_address + file_length_bytes, *from = to-1;
+                for (uint32_t i = 0; i < file_length_bytes - file_offset; i++)
+                    *to-- = *from--;
 
-                // Move all file data forward 1 byte then fill in current character
-                memcpy(file_ptr, file_ptr-1, file_length_bytes - file_offset);
+                current_line_length++;      // Update line length
+                file_length_bytes++;        // Update file length
 
-                if (input_char == '\r') input_char = '\n';  // Convert CR to LF
+                if (input_char == '\r') {
+                    input_char = '\n';      // Convert CR to LF
+                    file_length_lines++;    // Update file lines length
+                }
                 *file_ptr = input_char;     // Overwrite current character at cursor
 
                 // Reprint file data, starting from cursor 
                 if (input_char == '\n') {
                     // Newline, reprint all lines until new end of file
                     // Blank out rest of current line
-                    int32_t diff = 80 - cursor_x;
+                    int32_t diff = line_length - cursor_x;
                     while (diff--) putchar(' ');
 
                     // Blank out rest of file
-                    for (uint32_t i = cursor_y; i <= file_length_lines; i++) 
-                        printf("%80s\r\n", "");
+                    for (uint32_t i = cursor_y+1; i <= file_length_lines; i++) 
+                        printf("\r\n%80s", "");
 
-                    // Reprint file data from current position
+                    // Reprint file data from new current position
+                    printf("\033X%uY%u;", cursor_x, cursor_y);
                     for (uint8_t *p = file_ptr; *p != 0x00; p++) {
-                        if (*p == '\n') printf(" \r\n");     // Newline
+                        if (*p == '\n') printf("\r\n");     // Newline
                         else            putchar(*p);
                     }
 
