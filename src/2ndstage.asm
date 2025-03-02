@@ -253,12 +253,43 @@ use16
         .done:
             ret
 
+    ;; Task state segment
+    TSS:
+    dd 0h       ; previous TSS
+    dd 100000h  ; esp0, Initial Kernel ESP to use (1MB and below)
+    dd 10h      ; ss0, Kernel data selector for SS to use
+    dd 0        ; esp1
+    dd 0        ; ss1
+    dd 0        ; esp2
+    dd 0        ; ss2
+    dd 0        ; cr3
+    dd 0        ; eip
+    dd 0        ; eflags
+    dd 0        ; eax
+    dd 0        ; ecx
+    dd 0        ; edx
+    dd 0        ; ebx
+    dd 0        ; esp
+    dd 0        ; ebp
+    dd 0        ; esi
+    dd 0        ; edi
+    dd 0        ; es
+    dd 0        ; cs
+    dd 0        ; ss 
+    dd 0        ; ds 
+    dd 0        ; fs 
+    dd 0        ; gs 
+    dd 0        ; ldt
+    dw 0        ; trap
+    dw 0        ; iomap
+    .end:
+
     ;; Set up GDT
     GDT_start:
     ;; Offset 0h
     dq 0h           ;; 1st descriptor required to be NULL descriptor
 
-    ;; Offset 08h
+    ;; Offset 08h: Kernel Code segment
     .code:
     dw 0FFFFh       ; Segment limit 1 - 2 bytes
     dw 0h           ; Segment base 1 - 2 bytes
@@ -268,7 +299,7 @@ use16
     db 11001111b    ; bits: 7 - granularity (4KiB), 6 - size (32bit protected mode), 3-0 segment limit 2 - 4 bits
     db 0h           ; Segment base 3 - 1 byte
 
-    ;; Offset 10h
+    ;; Offset 10h: Kernel Data segment
     .data:
     dw 0FFFFh       ; Segment limit 1 - 2 bytes
     dw 0h           ; Segment base 1 - 2 bytes
@@ -276,6 +307,34 @@ use16
     db 10010010b    ; Access byte
     db 11001111b    ; bits: 7 - granularity (4KiB), 6 - size (32bit protected mode), 3-0 segment limit 2 - 4 bits
     db 0h           ; Segment base 3 - 1 byte
+
+    ;; Offset 18h: User Code segment
+    .usercode:
+    dw 0FFFFh       ; Segment limit 1 - 2 bytes
+    dw 0h           ; Segment base 1 - 2 bytes
+    db 0h           ; Segment base 2 - 1 byte
+    db 11111010b    ; Access byte - bits: 7 - Present, 6-5 - privelege level (3 = user), 4 - descriptor type (code/data)
+                    ;  3 - executable y/n, 2 - direction/conforming (grow up from base to limit), 1 - read/write, 0 - accessed (CPU sets this)
+    db 11001111b    ; bits: 7 - granularity (4KiB), 6 - size (32bit protected mode), 3-0 segment limit 2 - 4 bits
+    db 0h           ; Segment base 3 - 1 byte
+
+    ;; Offset 20h: User Data segment
+    .userdata:
+    dw 0FFFFh       ; Segment limit 1 - 2 bytes
+    dw 0h           ; Segment base 1 - 2 bytes
+    db 0h           ; Segment base 2 - 1 byte
+    db 11110010b    ; Access byte: privelege level 3/user
+    db 11001111b    ; bits: 7 - granularity (4KiB), 6 - size (32bit protected mode), 3-0 segment limit 2 - 4 bits
+    db 0h           ; Segment base 3 - 1 byte
+
+    ;; Offset 28h: TSS descriptor
+    .tss:
+    dw TSS.end - TSS - 1    ; Limit = sizeof TSS - 1
+    dw TSS                  ; Base = address of TSS
+    db 0h
+    db 10001001b    ; access byte: 32 bit TSS (available)
+    db 0h           ; Flags = 0
+    db 0h
 
     ;; Load GDT
     GDT_Desc:
@@ -301,6 +360,12 @@ use32                    ; We are officially in 32 bit mode now
     mov gs, ax                
     mov ss, ax
     mov esp, 090000h	    ; Set up stack pointer
+
+    mov ax, 28h             ; TSS descriptor offset in GDT
+    ltr ax                  ; Load task register with TSS
+
+    mov eax, GDT_start
+    mov [0x1810], eax       ; Store GDT address 
 
     ;; Set up VBE mode info block in memory to be easier to work with
     mov esi, mode_info_block

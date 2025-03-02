@@ -64,7 +64,7 @@ enum {
 };
 
 // Load ELF File
-void *load_elf_file(uint8_t *file_address, void *exe_buffer) {
+void *load_elf_file(uint8_t *file_address, void **pgm_buf, uint32_t *pgm_size) {
     Elf32_Ehdr *ehdr = (Elf32_Ehdr *)file_address;
 
     // Print ELF Info
@@ -134,17 +134,18 @@ void *load_elf_file(uint8_t *file_address, void *exe_buffer) {
     printf("\r\nMemory needed for file: %x\r\n", buffer_size);
 
     // Create buffer for file
-    exe_buffer = malloc(buffer_size);
+    *pgm_buf = malloc(buffer_size);
+    *pgm_size = buffer_size;
 
-    if (exe_buffer == NULL) {
+    if (*pgm_buf == NULL) {
         printf("\r\nError: Could not malloc() enough memory for program\r\n");
         return NULL;
     }
 
-    printf("\r\nProgram buffer address: %x\r\n", (uint32_t)exe_buffer);
+    printf("\r\nProgram buffer address: %x\r\n", (uint32_t)*pgm_buf);
 
     // Zero init buffer, to ensure 0 padding for all program sections
-    memset(exe_buffer, 0, buffer_size);
+    memset(*pgm_buf, 0, buffer_size);
 
     // Load program headers into buffer
     for (uint32_t i = 0; i < ehdr->e_phnum; i++) {
@@ -159,7 +160,7 @@ void *load_elf_file(uint8_t *file_address, void *exe_buffer) {
 
         // Read in p_filesz amount of data from p_offset in original file buffer,
         //   to p_vaddr (offset by same relative amount) in new buffer
-        uint8_t *dst = (uint8_t *)exe_buffer + relative_offset; 
+        uint8_t *dst = (uint8_t *)*pgm_buf + relative_offset; 
         uint8_t *src = file_address + phdr[i].p_offset;
         uint32_t len = phdr[i].p_filesz;
 
@@ -170,8 +171,7 @@ void *load_elf_file(uint8_t *file_address, void *exe_buffer) {
 
     // Return entry point which if offset into new buffer, 
     //   also needs to be relatively offset from the start of the original ELF buffer
-    void *entry_point = (void *)((uint8_t *)exe_buffer + (ehdr->e_entry - mem_min));
-
+    void *entry_point = (void *)((uint8_t *)*pgm_buf + (ehdr->e_entry - mem_min));
     return entry_point;
 }
 

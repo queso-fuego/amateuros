@@ -11,6 +11,7 @@
 #include "C/string.h" 
 #include "C/stdio.h"
 #include "C/stdbool.h"
+#include "C/stdlib.h"
 #include "sys/syscall_wrappers.h" 
 #include "gfx/2d_gfx.h"
 #include "keyboard/keyboard.h"
@@ -33,7 +34,7 @@ uint32_t scan;
 int32_t parse_num = 0;
 bool interactive = false;
 
-int main(int argc, char *argv[]) {
+int32_t main(int32_t argc, char *argv[]) {
     char input_char;
     const char valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
     uint8_t idx;
@@ -54,7 +55,7 @@ int main(int argc, char *argv[]) {
         }
 
         printf("\r\n"); // End newline to fix spacing 
-        return 0;   // Return to caller with SUCCESS
+        exit(0);   // Return to caller with SUCCESS
     }
     
     // Initial newline to not be at end of last user input from shell prompt
@@ -87,7 +88,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (input_char == 0x1B || (key_info->ctrl && input_char == 'r'))    // Escape key or ctrl-R
-           return 0;  // Return to caller 
+           exit(0);  // Return to caller 
 
         buffer[scan] = input_char;
         scan++;
@@ -95,6 +96,7 @@ int main(int argc, char *argv[]) {
         // Print char to screen
         putchar(input_char);
     }
+    exit(0);
 }
 
 void parse_buffer(void)

@@ -7,7 +7,7 @@
 
 typedef enum {
     SYSCALL_TEST0  = 0,
-    SYSCALL_TEST1  = 1,
+    SYSCALL_EXIT   = 1,
     SYSCALL_SLEEP  = 2,
     SYSCALL_MALLOC = 3,
     SYSCALL_FREE   = 4,

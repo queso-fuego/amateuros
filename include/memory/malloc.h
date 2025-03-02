@@ -33,12 +33,9 @@ void malloc_init(const uint32_t bytes)
     malloc_list_head    = (malloc_block_t *)malloc_virt_address;
 
     // Map in pages
-    for (uint32_t i = 0, virt = malloc_virt_address; i < total_malloc_pages; i++, virt += PAGE_SIZE) {
-        map_page((void *)(malloc_phys_address + i*PAGE_SIZE), (void *)virt);
-
-        pt_entry *page = get_page(virt);
-        SET_ATTRIBUTE(page, PTE_READ_WRITE); // Read/write access for malloc-ed pages
-    }
+    for (uint32_t i = 0, virt = malloc_virt_address; i < total_malloc_pages; i++, virt += PAGE_SIZE) 
+        map_address(current_page_directory, malloc_phys_address + i*PAGE_SIZE, virt,
+                    PTE_PRESENT | PTE_READ_WRITE | PTE_USER);
 
     if (malloc_list_head) {
         malloc_list_head->size = (total_malloc_pages * PAGE_SIZE) - sizeof(malloc_block_t);
@@ -97,11 +94,10 @@ void *malloc_next_block(const uint32_t size)
         uint32_t virt = malloc_virt_address + total_malloc_pages*PAGE_SIZE;
 
         for (uint8_t i = 0; i < num_pages; i++) {
-            pt_entry page = 0;
-            uint32_t *temp = allocate_page(&page);
+            uint32_t temp = (uint32_t)allocate_blocks(1);
+            map_address(current_page_directory, temp, virt,
+                        PTE_PRESENT | PTE_READ_WRITE | PTE_USER);
 
-            map_page((void *)temp, (void *)virt);
-            SET_ATTRIBUTE(&page, PTE_READ_WRITE);
             virt += PAGE_SIZE;
             cur->size += PAGE_SIZE;
             total_malloc_pages++;

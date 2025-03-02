@@ -46,16 +46,8 @@ void free(const void *ptr) {
     __asm__ __volatile__ ("int $0x80" : : "a"(SYSCALL_FREE), "b"(ptr) );
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
+// Terminate running process
+void exit(const int32_t status) {
+    __asm__ __volatile__ ("int $0x80" : : "a"(SYSCALL_EXIT), "b"(status) );
+}
 

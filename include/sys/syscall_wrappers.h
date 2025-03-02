@@ -66,22 +66,3 @@ int32_t seek(const int32_t fd, const int32_t offset, const whence_value_t whence
     return result;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

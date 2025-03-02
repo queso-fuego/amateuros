@@ -11,7 +11,7 @@
 
 #define MAX_PATH_SIZE 256
 
-char *current_dir;                      // "Current working directory" string
+static char current_dir[512];           // "Current working directory" string, from kernel.c
 inode_t current_dir_inode;              // Inode for current working dir
 inode_t current_parent_inode;
 uint8_t temp_sector[FS_SECTOR_SIZE];    // Temporary work sector

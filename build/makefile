@@ -46,7 +46,6 @@ OS       ::= $(BIN_DIR)/OS.bin
 # NOTE: -enable-kvm makes RTC and disk accesses slow for me, but can be better accuracy
 # NOTE: Change or remove audiodev and related audio lines depending on platform and sound setup
 QEMU     ::= qemu-system-i386 \
-             -monitor stdio \
              -m 128M \
              -drive format=raw,file=$(OS),if=ide,index=0,media=disk \
              -rtc base=localtime,clock=host,driftfix=slew \
@@ -108,7 +107,7 @@ $(BIN_DIR)/%.bin: $(SRC_DIR)/%.c
 
 # Launch OS with qemu 
 run:
-	$(QEMU)
+	$(QEMU) -monitor stdio -d cpu_reset
 
 # Use .gdbinit and autoload gdb for debugging
 debug:

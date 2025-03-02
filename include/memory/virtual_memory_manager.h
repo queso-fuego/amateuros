@@ -4,6 +4,7 @@
 #pragma once
 
 #include "C/stdbool.h"
+#include "C/stddef.h"
 #include "C/string.h"
 #include "memory/physical_memory_manager.h"
 #include "global/global_addresses.h"
@@ -63,6 +64,13 @@ typedef struct {
 } page_directory;
 
 page_directory *current_page_directory = 0;
+
+void map_address(page_directory *dir, uint32_t phys, uint32_t virt, uint32_t flags);
+bool create_page_table(page_directory *dir, uint32_t virt, uint32_t flags);
+
+page_directory *get_page_directory(void) {
+    return current_page_directory;
+}
 
 // Get entry in page table for given address
 pt_entry *get_pt_entry(page_table *pt, virtual_address address)
@@ -182,27 +190,58 @@ void unmap_page(void *virt_address)
     CLEAR_ATTRIBUTE(page, PTE_PRESENT); // Set as not present, will trigger a #PF
 }
 
+void map_address(page_directory *dir, uint32_t phys, uint32_t virt, uint32_t flags) {
+    pd_entry *pd = dir->entries;
+    if (pd[virt >> 22] == 0) create_page_table(dir, virt, flags);
+    ((uint32_t *)(pd[virt >> 22] & ~0xFFF))[virt << 10 >> 10 >> 12] = phys | flags;
+}
+
+bool create_page_table(page_directory *dir, uint32_t virt, uint32_t flags) {
+    pd_entry *pd = dir->entries;
+    if (pd[virt >> 22] == 0) {
+        void *block = allocate_blocks(1);
+        if (!block) return false;
+        pd[virt >> 22] = (uint32_t)block | flags;
+        memset((uint32_t *)pd[virt >> 22], 0, PAGE_SIZE);
+
+        // Map page table into directory
+        map_address(dir, (uint32_t)block, (uint32_t)block, flags); 
+    }
+    return true;
+}
+
+void unmap_page_table(page_directory *dir, uint32_t virt) {
+    pd_entry *pd = dir->entries;
+    if (pd[virt >> 22] != 0) {
+        // Get mapped frame
+        void *frame = (void *)(pd[virt >> 22] & 0x7FFFF000);
+
+        // Unmap frame
+        free_blocks(frame, 1);
+        pd[virt >> 22] = 0;
+    }
+}
+
+void unmap_address(page_directory *dir, uint32_t virt) {
+    pd_entry *pd = dir->entries;
+    if (pd[virt >> 22] != 0) unmap_page_table(dir, virt);
+}
+
+void *get_physical_address(page_directory *dir, uint32_t virt) {
+    pd_entry *pd = dir->entries;
+    if (pd[virt >> 22] == 0) return NULL;
+    return (void *)((uint32_t *)(pd[virt >> 22] & ~0xFFF))[virt << 10 >> 10 >> 12];
+}
+
 // Initialize virtual memory manager
 bool initialize_virtual_memory_manager(void)
 {
-    // Create a default page directory
-    page_directory *dir = (page_directory *)allocate_blocks(3);
-
-    if (!dir) return false; // Out of memory
-
-    // Clear page directory and set as current
-    memset(dir, 0, sizeof(page_directory));
-    for (uint32_t i = 0; i < 1024; i++)
-        dir->entries[i] = 0x02; // Supervisor, read/write, not present
-
     // Allocate page table for 0-4MB
     page_table *table = (page_table *)allocate_blocks(1);
-
     if (!table) return false;   // Out of memory
 
     // Allocate a 3GB page table
     page_table *table3G = (page_table *)allocate_blocks(1);
-
     if (!table3G) return false;   // Out of memory
 
     // Clear page tables
@@ -226,12 +265,18 @@ bool initialize_virtual_memory_manager(void)
         // Create new page
         pt_entry page = 0;
         SET_ATTRIBUTE(&page, PTE_PRESENT);
-        SET_ATTRIBUTE(&page, PTE_READ_WRITE);
         SET_FRAME(&page, frame);
 
         // Add page to 0-4MB page table
         table->entries[PT_INDEX(virt)] = page;
     }
+
+    // Create a default page directory
+    page_directory *dir = (page_directory *)allocate_blocks(3);
+    if (!dir) return false; // Out of memory
+
+    // Clear page directory 
+    memset(dir, 0, sizeof(page_directory));
 
     pd_entry *entry = &dir->entries[PD_INDEX(0xC0000000)];
     SET_ATTRIBUTE(entry, PDE_PRESENT);

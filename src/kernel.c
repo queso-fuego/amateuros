@@ -6,6 +6,7 @@
 #include "C/string.h"
 #include "C/stdio.h"
 #include "C/stddef.h"
+#include "C/stdbool.h"
 #include "C/time.h"
 #include "C/ctype.h"
 #include "global/global_addresses.h"
@@ -26,6 +27,7 @@
 #include "sys/syscall_wrappers.h"
 #include "fs/fs_impl.h"
 #include "elf/elf.h"
+#include "process/process.h"
 
 // Open file table & inode table pointers
 open_file_table_t *open_file_table;
@@ -36,6 +38,8 @@ inode_t *open_inode_table;
 uint32_t max_open_inodes;
 uint32_t current_open_inodes;
 
+extern char current_dir[512];   // Current working directory string
+
 uint32_t next_available_file_virtual_address;
 
 // Forward function declarations
@@ -43,6 +47,8 @@ void print_physical_memory_info(void);  // Print information from the physical m
 void init_open_file_table(void);                                        
 void init_open_inode_table(void);                                        
 void init_fs_vars(void);
+
+void shell(bool, int32_t);
 
 bool cmd_touch(int32_t argc, char *argv[]);
 
@@ -53,75 +59,10 @@ bool test_read(void);
 bool test_malloc(void);
 
 __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
-    char cmdString[256] = {0};         // User input string  
-    char *cmdString_ptr = cmdString;
-    uint8_t input_char   = 0;       // User input character
-    uint8_t input_length;           // Length of user input
-    char *cmdDir          = "dir";          // Directory command; list all files/pgms on disk
-    char *cmdReboot       = "reboot";       // 'warm' reboot option
-    char *cmdPrtreg       = "prtreg";       // Print register values
-    char *cmdGfxtst       = "gfxtst";       // Graphics mode test
-    char *cmdHlt          = "hlt";          // E(n)d current program by halting cpu
-    char *cmdCls	      = "cls";          // Clear screen by scrolling
-    char *cmdShutdown     = "shutdown";     // Close QEMU emulator
-    char *cmdDelFile      = "del";		    // Delete a file from disk
-    char *cmdPrtmemmap    = "prtmemmap";    // Print physical memory map info
-    char *cmdChgColors    = "chgcolors";    // Change current fg/bg colors
-    char *cmdChgFont      = "chgfont";      // Change current font
-    char *cmdSleep        = "sleep";        // Sleep for a # of seconds
-    char *cmdMSleep       = "msleep";       // Sleep for a # of milliseconds
-    char *cmdShowDateTime = "datetime";     // Show CMOS RTC date/time values
-    char *cmdSoundTest    = "soundtest";    // Test pc speaker square wave sound
-    char *cmdRunTests     = "runtests";     // Run test functions
-    char *cmdType         = "type";         // 'Type' out a text or other file to the screen
-
-    // TODO: Move all commands to this array 
-    // !NOTE!: All commands here need to have their own functions at the 
-    //   exact same array offset/element in the command_functions array below
-    enum {
-        MKDIR,
-        CHDIR,
-        RM,
-        RMDIR,
-        REN,
-        TOUCH,
-    };
-
-    char *commands[] = {
-        [MKDIR] = "mkdir",
-        [CHDIR] = "chdir",
-        [RM]    = "rm",
-        [RMDIR] = "rmdir",
-        [REN]   = "ren", 
-        [TOUCH] = "touch",
-    };
-
-    // Commands will be similar to programs, and be called
-    //   with the same argc/argv[]
-    bool (*command_functions[])(int32_t argc, char **) = {
-        [CHDIR] = fs_change_dir,
-        [MKDIR] = fs_make_dir,
-        [RM]    = fs_delete_file,
-        [RMDIR] = fs_delete_dir,
-        [REN]   = fs_rename_file,
-        [TOUCH] = cmd_touch,
-    };
-
-    uint8_t fileExt[3];
-    uint8_t *file_ptr;
     //uint8_t *windowsMsg     = "\r\n" "Oops! Something went wrong :(" "\r\n\0";
     uint8_t *menuString     = "------------------------------------------------------\r\n"
                               "Kernel Booted, Welcome to QuesOS - 32 Bit 'C' Edition!\r\n"
                               "------------------------------------------------------\r\n";
-    uint8_t *failure        = "\r\n" "Command/Program not found, Try again" "\r\n";
-    uint8_t *prompt         = ">";
-    uint8_t *fontNotFound   = "\r\n" "Font not found!" "\r\n";
-
-    uint8_t font_width  = *(uint8_t *)FONT_WIDTH;
-    uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
-    int32_t argc = 0;
-    char *argv[10] = {0};
-
     // --------------------------------------------------------------------
     // Initial hardware, interrupts, etc. setup
     // --------------------------------------------------------------------
@@ -177,25 +118,18 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     //   non-exception and not NMI hardware interrupts
     __asm__ __volatile__("sti");
 
-    // Set up kernel malloc variables for e.g. printf() calls
-    uint32_t kernel_malloc_virt_address = 0x300000;
-    uint32_t kernel_malloc_phys_address = (uint32_t)allocate_blocks(1);
-    uint32_t kernel_total_malloc_pages  = 1;
+    // Set up kernel malloc variables 
+    malloc_virt_address = 0x400000; // 4MB
+    malloc_phys_address = (uint32_t)allocate_blocks(1);
+    map_address(current_page_directory, malloc_phys_address, malloc_virt_address,
+                PTE_PRESENT | PTE_READ_WRITE | PTE_USER);
 
-    map_page((void *)kernel_malloc_phys_address, (void *)kernel_malloc_virt_address);
-    pt_entry *kernel_malloc_page = get_page(kernel_malloc_virt_address);
-    SET_ATTRIBUTE(kernel_malloc_page, PTE_READ_WRITE);  // Add read/write flags for malloc-ed memory
+    malloc_list_head       = (malloc_block_t *)malloc_virt_address;
+    malloc_list_head->size = PAGE_SIZE - sizeof(malloc_block_t);
+    malloc_list_head->free = true;
+    malloc_list_head->next = 0;
 
-    malloc_block_t *kernel_malloc_list_head = (malloc_block_t *)kernel_malloc_virt_address;
-
-    kernel_malloc_list_head->size = PAGE_SIZE - sizeof(malloc_block_t);
-    kernel_malloc_list_head->free = true;
-    kernel_malloc_list_head->next = 0;
-    
-    malloc_list_head    = kernel_malloc_list_head;
-    malloc_virt_address = kernel_malloc_virt_address;
-    malloc_phys_address = kernel_malloc_phys_address;
-    total_malloc_pages  = kernel_total_malloc_pages;
+    total_malloc_pages  = 1;
 
     // Set up initial file system variables
     init_fs_vars();
@@ -207,14 +141,10 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     // Set intial colors
     while (!user_gfx_info->fg_color) {
         if (gfx_mode->bits_per_pixel > 8) {
-            printf("\033FG%xBG%x;", convert_color(0x00EEEEEE), convert_color(0x00222222)); 
-            user_gfx_info->fg_color = convert_color(0x00EEEEEE);
-            user_gfx_info->bg_color = convert_color(0x00222222);
+            printf("\033FG%#xBG%#x;", convert_color(0x00EEEEEE), convert_color(0x00222222)); 
         } else {
             // Assuming VGA palette
-            printf("\033FG%xBG%x;", convert_color(0x02), convert_color(0x00)); 
-            user_gfx_info->fg_color = convert_color(0x02);
-            user_gfx_info->bg_color = convert_color(0x00);
+            printf("\033FG%#xBG%#x;", convert_color(0x02), convert_color(0x00)); 
         }
     }
 
@@ -224,20 +154,92 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     // Print OS boot message
     printf("\033CSROFF;%s", menuString);
 
-    // --------------------------------------------------------------------
-    // Get user input, print to screen & run command/program  
-    // --------------------------------------------------------------------
-    while (1) {
-        // Reset tokens data, arrays, and variables for next input line
-        memset(cmdString, 0, sizeof cmdString);
+    shell(false, 0);
+}
 
+// Kernel "shell"
+void shell(bool from_process, int32_t return_status) {
+    char cmdString[256] = {0};         // User input string  
+    char *cmdString_ptr = cmdString;
+    uint8_t input_char   = 0;       // User input character
+    uint8_t input_length;           // Length of user input
+    char *cmdDir          = "dir";          // Directory command; list all files/pgms on disk
+    char *cmdReboot       = "reboot";       // 'warm' reboot option
+    char *cmdPrtreg       = "prtreg";       // Print register values
+    char *cmdGfxtst       = "gfxtst";       // Graphics mode test
+    char *cmdHlt          = "hlt";          // E(n)d current program by halting cpu
+    char *cmdCls	      = "cls";          // Clear screen by scrolling
+    char *cmdShutdown     = "shutdown";     // Close QEMU emulator
+    char *cmdDelFile      = "del";		    // Delete a file from disk
+    char *cmdPrtmemmap    = "prtmemmap";    // Print physical memory map info
+    char *cmdChgColors    = "chgcolors";    // Change current fg/bg colors
+    char *cmdChgFont      = "chgfont";      // Change current font
+    char *cmdSleep        = "sleep";        // Sleep for a # of seconds
+    char *cmdMSleep       = "msleep";       // Sleep for a # of milliseconds
+    char *cmdShowDateTime = "datetime";     // Show CMOS RTC date/time values
+    char *cmdSoundTest    = "soundtest";    // Test pc speaker square wave sound
+    char *cmdRunTests     = "runtests";     // Run test functions
+    char *cmdType         = "type";         // 'Type' out a text or other file to the screen
+
+    uint8_t *prompt       = ">";
+    uint8_t *fontNotFound = "\r\n" "Font not found!" "\r\n";
+    uint8_t *failure      = "\r\n" "Command/Program not found, Try again" "\r\n";
+
+    uint8_t font_width  = *(uint8_t *)FONT_WIDTH;
+    uint8_t font_height = *(uint8_t *)FONT_HEIGHT;
+
+    uint8_t *file_ptr;
+    uint8_t fileExt[3];
+
+    int32_t argc = 0;
+    char *argv[10] = {0};
+
+    // TODO: Move all commands to below arrays
+    // !NOTE!: All commands here need to have their own functions at the 
+    //   exact same array offset/element in the command_functions array below
+    enum {
+        MKDIR,
+        CHDIR,
+        RM,
+        RMDIR,
+        REN,
+        TOUCH,
+    };
+
+    char *commands[] = {
+        [MKDIR] = "mkdir",
+        [CHDIR] = "chdir",
+        [RM]    = "rm",
+        [RMDIR] = "rmdir",
+        [REN]   = "ren", 
+        [TOUCH] = "touch",
+    };
+
+    // Commands will be similar to programs, and be called
+    //   with the same argc/argv[]
+    bool (*command_functions[])(int32_t argc, char **) = {
+        [CHDIR] = fs_change_dir,
+        [MKDIR] = fs_make_dir,
+        [RM]    = fs_delete_file,
+        [RMDIR] = fs_delete_dir,
+        [REN]   = fs_rename_file,
+        [TOUCH] = cmd_touch,
+    };
+
+    // If returned from a process, print return status code
+    if (from_process) {
+        from_process = false;
+        printf("\r\nReturn Code: %d\r\n", return_status);
+    }
+
+    while (true) {
         // Print prompt
         printf("\r\n%s%s\033CSRON;", current_dir, prompt);
         
-        input_length = 0;   // reset byte counter of input
+        input_length = 0;   // Reset input byte count
 
         // Key loop - get input from user
-        while (1) {
+        while (true) {
             input_char = get_key();     // Get ascii char from scancode from keyboard data port 60h
 
             if (input_char == '\r') {   // enter key?
@@ -254,7 +256,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
                     // Do a "visual" backspace; Move cursor back 1 space, print 2 spaces, move back 2 spaces
                     printf("\033BS;  \033BS;\033BS;");
                 }
-
                 continue;   // Get next character
             }
 
@@ -332,7 +333,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
         // Run test functions and present results
         if (strncmp(argv[0], cmdRunTests, strlen(argv[0])) == 0) {
             typedef struct {
-                //char name[256];
                 char *name;
                 bool (*function)(void);
             } test_function_t;
@@ -355,18 +355,17 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             for (uint32_t i = 0; i < num_tests; i++) {
                 printf("\r\n%s: ", tests[i].name);
                 if (tests[i].function()) {
-                    printf("\033FG%xBG%x;OK", GREEN, bg);
+                    printf("\033FG%#xBG%#x;OK", GREEN, bg);
                     num_passed++;
                 } else {
-                    printf("\033FG%xBG%x;FAIL", RED, bg);
+                    printf("\033FG%#xBG%#x;FAIL", RED, bg);
                 }
 
                 // Reset default colors
-                printf("\033FG%xBG%x;", fg, bg);
+                printf("\033FG%#xBG%#x;", fg, bg);
             }
 
             printf("\r\nTests passed: %d/%d\r\n", num_passed, num_tests);
-
             continue;
         }
 
@@ -741,103 +740,13 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
             continue;
         }
 
-        // Load file to memory
-        char *exe_name = argv[0];
-        int32_t fd = open(exe_name, O_RDWR);
-
-        if (fd < 0) {
-            printf("\r\nError: Could not load program %s\r\n", exe_name);
+        int32_t pid = create_process(argc, argv);
+        if (pid < 0) {
+            printf("\r\nError: Could not create process for program %s\r\n", argv[0]);
             continue;
         }
 
-        printf("\r\nFile loaded to address %x\r\n", open_file_table[fd].address);
-
-        // Determine what type of executable this is
-        uint8_t *magic = (uint8_t *)open_file_table[fd].address;
-
-        typedef int32_t program(int32_t argc, char *argv[]); 
-        int32_t return_code = 0;
-
-        // Save current kernel malloc values
-        malloc_block_t *save_malloc_head  = malloc_list_head;
-        uint32_t save_malloc_virt_address = malloc_virt_address;
-        uint32_t save_malloc_phys_address = malloc_phys_address;
-        uint32_t save_malloc_pages        = total_malloc_pages;
-
-        void *exe_buffer  = NULL; // Buffer to hold loaded executable
-        void *entry_point = NULL; // Entry point of executable
-
-        // Reset malloc variables before calling program
-        malloc_list_head    = 0;    // Start of linked list
-        // TODO: Change this, possibly using a virtual address map to get the next available 
-        //   virtual address
-        malloc_virt_address = next_available_file_virtual_address;
-        malloc_phys_address = 0;
-        total_malloc_pages  = 0;
-
-        if (magic[0] == 'M' && magic[1] == 'Z') {
-            // PE32 File
-            printf("PE32 Executable\r\n");
-            // ...
-
-        } else if (magic[0] == 0x7F && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F') {
-            // ELF32 File
-            printf("ELF32 Executable\r\n");
-
-            // Load elf file and get entry point
-            entry_point = load_elf_file(open_file_table[fd].address, exe_buffer);
-
-            if (entry_point == NULL) {
-                printf("Error: Could not load ELF file or get entry point\r\n");
-                continue;
-            }
-
-        } else {
-            // Assuming flat binary file by default
-            // ...
-        }
-
-        // Run the executable
-        printf("Entry point: %x\r\n", (uint32_t)entry_point);
-
-        program *pgm = NULL;
-        *(void **)&pgm = entry_point;   // Get around object pointer to function pointer warning
-        return_code = pgm(argc, argv);
-
-        // Close file when done
-        close(fd);
-
-        printf("\033CSROFF;Return Code: %d\r\n", return_code);
-
-        // If used malloc(), free remaining malloc-ed memory to prevent memory leaks
-        for (uint32_t i = 0, virt = malloc_virt_address; 
-             i < total_malloc_pages; 
-             i++, virt += PAGE_SIZE) {
-
-            pt_entry *page = get_page(virt);
-            if (PAGE_PHYS_ADDRESS(page) && TEST_ATTRIBUTE(page, PTE_PRESENT)) {
-                free_page(page);
-                unmap_page((void *)virt);
-                flush_tlb_entry(virt);  // Invalidate page as it is no longer present
-            }
-        }
-
-        // Reset malloc variables, exe buffer was loaded from this starting point
-        malloc_list_head    = save_malloc_head;
-        malloc_virt_address = save_malloc_virt_address;
-        malloc_phys_address = save_malloc_phys_address;
-        total_malloc_pages  = save_malloc_pages;
-
-        // Free malloc-ed memory for exe
-        free(exe_buffer);
-
-        // TODO: In the future, if using a backbuffer, restore screen data from that buffer here instead
-        //  of clearing
-            
-        if (return_code < 0) 
-            printf("Error running program; Return code: %d\r\n", return_code);
-
-        continue;   // Loop back to prompt for next input
+        execute_process();
     }
 }
 
@@ -904,7 +813,6 @@ void init_fs_vars(void) {
     superblock.root_inode_pointer = (uint32_t)&root_inode;
 
     // Set filesystem starting point
-    current_dir = calloc(1, 1024); // Set starting size of current working directory string
     strcpy(current_dir, "/");   // Start in 'root' directory by default
     current_dir_inode = root_inode;
     current_parent_inode = root_inode;  // Root's parent is itself
@@ -1038,7 +946,7 @@ bool test_write(void) {
         return false;
     }
 
-    char *buf = "Hello, World!";
+    char buf[] = "Hello, World!";
 
     if (14 != write(fd, buf, sizeof buf)) {
         printf("\r\nError: could not write \"%s\" to file %s\r\n", 
@@ -1062,7 +970,7 @@ bool test_read(void) {
         return false;
     }
 
-    char *str_buf = "Hello, World!";
+    char str_buf[] = "Hello, World!";
 
     if (14 != write(fd, str_buf, sizeof str_buf)) {
         printf("\r\nError: could not write \"%s\" to file %s\r\n", 

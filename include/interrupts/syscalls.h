@@ -8,37 +8,14 @@
 #include "C/stdio.h"    
 #include "C/string.h"    
 #include "sys/syscall_numbers.h"
+#include "sys/regs.h"
 #include "print/print_types.h"
 #include "interrupts/pic.h"
 #include "memory/malloc.h"
 #include "memory/virtual_memory_manager.h" 
 #include "terminal/terminal.h"
 #include "fs/fs_impl.h"
-
-// Registers pushed onto stack when a syscall function is called
-//  from the syscall dispatcher.
-// NOTE: Ordering here is reverse from push order, last value pushed is
-//    the first value in memory in the struct
-typedef struct {
-    int32_t eax;
-    int32_t ebx;
-    int32_t ecx;
-    int32_t edx;
-    int32_t esi;
-    int32_t edi;
-    int32_t ebp;
-    int32_t ds;
-    int32_t es;
-    int32_t fs;
-    int32_t gs;
-
-    // Interrupt frame pushed by cpu
-    int32_t eip;   
-    int32_t cs;
-    int32_t eflags;
-    int32_t esp;
-    int32_t ss;
-} syscall_regs_t;
+#include "process/process.h"
 
 // These extern vars are from kernel.c
 extern open_file_table_t *open_file_table;  
@@ -56,10 +33,46 @@ int32_t syscall_test0(syscall_regs_t *regs) {
     return EXIT_SUCCESS;
 }
 
-// Test syscall 1
-int32_t syscall_test1(syscall_regs_t *regs) {
-    printf("\r\nTest Syscall; Syscall # (EAX): %d\r\n", regs->eax);
-    return EXIT_SUCCESS;
+// Terminate running process
+int32_t syscall_exit(syscall_regs_t *regs) {
+    int32_t rtn = regs->ebx;
+    Process *cur = get_current_process();
+    if (!cur->id) return -1;   // No PID set, no current process
+
+    // Release threads
+    int32_t i = 0;
+    Thread *thread = &cur->threads[i];
+
+    // Get physical address of stack
+    void *stack_frame = get_physical_address(cur->page_dir, (uint32_t)thread->stack);
+
+    // Unmap and release stack memory
+    unmap_address(cur->page_dir, (uint32_t)thread->stack);
+    free_blocks(stack_frame, 1);
+
+    // Unmap and release program memory
+    for (uint32_t page = 0; page < thread->pgm_size / PAGE_SIZE; page++) {
+        uint32_t virt = thread->pgm_buf + (page * PAGE_SIZE);
+        uint32_t phys = (uint32_t)get_physical_address(cur->page_dir, virt);
+
+        unmap_address(cur->page_dir, virt);
+        free_blocks((void *)phys, 1);
+    }
+
+    // Restore kernel selectors
+    __asm__ __volatile__ ("cli\n"
+                          "movl $0x10, %eax\n"
+                          "movl %eax, %ds\n"
+                          "movl %eax, %es\n"
+                          "movl %eax, %fs\n"
+                          "movl %eax, %gs\n"
+                          "sti\n");
+
+    // Return back to kernel shell
+    extern void shell(bool, int32_t);
+    shell(true, rtn);
+
+    return rtn;
 }
 
 // Sleep for a given number of milliseconds
@@ -147,22 +160,18 @@ int32_t syscall_write(syscall_regs_t *regs) {
         uint32_t size_in_pages = bytes_to_blocks(bytes_to_allocate);
         if (size_in_pages == 0) size_in_pages = 1;  // Reserve 1 page by default for new/empty files
 
-        // Allocate enough pages/blocks for file
+        // Allocate pages/blocks for file: read/write and user accessible
         for (uint32_t i = 0; i < size_in_pages; i++) {
-            pt_entry page = 0;
-            uint32_t phys_addr = (uint32_t)allocate_page(&page);
+            uint32_t phys_addr = (uint32_t)allocate_blocks(1);
+            map_address(current_page_directory, phys_addr, next_available_file_virtual_address,
+                        PTE_PRESENT | PTE_READ_WRITE | PTE_USER);
 
-            if (!map_page((void *)phys_addr, (void *)(next_available_file_virtual_address))) {
-                // Error: Couldn't allocate enough additional memory for file
-                return -1;
-            }
-
-            // Set page as read/write
-            pt_entry *virt_page = get_page(next_available_file_virtual_address);
-            SET_ATTRIBUTE(virt_page, PTE_READ_WRITE);
+            //if (!map_page((void *)phys_addr, (void *)(next_available_file_virtual_address))) {
+            //    // Error: Couldn't allocate enough additional memory for file
+            //    return -1;
+            //}
 
             next_available_file_virtual_address += PAGE_SIZE;
-
             oft->pages_allocated++;  // File has another page allocated
         }
 
@@ -317,22 +326,18 @@ int32_t syscall_open(syscall_regs_t *regs) {
     uint32_t size_in_pages = bytes_to_blocks(tmp_ft_entry->inode->size_bytes);
     if (size_in_pages == 0) size_in_pages = 1;  // Reserve 1 page by default for new/empty files
 
-    // Allocate enough pages/blocks for file
+    // Allocate pages/blocks for file: read/write and user accessible
     for (uint32_t i = 0; i < size_in_pages; i++) {
-        pt_entry page = 0;
-        uint32_t phys_addr = (uint32_t)allocate_page(&page);
+        uint32_t phys_addr = (uint32_t)allocate_blocks(1);
+        map_address(current_page_directory, phys_addr, next_available_file_virtual_address,
+                    PTE_PRESENT | PTE_READ_WRITE | PTE_USER);
 
-        if (!map_page((void *)phys_addr, (void *)(next_available_file_virtual_address))) {
-            fd = -1;
-            return fd;
-        }
-
-        // Set page as read/write
-        pt_entry *virt_page = get_page(next_available_file_virtual_address);
-        SET_ATTRIBUTE(virt_page, PTE_READ_WRITE);
+        //if (!map_page((void *)phys_addr, (void *)(next_available_file_virtual_address))) {
+        //    fd = -1;
+        //    return fd;
+        //}
 
         next_available_file_virtual_address += PAGE_SIZE;
-
         tmp_ft_entry->pages_allocated++;    // Another page was mapped/allocated for file
     }
 
@@ -478,8 +483,8 @@ int32_t syscall_seek(syscall_regs_t *regs) {
 
 // Syscall table
 int32_t (*syscalls[MAX_SYSCALLS])(syscall_regs_t *) = {
-    [SYSCALL_TEST1]  = syscall_test1,
     [SYSCALL_TEST0]  = syscall_test0,
+    [SYSCALL_EXIT]   = syscall_exit,
     [SYSCALL_SLEEP]  = syscall_sleep,
     [SYSCALL_MALLOC] = syscall_malloc,
     [SYSCALL_FREE]   = syscall_free,
@@ -495,17 +500,18 @@ int32_t (*syscalls[MAX_SYSCALLS])(syscall_regs_t *) = {
 // The final "push esp" before "call do_syscall" means the current stack pointer points to
 //  all the registers/values pushed on the stack i.e. the syscall_regs_t struct *regs here,
 //  so that *regs has the correct register values for the syscall 
-void do_syscall(syscall_regs_t *regs) {
-    if (regs->eax >= MAX_SYSCALLS) {
+syscall_regs_t *do_syscall(syscall_regs_t *regs) {
+    if (regs->syscall_num >= MAX_SYSCALLS) {
         regs->eax = -1;         // Invalid syscall #
     } else {
-        regs->eax = syscalls[regs->eax](regs);    // Call system call
+        regs->eax = syscalls[regs->syscall_num](regs);    // Call system call
     }
+    return regs;
 }
 
 // Syscall dispatcher: assembly setup
 // naked attribute means no function prologue/epilogue, and only allows inline asm
-__attribute__ ((naked)) void syscall_dispatcher(__attribute__ ((unused)) int_frame_32_t *frame) {
+__attribute__ ((naked)) void syscall_dispatcher(void) {
     // "basic" syscall handler, push everything we want to save, call the syscall by
     //   offsetting into syscalls table with value in eax, then pop everything back 
     //   and return using "iret" (d/q), NOT regualar "ret" as this is technically
@@ -513,33 +519,33 @@ __attribute__ ((naked)) void syscall_dispatcher(__attribute__ ((unused)) int_fra
     //
     // Already on stack: SS, SP, FLAGS, CS, IP
     // Need to push: AX, GS, FS, ES, DS, BP, DI, SI, DX, CX, BX
-    //
-    __asm__ __volatile__ ("pushl %gs\n"         // Using doubleword (32 bit) values
-                          "pushl %fs\n"
-                          "pushl %es\n"
-                          "pushl %ds\n"
-                          "pushl %ebp\n"
-                          "pushl %edi\n"
-                          "pushl %esi\n"
-                          "pushl %edx\n"
-                          "pushl %ecx\n"
-                          "pushl %ebx\n"
-                          "pushl %eax\n"
 
-                          "pushl %esp\n"         
+    __asm__ __volatile__ ("pushl %%eax\n"       // Syscall number
+                          "pushal\n"
+                          "pushl %%gs\n"         // Using doubleword (32 bit) values
+                          "pushl %%fs\n"
+                          "pushl %%es\n"
+                          "pushl %%ds\n"
+
+                          "movl $0x10, %%eax\n" // Use kernel data segment
+                          "mov %%eax, %%gs\n"
+                          "mov %%eax, %%fs\n"
+                          "mov %%eax, %%es\n"
+                          "mov %%eax, %%ds\n"
+
+                          "pushl %%esp\n"
                           "call do_syscall\n"    // Call C function to do the syscall
-                          "popl %esp\n"
+                          "addl $4, %%esp\n"
 
-                          "popl %eax\n"
-                          "popl %ebx\n"
-                          "popl %ecx\n"
-                          "popl %edx\n"
-                          "popl %esi\n"
-                          "popl %edi\n"
-                          "popl %ebp\n"
-                          "popl %ds\n"          // Using doubleword (32 bit) values
-                          "popl %es\n"
-                          "popl %fs\n"
-                          "popl %gs\n"
-                          "iretl\n");           // Need interrupt return here! iret, NOT ret
+                          "popl %%ds\n"          // Using doubleword (32 bit) values
+                          "popl %%es\n"
+                          "popl %%fs\n"
+                          "popl %%gs\n"
+                          "popal\n"
+                          "addl $4, %%esp\n"
+
+                          "iretl\n"
+                          : 
+                          :
+                          : "memory");           // Need interrupt return here! iret, NOT ret
 }

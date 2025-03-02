@@ -40,6 +40,7 @@ typedef struct {
 __attribute__ ((interrupt)) void default_excp_handler(int_frame_32_t *int_frame_32) {
     (void)int_frame_32; // Silence compiler warnings
     printf("\033X0Y0;DEFAULT EXCEPTION HANDLER - NO ERROR CODE\r\n");
+    __asm__ __volatile__ ("cli;hlt");
 }
 
 // Default exception handler (includes error code)
@@ -47,12 +48,14 @@ __attribute__ ((interrupt)) void default_excp_handler_err_code(int_frame_32_t *i
     (void)int_frame_32; // Silence compiler warnings
     printf("\033X0Y0;DEFAULT EXCEPTION HANDLER - ERROR CODE: %#x\r\n",
            error_code);
+    __asm__ __volatile__ ("cli;hlt");
 }
 
 // Default interrupt handler
 __attribute__ ((interrupt)) void default_int_handler(int_frame_32_t *int_frame_32) {
     (void)int_frame_32; // Silence compiler warnings
     printf("\033X0Y0;DEFAULT INTERRUPT HANDLER\r\n");
+    __asm__ __volatile__ ("cli;hlt");
 }
 
 // Add an ISR to the IDT

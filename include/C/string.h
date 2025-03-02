@@ -59,6 +59,16 @@ char *strcpy(char *dst, const char *src) {
     return rtn;
 }
 
+// stpcpy: Copy src string to dst string (assuming src is <= dst!)
+//
+// Returns:
+//   pointer to end of dst/'\0'
+char *stpcpy(char *dst, const char *src) {
+    while (*src) *dst++ = *src++; 
+    *dst = '\0';
+    return dst;
+}
+
 // strchr: return pointer to first occurrence of char in string
 char *strchr(const char *str, const char c) {
     char *p = (char *)str;
