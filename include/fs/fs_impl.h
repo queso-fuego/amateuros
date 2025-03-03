@@ -667,6 +667,7 @@ bool fs_make_dir(int32_t argc, char *argv[]) {
     if (root_inode.id == parent_inode.id)
         root_inode = parent_inode;
 
+    close(fd);  // Close newly created/opened file when done
     return true;
 }
 

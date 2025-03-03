@@ -3,21 +3,28 @@
 //
 #pragma once
 
-#include "../C/stdbool.h"
-#include "../global/global_addresses.h"
+#include "C/stdbool.h"
+#include "C/stdint.h"
+#include "C/time.h"
 
 typedef struct {
     uint8_t key;   
     bool    shift;
     bool    ctrl; 
-} __attribute__ ((packed)) key_info_t;
+} key_info_t;
 
 uint8_t get_key(void) {
-    key_info_t *key_info = (key_info_t *)KEY_INFO_ADDRESS;
-    while (!key_info->key) __asm__ __volatile__("hlt");
+    key_info_t key_info = {0}, null_key = {0};
+    read(stdin, &key_info, sizeof key_info);
+    while (!key_info.key) {
+        seek(stdin, -sizeof key_info, SEEK_CUR);
+        sleep_milliseconds(10);
+        read(stdin, &key_info, sizeof key_info);
+    }
 
-    uint8_t output = key_info->key;
-    key_info->key = 0;
+    // Erase key data in file, to prevent infinite duplicate reads 
+    seek(stdin, -sizeof key_info, SEEK_CUR);
+    write(stdin, &null_key, sizeof key_info);
 
-    return output;
+    return key_info.key;
 }

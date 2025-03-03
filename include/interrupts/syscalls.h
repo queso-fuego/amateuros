@@ -127,9 +127,6 @@ int32_t syscall_write(syscall_regs_t *regs) {
         return -1;
     }
 
-    // TODO: Remove stdin write error later
-    if (fd == stdin) return -1;
-
     // Terminal write will return bytes consumed/written,
     // Return early
     if (fd == stdout || fd == stderr) 
@@ -283,8 +280,7 @@ int32_t syscall_open(syscall_regs_t *regs) {
 
     // Search for open spot in open file table
     open_file_table_t *tmp_ft_entry = open_file_table;
-    uint32_t file_tbl_idx = 3;  // fd 0/1/2 are reserved for stdin/out/err
-    tmp_ft_entry += 3;          // ""
+    uint32_t file_tbl_idx = 0; 
 
     while (file_tbl_idx < max_open_files &&
            tmp_ft_entry->address   != 0  && 

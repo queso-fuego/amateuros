@@ -150,6 +150,15 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     init_open_file_table();
     init_open_inode_table();
 
+    // Create default stdin/out/err files 
+    int32_t dummy_argc = 2;
+    char *dummy_argv[2] = { "dummy", "/sys/dev" };
+    fs_make_dir(dummy_argc, dummy_argv);
+
+    open("/sys/dev/stdin",  O_CREAT | O_RDWR);  // FD 0
+    open("/sys/dev/stdout", O_CREAT | O_RDWR);  // FD 1
+    open("/sys/dev/stderr", O_CREAT | O_RDWR);  // FD 2
+
     // Set intial colors
     while (!user_gfx_info->fg_color) {
         if (gfx_mode->bits_per_pixel > 8) {
@@ -404,8 +413,7 @@ void init_open_file_table(void) {
     memset(open_file_table, 0, sizeof(open_file_table_t) * max_open_files);
 
     *open_file_table = (open_file_table_t){0};
-
-    current_open_files = 3;    // FD 0/1/2 reserved for stdin/out/err
+    current_open_files = 0;   
 }
 
 // Initialize open inode table

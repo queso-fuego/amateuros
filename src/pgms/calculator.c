@@ -35,7 +35,6 @@ int32_t parse_num = 0;
 bool interactive = false;
 
 int32_t main(int32_t argc, char *argv[]) {
-    char input_char;
     const char valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
     uint8_t idx;
     key_info_t *key_info = (key_info_t *)KEY_INFO_ADDRESS;
@@ -66,9 +65,8 @@ int32_t main(int32_t argc, char *argv[]) {
     // Get line of input
     scan = 0;
     while (1) {
-        printf("\033CSRON; \033BS;");
-
-        input_char = get_key();
+        printf("\033CSRON;");
+        char input_char = get_key();
 
         // TODO: Use "strcspn" to check against valid_input string instead?
         for (idx = 0; idx < 20 && valid_input[idx] != input_char; idx++) 
@@ -99,14 +97,11 @@ int32_t main(int32_t argc, char *argv[]) {
     exit(0);
 }
 
-void parse_buffer(void)
-{
-    int32_t num = 0;
-
+void parse_buffer(void) {
     scan = 0;
 
 	// Print error msg or result
-    // Only end with newline, no need to double up
+    int32_t num = 0;
 	if ((num = parse_sum()) == ERROR) {
         printf("\r\nSyntax Error");
     } else {
@@ -116,8 +111,7 @@ void parse_buffer(void)
     if (interactive) printf("\r\n");
 }
 
-int32_t parse_sum(void)
-{
+int32_t parse_sum(void) {
     int32_t num, num2;
 
 	if ((num = parse_product()) == ERROR) return ERROR;
@@ -139,8 +133,7 @@ int32_t parse_sum(void)
     return ERROR;   // Should be unreachable?
 }
 
-int32_t parse_product(void)
-{
+int32_t parse_product(void) {
     int32_t num, num2;
 
     if ((num = parse_term()) == ERROR) return ERROR;
@@ -162,8 +155,7 @@ int32_t parse_product(void)
     return ERROR;   // Should be unreachable?
 }
 
-int32_t parse_term(void)
-{
+int32_t parse_term(void) {
     int32_t num;
 
 	skip_blanks();
@@ -184,25 +176,21 @@ int32_t parse_term(void)
     return num;
 }
 
-void skip_blanks(void)
-{
+void skip_blanks(void) {
     while (match_char(' ')) ;
 }
 
-int32_t parse_number(void)
-{
+int32_t parse_number(void) {
     parse_num = 0;
 
 	if (is_digit(&parse_num)) {
         while (is_digit(&parse_num)) ;
         return parse_num;
     } 
-
     return ERROR;
 }
 
-int8_t is_digit(int32_t *num)
-{
+int8_t is_digit(int32_t *num) {
     if (buffer[scan] >= '0' && buffer[scan] <= '9') {
         *num = (*num * 10) + (buffer[scan] - '0');
         scan++;
@@ -211,8 +199,7 @@ int8_t is_digit(int32_t *num)
     } else return false;
 }
 
-int8_t match_char(uint8_t in_char)
-{
+int8_t match_char(uint8_t in_char) {
     if (in_char == buffer[scan]) {
         scan++;
         return true;

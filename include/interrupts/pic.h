@@ -3,13 +3,13 @@
  */
 #pragma once
 
-#include "../C/stdbool.h"
-#include "../fs/fs.h" 
-#include "../global/global_addresses.h"
-#include "../ports/io.h"
-#include "../interrupts/idt.h"
-#include "../print/print_types.h"
-#include "../keyboard/keyboard.h"
+#include "C/stdbool.h"
+#include "fs/fs.h" 
+#include "global/global_addresses.h"
+#include "ports/io.h"
+#include "interrupts/idt.h"
+#include "print/print_types.h"
+#include "keyboard/keyboard.h"
 
 #define PIC_1_CMD  0x20
 #define PIC_1_DATA 0x21
@@ -183,6 +183,8 @@ void set_pit_channel_mode_frequency(const uint8_t channel, const uint8_t operati
 // Keyboard IRQ1 handler
 __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame) {
     (void)frame;    // Silence compiler warnings
+
+    static uint32_t kb_offset = 0;  // Next write offset into stdin file
                     
     enum {
         LSHIFT_MAKE  = 0x2A,
@@ -193,7 +195,6 @@ __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame) {
         LCTRL_BREAK  = 0x9D,
     };
 
-    uint8_t key;
     static bool e0 = false; 
     //static bool e1 = false;
 
@@ -208,17 +209,16 @@ __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame) {
     // Shift key pressed on number row lookup table (0-9 keys)
     const uint8_t *num_row_shifts = ")!@#$%^&*(";
 
-    // Set current key to null
-    key_info_t *key_info = (key_info_t *)KEY_INFO_ADDRESS;
-    key_info->key = 0;
+    // Current key/info 
+    static key_info_t key_info = {0};
 
-    key = inb(PS2_DATA_PORT);   // Read in new key
+    uint8_t key = inb(PS2_DATA_PORT);   // Read in new key
 
     if (key) {
-        if      (key == LSHIFT_MAKE  || key == RSHIFT_MAKE) key_info->shift = true; 
-        else if (key == LSHIFT_BREAK || key == RSHIFT_BREAK) key_info->shift = false; 
-        else if (key == LCTRL_MAKE)  key_info->ctrl = true;
-        else if (key == LCTRL_BREAK) key_info->ctrl = false;
+        if      (key == LSHIFT_MAKE  || key == RSHIFT_MAKE)  key_info.shift = true; 
+        else if (key == LSHIFT_BREAK || key == RSHIFT_BREAK) key_info.shift = false; 
+        else if (key == LCTRL_MAKE)  key_info.ctrl = true;
+        else if (key == LCTRL_BREAK) key_info.ctrl = false;
         else if (key == 0xE0) e0 = true;
         else {
             if (!(key & 0x80)) {
@@ -227,7 +227,7 @@ __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame) {
                     key = scancode_to_ascii[key]; 
 
                     // If pressed shift, translate key to shifted key
-                    if (key_info->shift) {
+                    if (key_info.shift) {
                         if      (key >= 'a' && key <= 'z') key -= 0x20;  // Convert lowercase into uppercase
                         else if (key >= '0' && key <= '9') key = num_row_shifts[key-0x30];  // Get int value of character, offset into shifted nums
                         else {
@@ -246,7 +246,14 @@ __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame) {
                         }
                     }
                 }
-                key_info->key = key;    // Set ascii key value in struct
+
+                key_info.key = key;                        // Set ascii key value in struct
+
+                if (!kb_offset) seek(stdin, 0, SEEK_SET);   // Using file as ring buffer, reset to start writing at start of file
+                write(stdin, &key_info, sizeof key_info);   // Write key data to stdin file
+
+                if (++kb_offset == PAGE_SIZE / sizeof key_info) 
+                    kb_offset = 0;  // Use as ring buffer
             }
             if (e0) e0 = false;
         }
