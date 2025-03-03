@@ -7,8 +7,8 @@
 
 #include "C/stdio.h"
 
-void print_registers(void)
-{
+bool print_registers(int argc, char *argv[]) {
+    (void)argc, (void)argv;
     uint8_t *printRegHeading = "\x0A\x0D" "--------  ------------" 
                                "\x0A\x0D" "Register  Mem Location" 
                                "\x0A\x0D" "--------  ------------\0";
@@ -64,4 +64,5 @@ void print_registers(void)
 
 	// Print newline when done
     printf("\r\n");
+    return true;
 }

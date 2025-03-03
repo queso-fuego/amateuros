@@ -532,7 +532,10 @@ done:
 }
 
 // Read a given directory's file data, and print to screen
-bool print_dir(char *path) {
+bool print_dir(int argc, char **argv) {
+    char *path = (argc == 1) ? current_dir : argv[1];
+    if (!path) return false;
+
     const inode_t dir = inode_from_path(path);
     if (dir.id == 0) return false;
 
