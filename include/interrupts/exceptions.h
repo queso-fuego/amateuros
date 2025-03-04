@@ -59,28 +59,30 @@ __attribute__ ((interrupt)) void page_fault_handler(int_frame_32_t *frame, uint3
     uint32_t bad_address = 0;
 
     user_gfx_info->fg_color = convert_color(0x00FF0000);          // Red
-    printf("\033X0Y0;PAGE FAULT EXCEPTION (#PF)\r\nERROR CODE: %#x", error_code);
 
     // CR2 contains bad address that caused page fault
     __asm__ __volatile__("movl %%CR2, %0" : "=r"(bad_address) );
 
-    printf("\r\nADDRESS: %#x", bad_address);
-    __asm__ __volatile__("cli;hlt");
-
     // Map in bad page, and set present/read/write flags
     void *phys_address = allocate_blocks(1);
     if (!phys_address) {
+        printf("\033X0Y0;PAGE FAULT EXCEPTION (#PF)\r\nERROR CODE: %#x", error_code);
+        printf("\r\nADDRESS: %#x", bad_address);
         printf("\r\nCOULD NOT ALLOCATE PAGES");
         __asm__ __volatile__("cli;hlt");
     }
 
-    if (!map_page(phys_address, (void *)bad_address)) {
+    if (!map_address(current_page_directory, (uint32_t)phys_address, bad_address, 
+                     PTE_PRESENT | PTE_READ_WRITE)) {
+
+        printf("\033X0Y0;PAGE FAULT EXCEPTION (#PF)\r\nERROR CODE: %#x", error_code);
+        printf("\r\nADDRESS: %#x", bad_address);
         printf("\r\nCOULD NOT MAP PAGES");
         __asm__ __volatile__("cli;hlt");
     }
 
-    printf("\r\nEXCEPTION HANDLED; NEW PHYS ADDR: %#x, VIRT ADDR: %#x",
-           (uint32_t)phys_address, bad_address);
+    //printf("\r\nEXCEPTION HANDLED; NEW PHYS ADDR: %#x, VIRT ADDR: %#x",
+    //       (uint32_t)phys_address, bad_address);
 
     user_gfx_info->fg_color = color;    // Restore text color
 }

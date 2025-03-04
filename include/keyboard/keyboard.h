@@ -13,7 +13,7 @@ typedef struct {
     bool    ctrl; 
 } key_info_t;
 
-uint8_t get_key(void) {
+key_info_t get_key(void) {
     key_info_t key_info = {0}, null_key = {0};
     read(stdin, &key_info, sizeof key_info);
     while (!key_info.key) {
@@ -26,5 +26,5 @@ uint8_t get_key(void) {
     seek(stdin, -sizeof key_info, SEEK_CUR);
     write(stdin, &null_key, sizeof key_info);
 
-    return key_info.key;
+    return key_info;
 }

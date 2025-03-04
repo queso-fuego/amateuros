@@ -36,8 +36,6 @@ bool interactive = false;
 
 int32_t main(int32_t argc, char *argv[]) {
     const char valid_input[] = "0123456789+-*/()" "\x20\x0D\x1B" "r";
-    uint8_t idx;
-    key_info_t *key_info = (key_info_t *)KEY_INFO_ADDRESS;
 
     // Check if user passed in expressions to evaluate; if so, do not run interactively
     if (argc > 1) {
@@ -66,16 +64,17 @@ int32_t main(int32_t argc, char *argv[]) {
     scan = 0;
     while (1) {
         printf("\033CSRON;");
-        char input_char = get_key();
+        key_info_t key_info = get_key();
 
         // TODO: Use "strcspn" to check against valid_input string instead?
-        for (idx = 0; idx < 20 && valid_input[idx] != input_char; idx++) 
+        uint8_t idx = 0;
+        for (; idx < 20 && valid_input[idx] != key_info.key; idx++) 
             ;
 
         if (idx == 20) continue;    // Invalid input character
 
         // Enter key with some input or buffer is full
-        if ((input_char == '\r' && scan > 0) || scan == 80) {    
+        if ((key_info.key == '\r' && scan > 0) || scan == 80) {    
             printf("\033CSROFF; "); // Print newline for result
             parse_buffer();
             scan = 0;
@@ -85,14 +84,14 @@ int32_t main(int32_t argc, char *argv[]) {
             continue;
         }
 
-        if (input_char == 0x1B || (key_info->ctrl && input_char == 'r'))    // Escape key or ctrl-R
+        if (key_info.key == 0x1B || (key_info.ctrl && key_info.key == 'r'))    // Escape key or ctrl-R
            exit(0);  // Return to caller 
 
-        buffer[scan] = input_char;
+        buffer[scan] = key_info.key;
         scan++;
 
         // Print char to screen
-        putchar(input_char);
+        putchar(key_info.key);
     }
     exit(0);
 }

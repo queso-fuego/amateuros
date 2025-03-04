@@ -3,7 +3,6 @@
  */
 #pragma once
 
-#define KEY_INFO_ADDRESS               0x1600
 #define RTC_DATETIME_AREA              0x1610
 #define IRQ0_SLEEP_TIMER_TICKS_AREA    0x1700
 #define CURRENT_PAGE_DIR_ADDRESS       0x1800

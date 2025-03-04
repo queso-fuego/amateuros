@@ -65,7 +65,7 @@ typedef struct {
 
 page_directory *current_page_directory = 0;
 
-void map_address(page_directory *dir, uint32_t phys, uint32_t virt, uint32_t flags);
+bool map_address(page_directory *dir, uint32_t phys, uint32_t virt, uint32_t flags);
 bool create_page_table(page_directory *dir, uint32_t virt, uint32_t flags);
 
 page_directory *get_page_directory(void) {
@@ -182,18 +182,20 @@ bool map_page(void *phys_address, void *virt_address)
 }
 
 // Unmap a page
-void unmap_page(void *virt_address)
-{
+void unmap_page(void *virt_address) {
     pt_entry *page = get_page((uint32_t)virt_address);
 
     SET_FRAME(page, 0);     // Set physical address to 0 (effectively this is now a null pointer)
     CLEAR_ATTRIBUTE(page, PTE_PRESENT); // Set as not present, will trigger a #PF
 }
 
-void map_address(page_directory *dir, uint32_t phys, uint32_t virt, uint32_t flags) {
+bool map_address(page_directory *dir, uint32_t phys, uint32_t virt, uint32_t flags) {
     pd_entry *pd = dir->entries;
-    if (pd[virt >> 22] == 0) create_page_table(dir, virt, flags);
+    if (pd[virt >> 22] == 0 && !create_page_table(dir, virt, flags)) 
+        return false;
+
     ((uint32_t *)(pd[virt >> 22] & ~0xFFF))[virt << 10 >> 10 >> 12] = phys | flags;
+    return true;
 }
 
 bool create_page_table(page_directory *dir, uint32_t virt, uint32_t flags) {

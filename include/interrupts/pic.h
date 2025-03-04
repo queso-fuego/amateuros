@@ -247,7 +247,7 @@ __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame) {
                     }
                 }
 
-                key_info.key = key;                        // Set ascii key value in struct
+                key_info.key = key;                         // Set ascii key value in struct
 
                 if (!kb_offset) seek(stdin, 0, SEEK_SET);   // Using file as ring buffer, reset to start writing at start of file
                 write(stdin, &key_info, sizeof key_info);   // Write key data to stdin file

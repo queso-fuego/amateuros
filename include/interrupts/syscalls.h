@@ -39,25 +39,47 @@ int32_t syscall_exit(syscall_regs_t *regs) {
     Process *cur = get_current_process();
     if (!cur->id) return -1;   // No PID set, no current process
 
+    // Close stdin/out/err
+    close(0);
+    close(1);
+    close(2);
+
     // Release threads
     int32_t i = 0;
     Thread *thread = &cur->threads[i];
 
-    // Get physical address of stack
-    void *stack_frame = get_physical_address(cur->page_dir, (uint32_t)thread->stack);
-
     // Unmap and release stack memory
-    unmap_address(cur->page_dir, (uint32_t)thread->stack);
-    free_blocks(stack_frame, 1);
+    void *stack_frame = get_physical_address(cur->page_dir, (uint32_t)thread->stack);
+    if (stack_frame) {
+        unmap_address(cur->page_dir, (uint32_t)thread->stack);
+        free_blocks(stack_frame, 1);
+    }
+
+    // Unmap and release args memory
+    void *args_frame = get_physical_address(cur->page_dir, (uint32_t)thread->stack + PAGE_SIZE);
+    if (args_frame) {
+        unmap_address(cur->page_dir, (uint32_t)thread->stack + PAGE_SIZE);
+        free_blocks(args_frame, 1);
+    }
 
     // Unmap and release program memory
     for (uint32_t page = 0; page < thread->pgm_size / PAGE_SIZE; page++) {
         uint32_t virt = thread->pgm_buf + (page * PAGE_SIZE);
         uint32_t phys = (uint32_t)get_physical_address(cur->page_dir, virt);
 
-        unmap_address(cur->page_dir, virt);
-        free_blocks((void *)phys, 1);
+        if (phys) {
+            unmap_address(cur->page_dir, virt);
+            free_blocks((void *)phys, 1);
+        }
     }
+
+    // Free open file table/inode table memory
+    free(open_file_table);
+    free(open_inode_table);
+
+    // Unmap malloc memory
+    for (uint32_t p = 0, virt = malloc_start; p < total_malloc_pages; p++, virt += PAGE_SIZE) 
+        unmap_address(current_page_directory, virt);
 
     // Restore kernel selectors
     __asm__ __volatile__ ("cli\n"

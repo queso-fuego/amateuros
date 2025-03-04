@@ -21,6 +21,7 @@ static malloc_block_t *malloc_list_head = 0;    // Start of linked list
 static uint32_t malloc_virt_address     = 0;
 static uint32_t malloc_phys_address     = 0;
 static uint32_t total_malloc_pages      = 0;
+static uint32_t malloc_start            = 0;
 
 // Initialize malloc bytes/linked list for first malloc() call from a program
 void malloc_init(const uint32_t bytes)

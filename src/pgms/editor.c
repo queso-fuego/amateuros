@@ -50,7 +50,6 @@ void write_bottom_screen_message(char *msg);
 
 uint32_t line_length = 80;
 uint32_t editor_filesize = 0;
-uint8_t  input_char;
 uint32_t cursor_x = 0, cursor_y = 0;
 uint8_t  *file_ptr;
 uint8_t  *file_address;
@@ -81,10 +80,11 @@ int main(int argc, char *argv[]) {
         file_mode = NEW;        // Creating a new file
 
         printf("\033CLS;(B)inary/hex file or (O)ther file type (.txt, etc)?");
+        key_info_t key_info;
         do {
-            input_char = get_key();
-            if (input_char == ESCAPE) return 1; // Return back to caller
-        } while (input_char != BINFILE && input_char != OTHERFILE);
+            key_info = get_key();
+            if (key_info.key == ESCAPE) return 1; // Return back to caller
+        } while (key_info.key != BINFILE && key_info.key != OTHERFILE);
 
         // Allocate 1 blank sector for new file, and initialize cursor
         //   and file variables
@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
         editor_filesize     = 0; 
         cursor_x = cursor_y = 0;
 
-        if (input_char == BINFILE) {
+        if (key_info.key == BINFILE) {
             // Fill out filetype (.bin)
             editor_filetype = BIN;
             hex_editor();
@@ -132,7 +132,7 @@ void editor_load_file(char *filename) {
         file_ptr     = malloc(file_size);    // Allocate memory for file 
         if (!file_ptr) {
             write_bottom_screen_message(load_file_error_msg);
-            input_char = get_key();
+            get_key();
             close(fd);
             return;
         }
@@ -141,7 +141,7 @@ void editor_load_file(char *filename) {
         // Load file into buffer
         if (read(fd, file_ptr, file_size) < (int32_t)file_size) {
             write_bottom_screen_message(load_file_error_msg);
-            input_char = get_key();
+            get_key();
             close(fd);
             return;
         }
@@ -149,7 +149,7 @@ void editor_load_file(char *filename) {
     } else {
         // Loading file error - file does not exist or could not be found
         write_bottom_screen_message(load_file_error_msg);
-        input_char = get_key();
+        get_key();
 
         printf("\033CLS;");
         cursor_x = cursor_y = 0;
@@ -238,7 +238,7 @@ void editor_load_file(char *filename) {
 
 void text_editor(char *in_filename) {
     bool unsaved = false;
-    key_info_t *key_info = (key_info_t *)KEY_INFO_ADDRESS;
+    key_info_t key_info;
 
     if (!in_filename) strcpy(editor_filename, "(new file)");
 
@@ -262,10 +262,10 @@ void text_editor(char *in_filename) {
         printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);
 
 		// Get next key, check text editor keybinds
-        input_char = get_key();
-        if (key_info->ctrl) {
+        key_info = get_key();
+        if (key_info.ctrl) {
             // Check CTRL keybinds
-            switch (input_char) {
+            switch (key_info.key) {
                 case 'r': return;   // CTRL-R Return to kernel
 
                 case 's':           // CTRL-S Save file to disk
@@ -359,11 +359,11 @@ void text_editor(char *in_filename) {
         }
 
         // Check navigation keys
-        switch (input_char) {
+        switch (key_info.key) {
             case '\b':      // Backspace
             case DELKEY:    // Delete
                 // TODO: May be inconsistent with multiple lines and deleting at different positions
-                if (input_char == '\b' && cursor_x == 0) break; // Skip backspace at start of line
+                if (key_info.key == '\b' && cursor_x == 0) break; // Skip backspace at start of line
 
                 // TODO: Handle newline deletion
                 if (*file_ptr == '\n') break;
@@ -381,7 +381,7 @@ void text_editor(char *in_filename) {
                 }
 
                 // Backspace, move back 1 character/byte
-                if (input_char == '\b') {
+                if (key_info.key == '\b') {
                     printf("\033BS; \033BS;"); // Erase character with space, left/space/left
                     cursor_x--;
                     file_ptr--;
@@ -546,14 +546,14 @@ void text_editor(char *in_filename) {
                 current_line_length++;      // Update line length
                 file_length_bytes++;        // Update file length
 
-                if (input_char == '\r') {
-                    input_char = '\n';      // Convert CR to LF
+                if (key_info.key == '\r') {
+                    key_info.key = '\n';      // Convert CR to LF
                     file_length_lines++;    // Update file lines length
                 }
-                *file_ptr = input_char;     // Overwrite current character at cursor
+                *file_ptr = key_info.key;     // Overwrite current character at cursor
 
                 // Reprint file data, starting from cursor 
-                if (input_char == '\n') {
+                if (key_info.key == '\n') {
                     // Newline, reprint all lines until new end of file
                     // Blank out rest of current line
                     int32_t diff = line_length - cursor_x;
@@ -581,7 +581,7 @@ void text_editor(char *in_filename) {
                 file_offset++;  
 
                 // If inserted newline, go to start of next line
-                if (input_char == '\n') {
+                if (key_info.key == '\n') {
                     cursor_x = 0;
                     cursor_y++;
 
@@ -610,13 +610,14 @@ void hex_editor(void) {
     write_bottom_screen_message(keybinds_hex_editor);  // Write keybinds to screen
     cursor_x = cursor_y = 0;            // Reset cursor
     printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
+    key_info_t key_info;
 
     while (1) {
-        input_char = get_key();
+        key_info = get_key();
 
         // Check for hex editor keybinds
-        // TODO: Use switch(input_char) here instead of if blocks
-        if (input_char == RUNINPUT) {
+        // TODO: Use switch(key_info.key) here instead of if blocks
+        if (key_info.key == RUNINPUT) {
             *(file_address + editor_filesize) = 0xCB; // CB = far return
 
             // Jump to and execute input
@@ -634,9 +635,9 @@ void hex_editor(void) {
             continue;
         } 
 
-        if (input_char == ENDPGM) return;   // End program, return to caller
+        if (key_info.key == ENDPGM) return;   // End program, return to caller
 
-        if (input_char == SAVEPGM) {   // Does user want to save?
+        if (key_info.key == SAVEPGM) {   // Does user want to save?
             printf("\033CSROFF;");
             save_hex_program();
             continue;
@@ -644,7 +645,7 @@ void hex_editor(void) {
 
         // Check backspace
         // TODO: Move all file data back 1 byte after blanking out current byte
-        if (input_char == '\b') {
+        if (key_info.key == '\b') {
             if (cursor_x >= 3) {
                 // Blank out 1st and 2nd nibbles of hex byte 
                 putchar(' ');
@@ -663,7 +664,7 @@ void hex_editor(void) {
 
         // Check delete key
         // TODO: Move all file data back 1 byte after blanking out current byte
-        if (input_char == DELKEY) {
+        if (key_info.key == DELKEY) {
             // Blank out 1st and 2nd nibbles of hex byte
             putchar(' ');
             putchar(' ');
@@ -675,7 +676,7 @@ void hex_editor(void) {
         }
         
         // Check navigation keys (arrows + home/end)
-        if (input_char == LEFTARROW) {     // Left arrow key
+        if (key_info.key == LEFTARROW) {     // Left arrow key
             // Move 1 byte left (till beginning of line)
             if (cursor_x >= 3) {
                 cursor_x -= 3;
@@ -686,7 +687,7 @@ void hex_editor(void) {
             continue;
         }
 
-        if (input_char == RIGHTARROW) {    // Right arrow key
+        if (key_info.key == RIGHTARROW) {    // Right arrow key
             // Move 1 byte right (till end of line)
             if (cursor_x <= 75) {
                 cursor_x += 3;
@@ -697,7 +698,7 @@ void hex_editor(void) {
             continue;
         }
 
-        if (input_char == UPARROW) {     // Up arrow key
+        if (key_info.key == UPARROW) {     // Up arrow key
             // Move 1 line up
             if (cursor_y != 0) {
                 cursor_y--;
@@ -708,7 +709,7 @@ void hex_editor(void) {
             continue;
         }
 
-        if (input_char == DOWNARROW) {   // Down arrow key
+        if (key_info.key == DOWNARROW) {   // Down arrow key
             // Move 1 line down
             if (cursor_y != ((uint32_t)gfx_mode->y_resolution / 16) - 1) {  // At bottom row of screen?
                 cursor_y++;
@@ -719,7 +720,7 @@ void hex_editor(void) {
             continue;
         }
 
-        if (input_char == HOMEKEY) {     // Home key pressed
+        if (key_info.key == HOMEKEY) {     // Home key pressed
             // Move to beginning of line
             file_ptr -= (cursor_x / 3);       // Each hex byte on screen is 2 nibbles + space
             file_offset -= (cursor_x / 3);
@@ -729,7 +730,7 @@ void hex_editor(void) {
             continue;
         }
 
-        if (input_char == ENDKEY) {       // End key pressed
+        if (key_info.key == ENDKEY) {       // End key pressed
             // Move to end of line
             file_ptr += (79 - cursor_x / 3);  // Each hex byte on screen is 2 nibbles + space
             file_offset += (79 - cursor_x / 3);
@@ -740,29 +741,29 @@ void hex_editor(void) {
         }
 
         // Check for valid hex digits
-        if (!(input_char >= '0' && input_char <= '9') &&
-            !(input_char >= 'A' && input_char <= 'F') &&
-            !(input_char >= 'a' && input_char <= 'f')) {
+        if (!(key_info.key >= '0' && key_info.key <= '9') &&
+            !(key_info.key >= 'A' && key_info.key <= 'F') &&
+            !(key_info.key >= 'a' && key_info.key <= 'f')) {
 
             continue;
         } 
 
-        if (input_char >= 'a' && input_char <= 'f')
-            input_char -= 0x20;             // Convert lowercase to uppercase
+        if (key_info.key >= 'a' && key_info.key <= 'f')
+            key_info.key -= 0x20;             // Convert lowercase to uppercase
 
         // Print character
-        putchar(input_char);
+        putchar(key_info.key);
         printf("\033X%uY%u;", cursor_x, cursor_y);  // Move cursor
 
-        // Convert input_char to hexidecimal 
-        if (input_char > '9') input_char -= 0x37;   // Ascii 'A'-'F', get hex A-F/decimal 10-15
-        else                  input_char -= 0x30;   // Ascii '0'-'9', get hex/decimal 0-9 
+        // Convert key_info.key to hexidecimal 
+        if (key_info.key > '9') key_info.key -= 0x37;   // Ascii 'A'-'F', get hex A-F/decimal 10-15
+        else                  key_info.key -= 0x30;   // Ascii '0'-'9', get hex/decimal 0-9 
 
         hex_count++;            // Increment byte counter
         if (hex_count == 2) {   // 2 ascii bytes = 1 hex byte
             hex_byte <<= 4;             // Move digit 4 bits to the left, make room for 2nd digit
-            hex_byte |= input_char;     // Move 2nd ascii byte/hex digit into memory
-            input_char = hex_byte; // TODO: Is this needed?
+            hex_byte |= key_info.key;     // Move 2nd ascii byte/hex digit into memory
+            key_info.key = hex_byte; // TODO: Is this needed?
             *file_ptr++ = hex_byte;   // Put hex byte(2 hex digits) into 10000h memory area, and inc di/point to next byte
             file_offset++;
             editor_filesize++;          // Increment file size byte counter
@@ -775,7 +776,7 @@ void hex_editor(void) {
             }
 
         } else {
-            hex_byte = input_char;  // Put input into hex byte variable
+            hex_byte = key_info.key;  // Put input into hex byte variable
         }
     }
 }
@@ -812,10 +813,10 @@ void save_hex_program(void) {
 void input_file_name(void) {
     uint8_t i;
     for (i = 0; i < sizeof editor_filename-1; i++) {
-        input_char = get_key();
-        if (input_char == '\r') break;
-        editor_filename[i] = input_char;
-        putchar(input_char);
+        key_info_t key_info = get_key();
+        if (key_info.key == '\r') break;
+        editor_filename[i] = key_info.key;
+        putchar(key_info.key);
     }
     editor_filename[i] = '\0';
 }
