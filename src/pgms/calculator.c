@@ -13,7 +13,6 @@
 #include "C/stdbool.h"
 #include "C/stdlib.h"
 #include "sys/syscall_wrappers.h" 
-#include "gfx/2d_gfx.h"
 #include "keyboard/keyboard.h"
 
 void parse_buffer(void);    // Function declarations

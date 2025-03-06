@@ -18,7 +18,7 @@ key_info_t get_key(void) {
     read(stdin, &key_info, sizeof key_info);
     while (!key_info.key) {
         seek(stdin, -sizeof key_info, SEEK_CUR);
-        sleep_milliseconds(10);
+        sleep_milliseconds(8);  // Tweak sleep delay as needed (or remove?)
         read(stdin, &key_info, sizeof key_info);
     }
 

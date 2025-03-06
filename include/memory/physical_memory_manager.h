@@ -117,7 +117,7 @@ void deinitialize_memory_region(const uint32_t base_address, const uint32_t size
 }
 
 // Allocate blocks of memory
-uint32_t *allocate_blocks(const uint32_t num_blocks)
+void *allocate_blocks(const uint32_t num_blocks)
 {
     // If # of free blocks left is not enough, we can't allocate any more, return
     if ((max_blocks - used_blocks) <= num_blocks) return 0;   
@@ -134,7 +134,7 @@ uint32_t *allocate_blocks(const uint32_t num_blocks)
     // Convert blocks to bytes to get start of actual RAM that is now allocated
     uint32_t address = starting_block * BLOCK_SIZE; 
 
-    return (uint32_t *)address;  // Physical memory location of allocated blocks
+    return (void *)address;  // Physical memory location of allocated blocks
 }
 
 // Free blocks memory

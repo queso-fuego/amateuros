@@ -80,10 +80,26 @@ pt_entry *get_pt_entry(page_table *pt, virtual_address address)
 }
 
 // Get entry in page directory for given address
-pd_entry *get_pd_entry(page_table *pd, virtual_address address)
+pd_entry *get_pd_entry(page_directory *pd, virtual_address address)
 {
     if (pd) return &pd->entries[PT_INDEX(address)];
     return 0;
+}
+
+void pt_add_flags(pt_entry *pt, uint32_t flags) {
+    *pt |= flags;
+}
+
+void pt_del_flags(pt_entry *pt, uint32_t flags) {
+    *pt &= ~flags;
+}
+
+void pd_add_flags(pd_entry *pd, uint32_t flags) {
+    *pd |= flags;
+}
+
+void pd_del_flags(pd_entry *pd, uint32_t flags) {
+    *pd &= ~flags;
 }
 
 // Return a page for a given virtual address in the current
@@ -277,14 +293,25 @@ bool initialize_virtual_memory_manager(void)
     page_directory *dir = (page_directory *)allocate_blocks(3);
     if (!dir) return false; // Out of memory
 
-    // Clear page directory 
     memset(dir, 0, sizeof(page_directory));
 
+    // Map gfx info and font info for user processes
+    pd_entry *ent = &dir->entries[PD_INDEX(0x0000C000)];
+    pd_add_flags(ent, PDE_PRESENT | PDE_READ_WRITE | PDE_USER);
+
+    ent = &dir->entries[PD_INDEX(0x0000D000)];
+    pd_add_flags(ent, PDE_PRESENT | PDE_READ_WRITE | PDE_USER);
+
+    table3G->entries[PT_INDEX(0x0000C000)] |= PTE_USER;
+    table3G->entries[PT_INDEX(0x0000D000)] |= PTE_USER;
+
+    // Map kernel table
     pd_entry *entry = &dir->entries[PD_INDEX(0xC0000000)];
     SET_ATTRIBUTE(entry, PDE_PRESENT);
     SET_ATTRIBUTE(entry, PDE_READ_WRITE);
     SET_FRAME(entry, (physical_address)table); // 3GB directory entry points to default page table
 
+    // Map default table
     pd_entry *entry2 = &dir->entries[PD_INDEX(0x00000000)];
     SET_ATTRIBUTE(entry2, PDE_PRESENT);
     SET_ATTRIBUTE(entry2, PDE_READ_WRITE);   

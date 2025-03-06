@@ -18,11 +18,11 @@
 #include "process/process.h"
 
 // These extern vars are from kernel.c
-extern open_file_table_t *open_file_table;  
+extern open_file_table_t open_file_table[256];  
 extern uint32_t max_open_files;
 extern uint32_t current_open_files;         // FD 0/1/2 reserved for stdin/out/err
 
-extern inode_t *open_inode_table;
+extern inode_t open_inode_table[256];
 extern uint32_t max_open_inodes;
 extern uint32_t current_open_inodes;
 extern uint32_t next_available_file_virtual_address;
@@ -72,10 +72,6 @@ int32_t syscall_exit(syscall_regs_t *regs) {
             free_blocks((void *)phys, 1);
         }
     }
-
-    // Free open file table/inode table memory
-    free(open_file_table);
-    free(open_inode_table);
 
     // Unmap malloc memory
     for (uint32_t p = 0, virt = malloc_start; p < total_malloc_pages; p++, virt += PAGE_SIZE) 
@@ -279,24 +275,24 @@ int32_t syscall_open(syscall_regs_t *regs) {
             tmp_inode++;
         }
 
-        if (inode_tbl_idx == max_open_inodes) {
-            // Reached current end of open inode table,
-            //   realloc() or expand table size and add a new entry for file
-            void *malloc_ptr = malloc(sizeof(inode_t) * (max_open_inodes*2));
-            memcpy(malloc_ptr, open_inode_table, sizeof(inode_t) * max_open_inodes);
-            free(open_inode_table);
-            open_inode_table = malloc_ptr;
+        //if (inode_tbl_idx == max_open_inodes) {
+        //    // Reached current end of open inode table,
+        //    //   realloc() or expand table size and add a new entry for file
+        //    void *malloc_ptr = malloc(sizeof(inode_t) * (max_open_inodes*2));
+        //    memcpy(malloc_ptr, open_inode_table, sizeof(inode_t) * max_open_inodes);
+        //    free(open_inode_table);
+        //    open_inode_table = malloc_ptr;
 
-            tmp_inode = open_inode_table + max_open_inodes; // Go to original max + 1
-            *tmp_inode = file_inode;                        // Fill new inode table element
+        //    tmp_inode = open_inode_table + max_open_inodes; // Go to original max + 1
+        //    *tmp_inode = file_inode;                        // Fill new inode table element
 
-            inode_tbl_idx = max_open_inodes+1;
-            max_open_inodes *= 2;
+        //    inode_tbl_idx = max_open_inodes+1;
+        //    max_open_inodes *= 2;
 
-        } else {
+        //} else {
             // Reached open position in inode table, add data to this position
             *tmp_inode = file_inode; 
-        }
+        //}
         current_open_inodes++;   
     }
 
@@ -312,20 +308,20 @@ int32_t syscall_open(syscall_regs_t *regs) {
         tmp_ft_entry++;
     }
 
-    if (file_tbl_idx == max_open_files) {
-        // Reached current end of open inode table,
-        //   realloc() or expand table size and add a new entry for file
-        void *malloc_ptr = malloc(sizeof(open_file_table_t) * (max_open_files*2));
-        memcpy(malloc_ptr, open_file_table, sizeof(open_file_table_t) * max_open_files);
-        free(open_file_table);
-        open_file_table = malloc_ptr;
+    //if (file_tbl_idx == max_open_files) {
+    //    // Reached current end of open inode table,
+    //    //   realloc() or expand table size and add a new entry for file
+    //    void *malloc_ptr = malloc(sizeof(open_file_table_t) * (max_open_files*2));
+    //    memcpy(malloc_ptr, open_file_table, sizeof(open_file_table_t) * max_open_files);
+    //    free(open_file_table);
+    //    open_file_table = malloc_ptr;
 
-        tmp_ft_entry = open_file_table + max_open_files;    // Go to original max + 1
-        
-        file_tbl_idx = max_open_files+1;
-        max_open_files *= 2;
+    //    tmp_ft_entry = open_file_table + max_open_files;    // Go to original max + 1
+    //    
+    //    file_tbl_idx = max_open_files+1;
+    //    max_open_files *= 2;
 
-    } 
+    //} 
     current_open_files++;   
 
     // Fill out file table entry data

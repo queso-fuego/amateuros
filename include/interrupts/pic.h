@@ -184,8 +184,6 @@ void set_pit_channel_mode_frequency(const uint8_t channel, const uint8_t operati
 __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame) {
     (void)frame;    // Silence compiler warnings
 
-    static uint32_t kb_offset = 0;  // Next write offset into stdin file
-                    
     enum {
         LSHIFT_MAKE  = 0x2A,
         LSHIFT_BREAK = 0xAA,
@@ -249,11 +247,13 @@ __attribute__ ((interrupt)) void keyboard_irq1_handler(int_frame_32_t *frame) {
 
                 key_info.key = key;                         // Set ascii key value in struct
 
-                if (!kb_offset) seek(stdin, 0, SEEK_SET);   // Using file as ring buffer, reset to start writing at start of file
+                static bool rewind_file = false;
+
+                if (rewind_file) seek(stdin, 0, SEEK_SET);  // Use file as ring buffer
                 write(stdin, &key_info, sizeof key_info);   // Write key data to stdin file
 
-                if (++kb_offset == PAGE_SIZE / sizeof key_info) 
-                    kb_offset = 0;  // Use as ring buffer
+                if (seek(stdin, 0, SEEK_CUR) == PAGE_SIZE / sizeof key_info)
+                    rewind_file = true;
             }
             if (e0) e0 = false;
         }

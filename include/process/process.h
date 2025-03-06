@@ -44,10 +44,18 @@ typedef struct Process {
 
 static Process _proc = {0};
 
-extern open_file_table_t *open_file_table;
+extern open_file_table_t open_file_table[256];
 
 Process *get_current_process(void) {
     return &_proc;
+}
+
+page_directory *new_address_space(void) {
+    page_directory *rtn = allocate_blocks(1);
+    if (!rtn) return NULL;
+
+    memset(rtn, 0, sizeof *rtn);
+    return rtn;
 }
 
 uint32_t create_process(int32_t argc, char **argv) {
@@ -56,7 +64,7 @@ uint32_t create_process(int32_t argc, char **argv) {
     if (fd < 0) return 0;
 
     // Get virtual address space
-    //page_directory *address_space = create_address_space();
+    //page_directory *address_space = new_address_space();
     page_directory *address_space = get_page_directory();
     if (!address_space) { close(fd); return 0; }
 
@@ -94,20 +102,16 @@ uint32_t create_process(int32_t argc, char **argv) {
     main_thread->regs.eip    = (int32_t)entry_point;
     main_thread->regs.eflags = 0x200;
 
-    // Create userspace stack
+    // Create & Map userspace stack
     void *stack = (void *)((uint8_t *)main_thread->pgm_buf + main_thread->pgm_size + PAGE_SIZE);
-    void *stack_phys = allocate_blocks(1);  // Only 4KB for now
-
-    // Map user process stack
-    map_address(address_space, (uint32_t)stack_phys, (uint32_t)stack, 
+    void *phys_addr = allocate_blocks(1);  // Only 4KB for now
+    map_address(address_space, (uint32_t)phys_addr, (uint32_t)stack, 
                 PTE_PRESENT | PTE_READ_WRITE | PTE_USER);
 
-    // Create userspace storage for arguments, above stack memory
+    // Create & map userspace memory for arguments (heap?), above stack 
     void *args = (void *)((uint8_t *)stack + PAGE_SIZE);
-    void *args_phys = allocate_blocks(1); 
-
-    // Map argument memory
-    map_address(address_space, (uint32_t)args_phys, (uint32_t)args, 
+    phys_addr = allocate_blocks(1); 
+    map_address(address_space, (uint32_t)phys_addr, (uint32_t)args, 
                 PTE_PRESENT | PTE_READ_WRITE | PTE_USER);
 
     // Copy argv into args memory

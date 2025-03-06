@@ -7,6 +7,7 @@
 #include "C/stdio.h"
 #include "C/stddef.h"
 #include "C/stdbool.h"
+#include "C/ctype.h"
 #include "gfx/2d_gfx.h"
 #include "keyboard/keyboard.h"
 #include "sys/syscall_wrappers.h"
@@ -60,10 +61,9 @@ uint32_t file_length_lines;
 uint32_t file_length_bytes;
 uint8_t  hex_count = 0;
 uint8_t  hex_byte = 0;   // 1 byte/2 hex digits
-int32_t  fd = 0;
+int32_t  fd = -1;
 int32_t  editor_filetype;
 char     editor_filename[32];
-char     old_filename[32];
 uint8_t  font_height;
 uint32_t screen_rows;
 static char *load_file_error_msg = "Load file error occurred, press any key to go back...";
@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
         key_info_t key_info;
         do {
             key_info = get_key();
-            if (key_info.key == ESCAPE) return 1; // Return back to caller
+            if (key_info.key == ESCAPE) exit(EXIT_FAILURE); 
         } while (key_info.key != BINFILE && key_info.key != OTHERFILE);
 
         // Allocate 1 blank sector for new file, and initialize cursor
@@ -115,6 +115,9 @@ int main(int argc, char *argv[]) {
 
     if (fd >= 0) close(fd);     // File cleanup
     printf("\033CLS;");         // Clear screen before returning
+    exit(EXIT_SUCCESS);
+
+    // Should never reach here!
     return EXIT_SUCCESS;
 }
 
@@ -303,6 +306,7 @@ void text_editor(char *in_filename) {
                         printf("\033CSRON;");  
 
                         // Get new file name
+                        char old_filename[32];
                         strcpy(old_filename, editor_filename);
                         input_file_name();
 
@@ -612,7 +616,7 @@ void hex_editor(void) {
     printf("\033X%uY%u;\033CSRON;", cursor_x, cursor_y);  // Move cursor
     key_info_t key_info;
 
-    while (1) {
+    while (true) {
         key_info = get_key();
 
         // Check for hex editor keybinds
@@ -740,16 +744,11 @@ void hex_editor(void) {
             continue;
         }
 
-        // Check for valid hex digits
-        if (!(key_info.key >= '0' && key_info.key <= '9') &&
-            !(key_info.key >= 'A' && key_info.key <= 'F') &&
-            !(key_info.key >= 'a' && key_info.key <= 'f')) {
+        // Check valid hex digit
+        if (!isxdigit(key_info.key)) continue;
 
-            continue;
-        } 
-
-        if (key_info.key >= 'a' && key_info.key <= 'f')
-            key_info.key -= 0x20;             // Convert lowercase to uppercase
+        // Convert to uppercase
+        key_info.key = toupper(key_info.key);
 
         // Print character
         putchar(key_info.key);
@@ -757,7 +756,7 @@ void hex_editor(void) {
 
         // Convert key_info.key to hexidecimal 
         if (key_info.key > '9') key_info.key -= 0x37;   // Ascii 'A'-'F', get hex A-F/decimal 10-15
-        else                  key_info.key -= 0x30;   // Ascii '0'-'9', get hex/decimal 0-9 
+        else                    key_info.key -= 0x30;   // Ascii '0'-'9', get hex/decimal 0-9 
 
         hex_count++;            // Increment byte counter
         if (hex_count == 2) {   // 2 ascii bytes = 1 hex byte

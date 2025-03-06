@@ -11,12 +11,10 @@
 #include "C/ctype.h"
 #include "global/global_addresses.h"
 #include "gfx/2d_gfx.h"
-#include "screen/clear_screen.h"
 #include "print/print_registers.h"
 #include "memory/physical_memory_manager.h"
 #include "memory/virtual_memory_manager.h"
 #include "memory/malloc.h"
-#include "disk/file_ops.h"
 #include "interrupts/idt.h"
 #include "interrupts/exceptions.h"
 #include "interrupts/pic.h"
@@ -26,19 +24,17 @@
 #include "sound/pc_speaker.h"
 #include "sys/syscall_wrappers.h"
 #include "fs/fs_impl.h"
-#include "elf/elf.h"
 #include "process/process.h"
 
 #include "../src/tests/kernel_tests.c"
 
 // Open file table & inode table pointers
-open_file_table_t *open_file_table;
-uint32_t max_open_files;
-uint32_t current_open_files;
-
-inode_t *open_inode_table;
-uint32_t max_open_inodes;
-uint32_t current_open_inodes;
+open_file_table_t open_file_table[256];
+inode_t open_inode_table[256];
+uint32_t max_open_files = 256;
+uint32_t max_open_inodes = 256;
+uint32_t current_open_files = 0;
+uint32_t current_open_inodes = 0;
 
 extern char current_dir[512];   // Current working directory string
 
@@ -47,8 +43,6 @@ uint32_t next_available_file_virtual_address;
 // Forward function declarations
 void init_fs_vars(void);
 void init_malloc(void);
-void init_open_file_table(void);                                        
-void init_open_inode_table(void);                                        
 
 void shell(bool, int32_t);
 
@@ -68,10 +62,7 @@ bool cmd_touch(int32_t argc, char *argv[]);
 bool cmd_type(int32_t argc, char *argv[]);
 
 __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
-    //uint8_t *windowsMsg     = "\r\n" "Oops! Something went wrong :(" "\r\n\0";
-    uint8_t *menuString     = "------------------------------------------------------\r\n"
-                              "Kernel Booted, Welcome to QuesOS - 32 Bit 'C' Edition!\r\n"
-                              "------------------------------------------------------\r\n";
+    //uint8_t *windowsMsg     = "\r\nOops! Something went wrong :(\r\n";
     // --------------------------------------------------------------------
     // Initial hardware, interrupts, etc. setup
     // --------------------------------------------------------------------
@@ -126,22 +117,6 @@ __attribute__ ((section ("kernel_entry"))) void kernel_main(void) {
     // After setting up hardware interrupts & PIC, set IF to enable 
     //   non-exception and not NMI hardware interrupts
     __asm__ __volatile__("sti");
-
-    // Set intial colors
-    while (!user_gfx_info->fg_color) {
-        if (gfx_mode->bits_per_pixel > 8) {
-            printf("\033FG%#xBG%#x;", convert_color(0x00EEEEEE), convert_color(0x00222222)); 
-        } else {
-            // Assuming VGA palette
-            printf("\033FG%#xBG%#x;", convert_color(0x02), convert_color(0x00)); 
-        }
-    }
-
-    // Clear the screen
-    printf("\033CLS;");
-
-    // Print OS boot message
-    printf("\033CSROFF;%s", menuString);
 
     shell(false, 0);
 }
@@ -245,28 +220,37 @@ void shell(bool from_process, int32_t return_status) {
     // Set up file system variables
     init_fs_vars();
 
-    // Set up open file table and open inode table
-    init_open_file_table();
-    init_open_inode_table();
+    next_available_file_virtual_address = 0x40000000; // Default to ~1GB
 
     if (first_boot) {
         first_boot = false;
 
-        // Create stdin/out/err files 
+        // Set intial colors
+        while (!user_gfx_info->fg_color) {
+            if (gfx_mode->bits_per_pixel > 8) {
+                printf("\033FG%#xBG%#x;", convert_color(0x00EEEEEE), convert_color(0x00222222)); 
+            } else {
+                // Assuming VGA palette
+                printf("\033FG%#xBG%#x;", convert_color(0x02), convert_color(0x00)); 
+            }
+        }
+
+        // Print OS boot message
+        printf("\033CLS;\033CSROFF;"
+               "------------------------------------------------------\r\n"
+               "Kernel Booted, Welcome to QuesOS - 32 Bit 'C' Edition!\r\n"
+               "------------------------------------------------------\r\n");
+
+        // Create initial /dev directory
         int32_t dummy_argc = 2;
         char *dummy_argv[2] = { "dummy", "/sys/dev" };
         fs_make_dir(dummy_argc, dummy_argv);
+    } 
 
-        open("/sys/dev/stdin",  O_CREAT | O_RDWR);  // FD 0
-        open("/sys/dev/stdout", O_CREAT | O_RDWR);  // FD 1
-        open("/sys/dev/stderr", O_CREAT | O_RDWR);  // FD 2
-
-    } else {
-        // Open stdin/out/err files 
-        open("/sys/dev/stdin",  O_RDWR);  // FD 0
-        open("/sys/dev/stdout", O_RDWR);  // FD 1
-        open("/sys/dev/stderr", O_RDWR);  // FD 2
-    }
+    // Open stdin/out/err files 
+    open("/sys/dev/stdin",  O_CREAT | O_RDWR);  // FD 0
+    open("/sys/dev/stdout", O_CREAT | O_RDWR);  // FD 1
+    open("/sys/dev/stderr", O_CREAT | O_RDWR);  // FD 2
 
     // If returned from a process, print return status code
     if (from_process) {
@@ -280,20 +264,20 @@ void shell(bool from_process, int32_t return_status) {
         
         input_length = 0;   // Reset input byte count
 
-        // Key loop - get input from user
+        // Key loop: get next line of user input
         while (true) {
             key_info = get_key();     // Get ascii char from scancode from keyboard data port 60h
 
-            if (key_info.key == '\r') {   // enter key?
-                printf("\033CSROFF; ");   // TODO: Add automatic newline here after prompt
-                break;                  // go on to tokenize user input line
+            if (key_info.key == '\r') {     // enter key?
+                printf("\033CSROFF;\r\n");
+                break;                      // go on to tokenize user input line
             }
 
             // TODO: Move all input back 1 char/byte after backspace, if applicable
-            if (key_info.key == '\b') {       // backspace?
-                if (input_length > 0) {                // Did user input anything?
-                    input_length--;                    // yes, go back one char in cmdString
-                    cmdString[input_length] = '\0';    // Blank out character    					
+            if (key_info.key == '\b') {                 // backspace?
+                if (input_length > 0) {                 // Did user input anything?
+                    input_length--;                     // yes, go back one char in cmdString
+                    cmdString[input_length] = '\0';     // Blank out character    					
 
                     // Do a "visual" backspace; Move cursor back 1 space, print 2 spaces, move back 2 spaces
                     printf("\033BS;  \033BS;\033BS;");
@@ -314,7 +298,7 @@ void shell(bool from_process, int32_t return_status) {
             continue;
         }
 
-        cmdString[input_length] = '\0';     // else null terminate cmdString from si
+        cmdString[input_length] = '\0';     // else null terminate cmdString
 
         // Tokenize input string "cmdString" into separate tokens
         cmdString_ptr = cmdString;      // Reset pointers...
@@ -398,10 +382,8 @@ void init_fs_vars(void) {
 
     // Set filesystem starting point
     strcpy(current_dir, "/");   // Start in 'root' directory by default
-    current_dir_inode = root_inode;
+    current_dir_inode    = root_inode;
     current_parent_inode = root_inode;  // Root's parent is itself
-                                        //
-    next_available_file_virtual_address = 0x40000000; // Default to ~1GB
 }
 
 // Initialize malloc variables/mappings/etc.
@@ -422,28 +404,6 @@ void init_malloc(void) {
     malloc_list_head->next = 0;
 
     total_malloc_pages  = 1;
-}
-
-// Initialize open file table
-void init_open_file_table(void) {
-    max_open_files = 256;
-
-    open_file_table = malloc(sizeof(open_file_table_t) * max_open_files);
-    memset(open_file_table, 0, sizeof(open_file_table_t) * max_open_files);
-
-    *open_file_table = (open_file_table_t){0};
-    current_open_files = 0;   
-}
-
-// Initialize open inode table
-void init_open_inode_table(void) {
-    max_open_inodes = 256;
-    current_open_inodes = 0;
-
-    open_inode_table = malloc(sizeof(inode_t) * max_open_inodes);
-    memset(open_inode_table, 0, sizeof(open_file_table_t) * max_open_inodes);
-
-    *open_inode_table = (inode_t){0};
 }
 
 // Change terminal colors
