@@ -252,10 +252,12 @@ void shell(bool from_process, int32_t return_status) {
     open("/sys/dev/stdout", O_CREAT | O_RDWR);  // FD 1
     open("/sys/dev/stderr", O_CREAT | O_RDWR);  // FD 2
 
+    printf("\033CSROFF;");
+
     // If returned from a process, print return status code
     if (from_process) {
         from_process = false;
-        printf("\r\nReturn Code: %d\r\n", return_status);
+        printf("\r\nReturn Code: %d", return_status);
     }
 
     while (true) {

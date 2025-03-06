@@ -14,6 +14,8 @@
 #include "global/global_addresses.h"
 #include "fs/fs_impl.h"
 
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+
 #define ESCAPE     0x1B  // Escape Key
 #define SPACE      0x20  // ASCII space
 #define LEFTARROW  0x4B	 // Keyboard scancodes...
@@ -63,7 +65,7 @@ uint8_t  hex_count = 0;
 uint8_t  hex_byte = 0;   // 1 byte/2 hex digits
 int32_t  fd = -1;
 int32_t  editor_filetype;
-char     editor_filename[32];
+char     editor_filename[64];
 uint8_t  font_height;
 uint32_t screen_rows;
 static char *load_file_error_msg = "Load file error occurred, press any key to go back...";
@@ -97,6 +99,8 @@ int main(int argc, char *argv[]) {
         editor_filesize     = 0; 
         cursor_x = cursor_y = 0;
 
+        printf("\033CLS;");     // Clear screen first
+
         if (key_info.key == BINFILE) {
             // Fill out filetype (.bin)
             editor_filetype = BIN;
@@ -127,40 +131,38 @@ void editor_load_file(char *filename) {
     // Save filename
     strcpy(editor_filename, filename);
 
-    fd = open(filename, O_RDWR);
+    fd = open(editor_filename, O_RDWR);
     if (fd < 0) return;
 
     file_size = seek(fd, 0, SEEK_END);
-    if (file_size > 0) {
-        file_ptr     = malloc(file_size);    // Allocate memory for file 
-        if (!file_ptr) {
-            write_bottom_screen_message(load_file_error_msg);
-            get_key();
-            close(fd);
-            return;
-        }
-        file_address = file_ptr;
+    seek(fd, 0, SEEK_SET);      // Rewind file
 
-        // Load file into buffer
-        if (read(fd, file_ptr, file_size) < (int32_t)file_size) {
-            write_bottom_screen_message(load_file_error_msg);
-            get_key();
-            close(fd);
-            return;
-        }
-
-    } else {
-        // Loading file error - file does not exist or could not be found
+    file_ptr = calloc(1, MIN(file_size, 512));  // Allocate memory for file 
+    if (!file_ptr) {
         write_bottom_screen_message(load_file_error_msg);
         get_key();
+        close(fd);
+        return;
+    }
+    file_address = file_ptr;    // Save initial address
 
+    // Load file into buffer
+    if (file_size > 0 && (read(fd, file_ptr, file_size) < (int32_t)file_size)) {
+        write_bottom_screen_message(load_file_error_msg);
+        get_key();
         printf("\033CLS;");
         cursor_x = cursor_y = 0;
-        return; // Return to caller after failure :(
+        return;
     }
 
-    // Load file success
-	// Go to editor depending on file type
+    // Load file success: go to editor depending on file type
+    // TODO: Check file contents to determine type e.g. magic header bytes,
+    //   don't use file extension
+    if (!memcmp(&editor_filename[strlen(editor_filename)-4], ".txt", 4))
+        editor_filetype = TXT;
+    else
+        editor_filetype = BIN;
+
     if (editor_filetype == BIN) {
         // Load hex file
         printf("\033CLS;");
@@ -245,8 +247,6 @@ void text_editor(char *in_filename) {
 
     if (!in_filename) strcpy(editor_filename, "(new file)");
 
-    printf("\033CLS;");     // Clear screen, resets cursor to 0,0
-
     // Input loop
     while (true) {
         // Write info and keybinds at bottom of screen; blank out line first
@@ -291,12 +291,13 @@ void text_editor(char *in_filename) {
                     }
 
                     // Save file data
+                    seek(fd, 0, SEEK_SET);  // Rewind file to overwrite all data
                     if (write(fd, file_address, file_length_bytes) < 0) {
                         write_bottom_screen_message("Error: write() file");   
                         get_key();
                         break;
                     } 
-                    unsaved = false;;    // User saved file, no more unsaved changes
+                    unsaved = false;    // User saved file, no more unsaved changes
                     break;
 
                 case 'c':           // Ctrl-C: Change file name 
